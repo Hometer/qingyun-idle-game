@@ -3,6 +3,7 @@
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt } from "@/lib/labels";
+import { productionBreakdown } from "@/engine/engine";
 import type { TechniqueId } from "@/engine/types";
 
 function eff(id: string, lvl: number): string {
@@ -12,33 +13,60 @@ function eff(id: string, lvl: number): string {
   return `护劫减伤 ${Math.round((lv.tribulationReduction ?? 0) * 100)}%`;
 }
 
+function Bar({ label, value, max }: { label: string; value: number; max: number }) {
+  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  return (
+    <div className="mt-1.5">
+      <div className="flex justify-between text-xs text-muted">
+        <span>{label}</span>
+        <span>
+          {fmt(value)} / {fmt(max)}
+        </span>
+      </div>
+      <div className="mt-0.5 h-2 overflow-hidden rounded-full bg-paper">
+        <div className="h-full rounded-full bg-cinnabar" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export default function XiulianPage() {
-  const { state, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique } = useGame();
-  if (!state) return null;
+  const { state, view, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique } = useGame();
+  if (!state || !view) return null;
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
   const next = REALM_LIST[idx + 1];
   const isQi4 = state.realm === "qi4";
   const isMax = state.realm === "foundation1";
+  const prod = productionBreakdown(state);
 
   return (
     <>
       <Section title="境界">
         <div className="text-xl font-semibold">{REALM_NAMES[state.realm]}</div>
-        {!isMax && !isQi4 && next && (
-          <p className="mt-1 text-sm text-muted">
-            下一境 {next.name}：需修为 {fmt(next.cultivationCost)}、灵气 {fmt(next.spiritCost)}
-          </p>
-        )}
-        {isQi4 && next && (
-          <p className="mt-1 text-sm text-muted">
-            圆满之境，需渡天劫方可筑基（修为 {fmt(next.cultivationCost)}、灵气 {fmt(next.spiritCost)}）
-          </p>
+        {!isMax && next && (
+          <>
+            <Bar label="修为" value={view.resources.cultivation} max={next.cultivationCost} />
+            <Bar label="灵气" value={view.resources.spirit} max={next.spiritCost} />
+            {isQi4 ? (
+              <p className="mt-1 text-xs text-muted">圆满之境，需渡天劫方可筑基。</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted">下一境 {next.name}：需修为 {fmt(next.cultivationCost)}、灵气 {fmt(next.spiritCost)}</p>
+            )}
+          </>
         )}
         {!isMax && !isQi4 && (
           <button onClick={doBreakthrough} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white">
             小进阶
           </button>
         )}
+      </Section>
+
+      <Section title="产速与来源">
+        {prod.lines.map((l, i) => (
+          <p key={i} className="py-0.5 text-sm text-ink/80">
+            {l}
+          </p>
+        ))}
       </Section>
 
       <Section title="功法">
