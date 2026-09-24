@@ -1,17 +1,27 @@
 {
   "name": "qingyun-game",
   "private": true,
-  "version": "0.1.0",
-  "type": "module",
+  "version": "0.2.0",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "test": "vitest run",
-    "preview": "vite preview"
+    "dev": "next dev -p 5173",
+    "build": "next build",
+    "start": "next start -p 5173",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.4",
-    "vite": "^5.4.8",
-    "vitest": "^2.1.1"
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }
