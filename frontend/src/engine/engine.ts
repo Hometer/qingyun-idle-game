@@ -197,6 +197,7 @@ export function settle(state: SaveState, nowMs: number): SaveState {
   s.resources.herb += spiritFieldRate(s) * deltaSec;
   s.resources.spiritStone += suppressionRate(s) * deltaSec;
   s.lastSettledAt = Math.max(s.lastSettledAt, nowMs);
+  s.revision += 1;
   return s;
 }
 
@@ -547,6 +548,78 @@ export function exportSave(state: SaveState): string {
   return JSON.stringify(state, null, 2);
 }
 
+const EQUIP_IDS = new Set(Object.keys(EQUIP_CFG));
+
+function validateResources(v: unknown): string | null {
+  if (!v || typeof v !== "object") return "资源数据缺失";
+  const o = v as Record<string, unknown>;
+  for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+    const x = o[k];
+    if (typeof x !== "number" || !Number.isFinite(x) || x < 0) return "资源数据无效";
+  }
+  return null;
+}
+
+function validateBuildings(v: unknown): string | null {
+  const o = (v ?? {}) as Record<string, unknown>;
+  for (const id of Object.keys(CONFIG.buildings)) {
+    const x = o[id];
+    if (x !== undefined && (!Number.isInteger(x) || (x as number) < 0 || (x as number) > 3)) return "建筑等级无效";
+  }
+  return null;
+}
+
+function validateTechnique(tech: unknown, levels: unknown): string | null {
+  if (tech !== null && tech !== undefined && !Object.keys(CONFIG.techniques).includes(tech as string)) return "功法无效";
+  const o = (levels ?? {}) as Record<string, unknown>;
+  for (const id of Object.keys(CONFIG.techniques)) {
+    const x = o[id];
+    if (x !== undefined && (!Number.isInteger(x) || (x as number) < 0 || (x as number) > 3)) return "功法等级无效";
+  }
+  return null;
+}
+
+function validateEquipmentAndInventory(eq: unknown, inv: unknown): string | null {
+  const e = (eq ?? {}) as Record<string, unknown>;
+  for (const slot of ["weapon", "armor", "accessory"]) {
+    const x = e[slot];
+    if (x !== null && x !== undefined && !EQUIP_IDS.has(x as string)) return "装备无效";
+  }
+  const i = (inv ?? {}) as Record<string, unknown>;
+  for (const [k, x] of Object.entries(i)) {
+    if (typeof x !== "number" || !Number.isFinite(x) || x < 0) return "库存数量无效";
+    if (k !== "tribulationPill" && !EQUIP_IDS.has(k)) return "库存装备无效";
+  }
+  return null;
+}
+
+function validateMaps(maps: unknown, suppression: unknown): string | null {
+  const m = (maps ?? {}) as Record<string, unknown>;
+  for (const mid of Object.keys(MAP_CFG) as MapId[]) {
+    const nodes = m[mid];
+    if (!nodes || typeof nodes !== "object") return "地图数据无效";
+    const rec = nodes as Record<string, unknown>;
+    for (const nid of Object.keys(MAP_CFG[mid].nodes)) {
+      const ns = rec[nid] as Record<string, unknown> | undefined;
+      if (ns && (typeof ns.unlocked !== "boolean" || typeof ns.cleared !== "boolean")) return "节点数据无效";
+    }
+  }
+  const sup = (suppression ?? {}) as Record<string, unknown>;
+  for (const [mid, nid] of Object.entries(sup)) {
+    if (nid !== null && nid !== undefined && !MAP_CFG[mid as MapId]?.nodes[nid as string]) return "镇压节点无效";
+  }
+  return null;
+}
+
+function validateEncounter(v: unknown): string | null {
+  const e = (v ?? {}) as Record<string, unknown>;
+  const pending = e.pending as Record<string, unknown> | null | undefined;
+  if (pending !== null && pending !== undefined) {
+    if (!ENC_CFG[pending.eventId as string]) return "际遇事件无效";
+  }
+  return null;
+}
+
 export function importSave(json: string): Result<SaveState> {
   let d: unknown;
   try {
@@ -557,15 +630,19 @@ export function importSave(json: string): Result<SaveState> {
   if (!d || typeof d !== "object") return fail("存档结构无效");
   const o = d as Record<string, unknown>;
   if (o.schemaVersion !== SCHEMA_VERSION) return fail(`存档版本不兼容（支持版本 ${SCHEMA_VERSION}）`);
-  if (typeof o.name !== "string" || !realmOrder.includes(o.realm as RealmId)) return fail("存档关键字段无效");
-  const r = o.resources as Record<string, unknown> | undefined;
-  if (!r) return fail("资源数据缺失");
-  for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
-    if (typeof r[k] !== "number" || !Number.isFinite(r[k] as number) || (r[k] as number) < 0) {
-      return fail("资源数据无效");
-    }
-  }
+  if (typeof o.name !== "string" || !o.name.trim()) return fail("存档缺少姓名");
+  if (!realmOrder.includes(o.realm as RealmId)) return fail("境界无效");
   if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt)) return fail("时间数据无效");
+
+  const checks: Array<string | null> = [
+    validateResources(o.resources),
+    validateBuildings(o.buildings),
+    validateTechnique(o.technique, o.techniqueLevel),
+    validateEquipmentAndInventory(o.equipment, o.inventory),
+    validateMaps(o.maps, o.suppression),
+    validateEncounter(o.encounter),
+  ];
+  for (const c of checks) if (c) return fail(c);
 
   const s = normalizeSave(o);
   return { state: s, ok: true };

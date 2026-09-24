@@ -2,10 +2,18 @@
 
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { REALM_NAMES, REALM_LIST, fmt } from "@/lib/labels";
+import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt } from "@/lib/labels";
+import type { TechniqueId } from "@/engine/types";
+
+function eff(id: string, lvl: number): string {
+  if (lvl < 1) return "未修";
+  const lv = TECHNIQUES[id].levels[lvl - 1];
+  if (id === "qingYun") return `修为产出 ${lv.cultivationMult}×`;
+  return `护劫减伤 ${Math.round((lv.tribulationReduction ?? 0) * 100)}%`;
+}
 
 export default function XiulianPage() {
-  const { state, doBreakthrough, startTrib, tribPreview } = useGame();
+  const { state, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique } = useGame();
   if (!state) return null;
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
   const next = REALM_LIST[idx + 1];
@@ -29,6 +37,48 @@ export default function XiulianPage() {
         {!isMax && !isQi4 && (
           <button onClick={doBreakthrough} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white">
             小进阶
+          </button>
+        )}
+      </Section>
+
+      <Section title="功法">
+        {state.technique ? (
+          <p className="text-sm">
+            主修：{TECHNIQUES[state.technique].name} Lv{state.techniqueLevel[state.technique]}
+          </p>
+        ) : (
+          <p className="text-sm text-muted">尚未主修功法</p>
+        )}
+        <div className="mt-2 space-y-2">
+          {(["qingYun", "xuanGui"] as TechniqueId[]).map((id) => {
+            const t = TECHNIQUES[id];
+            const lvl = state.techniqueLevel[id];
+            const nextLvl = lvl < 3 ? t.levels[lvl] : null;
+            return (
+              <div key={id} className="rounded-lg border border-line/60 p-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{t.name}</span>
+                  {state.technique !== id ? (
+                    <button onClick={() => setTechnique(id)} className="rounded-lg border border-line bg-paper px-3 py-1 text-sm">
+                      主修
+                    </button>
+                  ) : (
+                    <span className="text-xs text-cinnabar">主修中</span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  {eff(id, lvl)}
+                  {nextLvl
+                    ? ` → 下级 ${eff(id, lvl + 1)}（需残页 ${nextLvl.pageCost}）`
+                    : " · 已满级"}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        {state.technique && state.techniqueLevel[state.technique] < 3 && (
+          <button onClick={upgradeTechnique} className="mt-2 rounded-lg bg-cinnabar px-4 py-2 text-white">
+            升级功法
           </button>
         )}
       </Section>

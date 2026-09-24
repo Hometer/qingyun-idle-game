@@ -12,7 +12,7 @@ import {
 import * as eng from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
 import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId } from "@/engine/types";
-import { loadSave, persistSave, clearSave } from "@/engine/storage";
+import { loadSave, persistSave, replaceSave, backupSave, clearSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 
 export interface EncounterCopy {
@@ -24,8 +24,8 @@ export interface EncounterCopy {
 
 interface GameContextValue {
   ready: boolean;
-  state: SaveState | null; // 持久化状态（动作据此结算）
-  view: SaveState | null; // 展示用（按当前时间结算，每秒刷新）
+  state: SaveState | null;
+  view: SaveState | null;
   notice: string;
   battleLog: string[];
   encounter: EncounterCopy | null;
@@ -74,26 +74,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [encounter, setEncounter] = useState<EncounterCopy | null>(null);
   const [encounterLoading, setEncounterLoading] = useState(false);
 
-  // 每秒刷新展示时间
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // 加载存档
   useEffect(() => {
     (async () => {
       const saved = await loadSave().catch(() => null);
       if (saved) {
         const settled = eng.settle(saved, Date.now());
         setState(settled);
-        void persistSave(settled);
+        const res = await persistSave(settled);
+        if (res.conflict) {
+          const latest = await loadSave();
+          setState(latest ? eng.settle(latest, Date.now()) : null);
+        }
       }
       setReady(true);
     })();
   }, []);
 
-  // 际遇待选择时拉取文案
   const pendingId = state?.encounter.pending?.eventId ?? null;
   useEffect(() => {
     if (!state || !pendingId) {
@@ -148,123 +149,135 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [state],
   );
 
-  const apply = useCallback((next: SaveState | null, msg: string) => {
+  // 写入成功才提示；冲突则丢弃本地改动、重读最新档
+  const apply = useCallback(async (next: SaveState, msg: string): Promise<boolean> => {
+    const res = await persistSave(next);
+    if (res.conflict) {
+      const latest = await loadSave();
+      setState(latest ? eng.settle(latest, Date.now()) : null);
+      setNotice("检测到另一标签页正在运行，已刷新为最新进度");
+      return false;
+    }
     setState(next);
-    if (next) void persistSave(next);
     setNotice(msg);
+    return true;
   }, []);
 
   const clearNotice = useCallback(() => setNotice(""), []);
 
   const create = useCallback(
-    (name: string, root: SpiritRoot) => {
+    async (name: string, root: SpiritRoot) => {
       const s = eng.createGame(name, root, Date.now());
-      apply(s, "角色已创建，踏上仙途");
+      await apply(s, "角色已创建，踏上仙途");
     },
     [apply],
   );
 
-  const settleNow = useCallback(() => {
+  const settleNow = useCallback(async () => {
     if (!state) return;
-    apply(eng.settle(state, Date.now()), "已领取挂机收益");
+    await apply(eng.settle(state, Date.now()), "已领取挂机收益");
   }, [state, apply]);
 
-  const doBreakthrough = useCallback(() => {
+  const doBreakthrough = useCallback(async () => {
     if (!state) return;
     const r = eng.breakthrough(state, Date.now());
-    apply(r.ok && r.state ? r.state : state, r.ok ? "突破成功" : r.reason);
+    await apply(r.ok && r.state ? r.state : state, r.ok ? "突破成功" : r.reason);
   }, [state, apply]);
 
   const upgradeBuilding = useCallback(
-    (id: BuildingId) => {
+    async (id: BuildingId) => {
       if (!state) return;
       const r = eng.upgradeBuilding(state, Date.now(), id);
-      apply(r.ok && r.state ? r.state : state, r.ok ? "升级成功" : r.reason);
+      await apply(r.ok && r.state ? r.state : state, r.ok ? "升级成功" : r.reason);
     },
     [state, apply],
   );
 
   const setTechnique = useCallback(
-    (id: TechniqueId) => {
+    async (id: TechniqueId) => {
       if (!state) return;
       const r = eng.setTechnique(state, Date.now(), id);
-      apply(r.ok && r.state ? r.state : state, r.ok ? "改修成功" : r.reason);
+      await apply(r.ok && r.state ? r.state : state, r.ok ? "改修成功" : r.reason);
     },
     [state, apply],
   );
 
-  const upgradeTechnique = useCallback(() => {
+  const upgradeTechnique = useCallback(async () => {
     if (!state) return;
     const r = eng.upgradeTechnique(state, Date.now());
-    apply(r.ok && r.state ? r.state : state, r.ok ? "功法精进" : r.reason);
+    await apply(r.ok && r.state ? r.state : state, r.ok ? "功法精进" : r.reason);
   }, [state, apply]);
 
   const equip = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!state) return;
       const r = eng.equipItem(state, Date.now(), id);
-      apply(r.ok && r.state ? r.state : state, r.ok ? "已穿戴" : r.reason);
+      await apply(r.ok && r.state ? r.state : state, r.ok ? "已穿戴" : r.reason);
     },
     [state, apply],
   );
 
-  const craftPill = useCallback(() => {
+  const craftPill = useCallback(async () => {
     if (!state) return;
     const r = eng.craftPill(state, Date.now());
-    apply(r.ok && r.state ? r.state : state, r.ok ? "炼得护劫丹一枚" : r.reason);
+    await apply(r.ok && r.state ? r.state : state, r.ok ? "炼得护劫丹一枚" : r.reason);
   }, [state, apply]);
 
-  const togglePill = useCallback(() => {
+  const togglePill = useCallback(async () => {
     if (!state) return;
     const r = eng.togglePreparePill(state, Date.now());
-    apply(r.ok && r.state ? r.state : state, r.ok ? "已切换预置" : r.reason);
+    await apply(r.ok && r.state ? r.state : state, r.ok ? "已切换预置" : r.reason);
   }, [state, apply]);
 
   const fight = useCallback(
-    (mapId: MapId, nodeId: string) => {
+    async (mapId: MapId, nodeId: string) => {
       if (!state) return;
       const r = eng.fightNode(state, Date.now(), mapId, nodeId);
       setBattleLog(r.log);
       if (!r.ok) {
-        apply(state, r.reason);
+        setNotice(r.reason);
         return;
       }
-      const next = r.state;
-      setState(next);
-      void persistSave(next);
-      setNotice(r.won ? (r.encounterTriggered ? "战斗胜利，际遇降临" : "战斗胜利") : "战败，未获得奖励");
+      await apply(r.state, r.won ? (r.encounterTriggered ? "战斗胜利，际遇降临" : "战斗胜利") : "战败，未获得奖励");
     },
     [state, apply],
   );
 
   const suppress = useCallback(
-    (mapId: MapId, nodeId: string) => {
+    async (mapId: MapId, nodeId: string) => {
       if (!state) return;
       const r = eng.setSuppression(state, Date.now(), mapId, nodeId);
-      apply(r.ok && r.state ? r.state : state, r.ok ? "已镇压，获得持续产出" : r.reason);
+      await apply(r.ok && r.state ? r.state : state, r.ok ? "已镇压，获得持续产出" : r.reason);
     },
     [state, apply],
   );
 
   const choose = useCallback(
-    (optionId: string) => {
+    async (optionId: string) => {
       if (!state) return;
       const r = eng.resolveEncounter(state, Date.now(), optionId);
-      if (r.ok && r.state) {
-        setEncounter(null);
-        apply(r.state, "选择已定，奖励到账");
-      } else {
+      if (!r.ok || !r.state) {
         setNotice(r.reason);
+        return;
       }
+      setEncounter(null);
+      await apply(r.state, "选择已定，奖励到账");
     },
     [state, apply],
   );
 
-  const startTrib = useCallback(() => {
+  const startTrib = useCallback(async () => {
     if (!state) return;
     if (!window.confirm("确定渡劫？将消耗门槛资源与预置丹药，失败门槛不退。")) return;
     const r = eng.startTribulation(state, Date.now());
-    apply(r.ok && r.state ? r.state : state, r.ok ? (r.state!.realm === "foundation1" ? "渡劫成功，晋入筑基一层" : "渡劫失败，可重新积累再试") : r.reason);
+    await apply(
+      r.ok && r.state ? r.state : state,
+      r.ok
+        ? r.state!.realm === "foundation1"
+          ? "渡劫成功，晋入筑基一层"
+          : "渡劫失败，可重新积累再试"
+        : r.reason,
+    );
   }, [state, apply]);
 
   const doExport = useCallback(() => {
@@ -280,25 +293,29 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   const doImport = useCallback(
-    (file: File) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const r = eng.importSave(String(reader.result));
-        if (r.ok && r.state) {
-          setEncounter(null);
-          apply(r.state, "存档导入成功");
-        } else {
-          setNotice("导入失败：" + r.reason);
-        }
-      };
-      reader.readAsText(file);
+    async (file: File) => {
+      const text = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsText(file);
+      });
+      const r = eng.importSave(text);
+      if (!r.ok || !r.state) {
+        setNotice("导入失败：" + r.reason);
+        return;
+      }
+      if (state) await backupSave(state).catch(() => {});
+      await replaceSave(r.state);
+      setEncounter(null);
+      setState(r.state);
+      setNotice("存档导入成功（原档已备份）");
     },
-    [apply],
+    [state],
   );
 
-  const doReset = useCallback(() => {
+  const doReset = useCallback(async () => {
     if (!window.confirm("确定重置？当前进度将被覆盖，建议先导出存档。")) return;
-    void clearSave();
+    await clearSave().catch(() => {});
     setState(null);
     setEncounter(null);
     setBattleLog([]);

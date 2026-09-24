@@ -8,6 +8,7 @@ import {
   setTechnique,
   upgradeTechnique,
   craftPill,
+  equipItem,
   togglePreparePill,
   fightNode,
   setSuppression,
@@ -18,7 +19,7 @@ import {
   importSave,
   playerStats,
 } from "./engine";
-import type { SaveState } from "./types";
+import type { SaveState, RealmId, MapId } from "./types";
 
 const H = 3600_000;
 const T0 = 1_700_000_000_000;
@@ -292,5 +293,59 @@ describe("存档导入导出", () => {
     const s = fresh();
     const bad = { ...s, resources: { ...s.resources, cultivation: -1 } };
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});
+
+describe("修订号", () => {
+  it("结算增加修订号", () => {
+    const s = fresh();
+    const after = settle(s, T0 + 1000);
+    expect(after.revision).toBeGreaterThan(s.revision);
+  });
+});
+
+describe("坏档导入", () => {
+  it("建筑等级越界拒绝", () => {
+    const s = fresh();
+    const bad = { ...s, buildings: { ...s.buildings, cultivationRoom: 99 } };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+  it("非法装备拒绝", () => {
+    const s = fresh();
+    const bad = { ...s, equipment: { ...s.equipment, weapon: "not_real" } };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+  it("非法功法拒绝", () => {
+    const s = fresh();
+    const bad = { ...s, technique: "not_real" };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});
+
+describe("数值可达性", () => {
+  it("两图六节点可逐节点首通", () => {
+    const order: Array<{ map: MapId; node: string; gate: RealmId; drop: string | null }> = [
+      { map: "map_qingyun", node: "node_wolf", gate: "qi1", drop: "a_cloth" },
+      { map: "map_qingyun", node: "node_bandit", gate: "qi2", drop: "w_azure" },
+      { map: "map_qingyun", node: "node_demon", gate: "qi3", drop: "c_wood" },
+      { map: "map_nether", node: "node_shade", gate: "qi3", drop: "a_iron" },
+      { map: "map_nether", node: "node_ghost", gate: "qi4", drop: "c_jade" },
+      { map: "map_nether", node: "node_king", gate: "qi4", drop: null },
+    ];
+    let s = fresh();
+    for (const step of order) {
+      s.realm = step.gate;
+      const r = fightNode(s, T0, step.map, step.node);
+      expect(r.won, `${step.map}|${step.node} 可首通`).toBe(true);
+      s = r.state;
+      if (step.drop) {
+        const eq = equipItem(s, T0, step.drop);
+        expect(eq.ok).toBe(true);
+        s = eq.state as SaveState;
+      }
+    }
+    for (const step of order) {
+      expect(s.maps[step.map][step.node].cleared).toBe(true);
+    }
   });
 });

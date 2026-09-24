@@ -94,7 +94,7 @@ export const CONFIG = {
         node_wolf: {
           name: "野狼", gate: "qi1",
           enemy: { attack: 8, defense: 2, hp: 30 },
-          firstClear: { cultivation: 20, spiritStone: 50, page: 5, equipment: null },
+          firstClear: { cultivation: 20, spiritStone: 50, page: 5, equipment: "a_cloth" },
           repeat: { cultivation: 4, page: 1 },
           suppressRate: 0.1,
         },
@@ -108,7 +108,7 @@ export const CONFIG = {
         node_demon: {
           name: "妖兽", gate: "qi3",
           enemy: { attack: 18, defense: 8, hp: 80 },
-          firstClear: { cultivation: 80, spiritStone: 200, page: 0, equipment: "a_iron" },
+          firstClear: { cultivation: 80, spiritStone: 200, page: 0, equipment: "c_wood" },
           repeat: { cultivation: 16, page: 3 },
           suppressRate: 0.3,
         },
@@ -119,21 +119,21 @@ export const CONFIG = {
       nodes: {
         node_shade: {
           name: "阴魂", gate: "qi3",
-          enemy: { attack: 25, defense: 12, hp: 120 },
-          firstClear: { cultivation: 150, spiritStone: 300, page: 15, equipment: null },
+          enemy: { attack: 16, defense: 10, hp: 90 },
+          firstClear: { cultivation: 150, spiritStone: 300, page: 15, equipment: "a_iron" },
           repeat: { cultivation: 30, page: 5 },
           suppressRate: 0.4,
         },
         node_ghost: {
           name: "厉鬼", gate: "qi4",
-          enemy: { attack: 35, defense: 18, hp: 180 },
+          enemy: { attack: 21, defense: 13, hp: 150 },
           firstClear: { cultivation: 300, spiritStone: 500, page: 0, equipment: "c_jade" },
           repeat: { cultivation: 60, page: 8 },
           suppressRate: 0.6,
         },
         node_king: {
           name: "鬼王", gate: "qi4",
-          enemy: { attack: 50, defense: 25, hp: 260 },
+          enemy: { attack: 22, defense: 14, hp: 190 },
           firstClear: { cultivation: 500, spiritStone: 800, page: 30, equipment: null },
           repeat: { cultivation: 100, page: 12 },
           suppressRate: 1.0,
