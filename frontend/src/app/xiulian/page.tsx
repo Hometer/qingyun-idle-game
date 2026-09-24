@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt } from "@/lib/labels";
@@ -31,13 +32,17 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 }
 
 export default function XiulianPage() {
-  const { state, view, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique } = useGame();
+  const { state, view, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique, markTribPreviewViewed } = useGame();
   if (!state || !view) return null;
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
   const next = REALM_LIST[idx + 1];
   const isQi4 = state.realm === "qi4";
   const isMax = state.realm === "foundation1";
   const prod = productionBreakdown(state);
+
+  useEffect(() => {
+    if (isQi4 && tribPreview?.ok) markTribPreviewViewed();
+  }, [isQi4, tribPreview?.ok, markTribPreviewViewed]);
 
   return (
     <>

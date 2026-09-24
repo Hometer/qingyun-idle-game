@@ -15,13 +15,27 @@ import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId } from "@/en
 import { loadSave, persistSave, replaceSave, backupSave, clearSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode } from "@/lib/prefs";
-import { RESOURCE_LABELS, fmt, resourceGains } from "@/lib/labels";
+import { RESOURCE_LABELS, REALM_ORDER, fmt, resourceGains } from "@/lib/labels";
 
 export interface EncounterCopy {
   title: string;
   body: string;
   options: { option_id: string; option_text: string }[];
   source: string;
+}
+
+export interface ResultPanel {
+  title: string;
+  lines: string[];
+}
+
+export interface Target {
+  id: string;
+  label: string;
+  done: boolean;
+  later: boolean;
+  hint?: string;
+  href?: string;
 }
 
 interface GameContextValue {
@@ -50,6 +64,10 @@ interface GameContextValue {
   doImport: (file: File) => void;
   doReset: () => void;
   clearNotice: () => void;
+  lastResult: ResultPanel | null;
+  clearResult: () => void;
+  targets: Target[];
+  markTribPreviewViewed: () => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -67,6 +85,16 @@ function localTemplate(eventId: string): EncounterCopy {
   };
 }
 
+function deltaLines(before: SaveState, after: SaveState): string[] {
+  const d = resourceGains(before, after);
+  const lines: string[] = [];
+  for (const [k, v] of Object.entries(d)) {
+    if (v > 0) lines.push(`${RESOURCE_LABELS[k]} +${fmt(v)}`);
+    else if (v < 0) lines.push(`${RESOURCE_LABELS[k]} ${fmt(v)}`);
+  }
+  return lines;
+}
+
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SaveState | null>(null);
   const [ready, setReady] = useState(false);
@@ -75,6 +103,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [battleLog, setBattleLog] = useState<string[]>([]);
   const [encounter, setEncounter] = useState<EncounterCopy | null>(null);
   const [encounterLoading, setEncounterLoading] = useState(false);
+  const [lastResult, setLastResult] = useState<ResultPanel | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -165,6 +194,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [state],
   );
 
+  const targets = useMemo<Target[]>(() => {
+    if (!state) return [];
+    const realmIdx = REALM_ORDER.indexOf(state.realm);
+    return [
+      { id: "settle", label: "领取一次收益", done: state.firsts.settledOnce, later: false, hint: "点顶部「领取收益」" },
+      { id: "breakthrough", label: "完成首次小进阶", done: realmIdx >= 1, later: false, href: "/xiulian" },
+      { id: "suppress", label: "击败并镇压首个节点", done: state.firsts.suppressedFirstNodeOnce, later: false, href: "/lilian" },
+      { id: "trib", label: "查看一次天劫预览", done: state.firsts.viewedTribPreviewOnce, later: realmIdx < 3, href: "/xiulian" },
+    ];
+  }, [state]);
+
   // 写入成功才提示；冲突则丢弃本地改动、重读最新档
   const apply = useCallback(async (next: SaveState, msg: string): Promise<boolean> => {
     const res = await persistSave(next);
@@ -180,10 +220,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearNotice = useCallback(() => setNotice(""), []);
+  const clearResult = useCallback(() => setLastResult(null), []);
+
+  const markTribPreviewViewed = useCallback(async () => {
+    if (!state || state.realm !== "qi4" || state.firsts.viewedTribPreviewOnce) return;
+    const next = structuredClone(state);
+    next.firsts.viewedTribPreviewOnce = true;
+    next.revision += 1;
+    const res = await persistSave(next);
+    if (!res.conflict) setState(next);
+  }, [state]);
 
   const create = useCallback(
     async (name: string, root: SpiritRoot) => {
       const s = eng.createGame(name, root, Date.now());
+      setLastResult(null);
       await apply(s, "角色已创建，踏上仙途");
     },
     [apply],
@@ -192,6 +243,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const settleNow = useCallback(async () => {
     if (!state) return;
     const settled = eng.settle(state, Date.now());
+    settled.firsts.settledOnce = true;
     const delta = resourceGains(state, settled);
     const parts = Object.entries(delta)
       .filter(([, v]) => v > 0)
@@ -202,7 +254,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const doBreakthrough = useCallback(async () => {
     if (!state) return;
-    const r = eng.breakthrough(state, Date.now());
+    const before = state;
+    const r = eng.breakthrough(before, Date.now());
+    if (r.ok && r.state) setLastResult({ title: `晋入 ${REALM_NAMES[r.state.realm]}`, lines: deltaLines(before, r.state) });
     await apply(r.ok && r.state ? r.state : state, r.ok ? "突破成功" : r.reason);
   }, [state, apply]);
 
@@ -254,11 +308,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const fight = useCallback(
     async (mapId: MapId, nodeId: string) => {
       if (!state) return;
-      const r = eng.fightNode(state, Date.now(), mapId, nodeId);
+      const before = state;
+      const r = eng.fightNode(before, Date.now(), mapId, nodeId);
       setBattleLog(r.log);
       if (!r.ok) {
         setNotice(r.reason);
         return;
+      }
+      if (r.won) {
+        const lines = deltaLines(before, r.state);
+        if (r.encounterTriggered) lines.push("触发际遇");
+        setLastResult({ title: "战斗胜利", lines });
+      } else {
+        setLastResult({ title: "战斗落败", lines: ["未获得奖励", ...r.log.filter((l) => l.startsWith("短板"))] });
       }
       await apply(r.state, r.won ? (r.encounterTriggered ? "战斗胜利，际遇降临" : "战斗胜利") : "战败，未获得奖励");
     },
@@ -277,12 +339,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const choose = useCallback(
     async (optionId: string) => {
       if (!state) return;
-      const r = eng.resolveEncounter(state, Date.now(), optionId);
+      const before = state;
+      const r = eng.resolveEncounter(before, Date.now(), optionId);
       if (!r.ok || !r.state) {
         setNotice(r.reason);
         return;
       }
       setEncounter(null);
+      const evtId = before.encounter.pending?.eventId ?? "";
+      const title = evtId ? `际遇「${CONFIG.encounters[evtId as keyof typeof CONFIG.encounters]?.title ?? evtId}」` : "际遇";
+      setLastResult({ title, lines: deltaLines(before, r.state) });
       await apply(r.state, "选择已定，奖励到账");
     },
     [state, apply],
@@ -291,7 +357,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const startTrib = useCallback(async () => {
     if (!state) return;
     if (!window.confirm("确定渡劫？将消耗门槛资源与预置丹药，失败门槛不退。")) return;
-    const r = eng.startTribulation(state, Date.now());
+    const before = state;
+    const r = eng.startTribulation(before, Date.now());
+    if (r.ok && r.state) {
+      setLastResult({
+        title: r.state.realm === "foundation1" ? "渡劫成功" : "渡劫失败",
+        lines: [...deltaLines(before, r.state), ...(r.state.tribulationLog?.log ?? [])],
+      });
+    }
     await apply(
       r.ok && r.state ? r.state : state,
       r.ok
@@ -341,6 +414,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setState(null);
     setEncounter(null);
     setBattleLog([]);
+    setLastResult(null);
     setNotice("已重置");
   }, []);
 
@@ -370,6 +444,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     doImport,
     doReset,
     clearNotice,
+    lastResult,
+    clearResult,
+    targets,
+    markTribPreviewViewed,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
