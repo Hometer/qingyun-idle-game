@@ -1,7 +1,6 @@
 import { CONFIG } from "./config";
 import type {
   BuildingId,
-  DailyCounters,
   DailyState,
   MapId,
   Milestone,
@@ -63,17 +62,6 @@ const ENC_CFG = CONFIG.encounters as unknown as Record<
   { title: string; options: Record<string, { label: string; meaning: string; reward: Partial<Resources> }> }
 >;
 
-type WeatherCfg = {
-  name: string;
-  desc: string;
-  cultivationMult?: number;
-  spiritMult?: number;
-  herbMult?: number;
-  spiritStoneMult?: number;
-  battleAtkMult?: number;
-};
-const WEATHER_CFG = CONFIG.weathers as unknown as Record<string, WeatherCfg>;
-
 const realmOrder: RealmId[] = ["qi1", "qi2", "qi3", "qi4", "foundation1"];
 
 function realmIndex(realm: RealmId): number {
@@ -107,8 +95,8 @@ function pushMilestone(s: SaveState, type: string, time: number, text: string): 
   s.milestones.push({ type, time, text });
 }
 
-const DAILY_QUEST_IDS = ["settle", "breakthrough", "battle", "suppress", "craft", "encounter"] as const;
-const WEATHER_IDS = ["clear", "rain", "spirit_vein", "battle_mark", "none"] as const;
+const WEATHER_IDS = ["rain", "clear", "vein", "none"] as const;
+const ASTROLOGY_IDS = ["lucky", "war", "none"] as const;
 
 function hashString(s: string): number {
   let h = 0;
@@ -117,26 +105,22 @@ function hashString(s: string): number {
 }
 
 export function weatherOfDate(dateStr: string): string {
-  return WEATHER_IDS[hashString(dateStr) % WEATHER_IDS.length];
+  return WEATHER_IDS[hashString("w" + dateStr) % WEATHER_IDS.length];
 }
 
-export function rollDailyQuests(dateStr: string): string[] {
-  const h = hashString(dateStr);
-  const pool = [...DAILY_QUEST_IDS] as string[];
-  const picked: string[] = [];
-  for (let i = 0; i < 3; i++) {
-    const idx = (h + i * 7) % pool.length;
-    picked.push(pool.splice(idx, 1)[0]);
-  }
-  return picked;
+export function astrologyOfDate(dateStr: string): string {
+  return ASTROLOGY_IDS[hashString("a" + dateStr) % ASTROLOGY_IDS.length];
 }
 
 function emptyDaily(dateStr: string): DailyState {
   return {
     date: dateStr,
-    weather: weatherOfDate(dateStr),
-    quests: rollDailyQuests(dateStr).map((id) => ({ id, done: false })),
-    counters: { settle: 0, battle: 0, craft: 0, suppress: 0, breakthrough: 0, encounter: 0 },
+    weather: { id: weatherOfDate(dateStr), used: false },
+    astrology: { id: astrologyOfDate(dateStr), used: false },
+    goals: {
+      battle: { progress: 0, claimed: false },
+      suppress: { progress: 0, claimed: false },
+    },
   };
 }
 
@@ -153,48 +137,36 @@ function applyReward(s: SaveState, reward: Partial<Resources>): void {
   if (reward.page) s.resources.page += reward.page;
 }
 
-function recordDailyEvent(s: SaveState, nowMs: number, event: keyof DailyCounters): void {
-  ensureDaily(s, nowMs);
-  s.daily.counters[event] += 1;
-  for (const q of s.daily.quests) {
-    if (q.done) continue;
-    const cfg = CONFIG.dailyQuests[q.id as keyof typeof CONFIG.dailyQuests] as unknown as {
-      title: string;
-      target: number;
-      reward: Partial<Resources>;
-    };
-    if (s.daily.counters[q.id as keyof DailyCounters] >= cfg.target) {
-      q.done = true;
-      applyReward(s, cfg.reward);
-      pushMilestone(s, "daily", nowMs, `完成今日任务「${cfg.title}」`);
-    }
-  }
-}
-
-function applySuppressionExpiry(s: SaveState, nowMs: number): void {
-  const durMs = CONFIG.suppressionDurationHours * 3600 * 1000;
-  for (const mid of Object.keys(MAP_CFG) as MapId[]) {
-    const nodeId = s.suppression[mid];
-    if (nodeId && s.suppressionSince[mid] > 0 && nowMs - s.suppressionSince[mid] >= durMs) {
-      s.suppression[mid] = null;
-      s.suppressionSince[mid] = 0;
-      s.recentLogs.push(`${MAP_CFG[mid].nodes[nodeId].name}妖气复聚，镇压失效。`);
-    }
-  }
-}
-
-function battleStats(s: SaveState): { attack: number; defense: number; hp: number } {
-  const stats = playerStats(s);
-  const w = WEATHER_CFG[s.daily.weather];
-  if (w?.battleAtkMult) return { ...stats, attack: Math.round(stats.attack * w.battleAtkMult) };
-  return stats;
+function battleDamageMult(s: SaveState): number {
+  return !s.daily.astrology.used && s.daily.astrology.id === "war" ? 1.2 : 1;
 }
 
 export function recordDailySettle(state: SaveState, nowMs: number): SaveState {
   const s = structuredClone(state);
-  recordDailyEvent(s, nowMs, "settle");
+  ensureDaily(s, nowMs);
+  if (!s.daily.weather.used && s.daily.weather.id !== "none") {
+    s.daily.weather.used = true;
+    const cfg = CONFIG.weathers[s.daily.weather.id as keyof typeof CONFIG.weathers] as unknown as {
+      reward?: Partial<Resources>;
+    };
+    applyReward(s, cfg.reward ?? {});
+  }
   s.revision += 1;
   return s;
+}
+
+export function claimDailyGoal(state: SaveState, nowMs: number, goalId: "battle" | "suppress"): Result<SaveState> {
+  const s = structuredClone(state);
+  ensureDaily(s, nowMs);
+  const goal = s.daily.goals[goalId];
+  const cfg = CONFIG.dailyGoals[goalId];
+  if (goal.claimed) return fail("已领取");
+  if (goal.progress < cfg.target) return fail("目标未达成");
+  goal.claimed = true;
+  applyReward(s, cfg.reward);
+  pushMilestone(s, "daily", nowMs, `领取今日目标「${cfg.title}」`);
+  s.revision += 1;
+  return { state: s, ok: true };
 }
 
 // ---- 新建 / 重置 ----
@@ -298,20 +270,22 @@ export interface ProductionBreakdown {
 }
 
 export function productionBreakdown(state: SaveState): ProductionBreakdown {
-  const w = WEATHER_CFG[state.daily.weather];
   const cultBuilding = buildingCultivationMult(state);
   const cultTech = techniqueCultivationMult(state);
   const spiritBuilding = buildingSpiritMult(state);
-  const herb = spiritFieldRate(state) * (w?.herbMult ?? 1);
-  const stone = suppressionRate(state) * (w?.spiritStoneMult ?? 1);
-  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * (w?.cultivationMult ?? 1);
-  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * (w?.spiritMult ?? 1);
+  const herb = spiritFieldRate(state);
+  const stone = suppressionRate(state);
+  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech;
+  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding;
+  const w = CONFIG.weathers[state.daily.weather.id as keyof typeof CONFIG.weathers];
+  const a = CONFIG.astrologies[state.daily.astrology.id as keyof typeof CONFIG.astrologies];
   const lines: string[] = [
-    `天时·${w?.name ?? "平常"}${w?.desc ? `：${w.desc}` : ""}`,
-    `修为 ${n1(cultivationPerSec)}/秒（基础 ${n1(CONFIG.baseCultivationPerSecond)}${cultBuilding > 1 ? ` × 修炼室 ${n1(cultBuilding)}` : ""}${cultTech > 1 ? ` × 功法 ${n1(cultTech)}` : ""}${w?.cultivationMult ? ` × 天时 ${w.cultivationMult}` : ""}）`,
-    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}${w?.spiritMult ? ` × 天时 ${w.spiritMult}` : ""}）`,
-    herb > 0 ? `灵草 ${n1(herb)}/秒（灵田${w?.herbMult ? ` × 天时 ${w.herbMult}` : ""}）` : "灵草 0/秒（未建灵田）",
-    stone > 0 ? `灵石 ${n1(stone)}/秒（镇压产出${w?.spiritStoneMult ? ` × 天时 ${w.spiritStoneMult}` : ""}）` : "灵石 0/秒（未镇压节点）",
+    `天气·${w.name}：${w.desc}${state.daily.weather.used ? "（已用）" : ""}`,
+    `星象·${a.name}：${a.desc}${state.daily.astrology.used ? "（已用）" : ""}`,
+    `修为 ${n1(cultivationPerSec)}/秒（基础 ${n1(CONFIG.baseCultivationPerSecond)}${cultBuilding > 1 ? ` × 修炼室 ${n1(cultBuilding)}` : ""}${cultTech > 1 ? ` × 功法 ${n1(cultTech)}` : ""}）`,
+    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}）`,
+    herb > 0 ? `灵草 ${n1(herb)}/秒（灵田）` : "灵草 0/秒（未建灵田）",
+    stone > 0 ? `灵石 ${n1(stone)}/秒（镇压产出）` : "灵石 0/秒（未镇压节点）",
   ];
   return { cultivationPerSec, spiritPerSec, herbPerSec: herb, spiritStonePerSec: stone, lines };
 }
@@ -321,15 +295,47 @@ export function productionBreakdown(state: SaveState): ProductionBreakdown {
 export function settle(state: SaveState, nowMs: number): SaveState {
   const s = structuredClone(state);
   ensureDaily(s, nowMs);
-  applySuppressionExpiry(s, nowMs);
-  const capSec = CONFIG.offlineCapHours * 3600;
-  const deltaSec = Math.max(0, Math.min((nowMs - s.lastSettledAt) / 1000, capSec));
+
+  const capMs = CONFIG.offlineCapHours * 3600 * 1000;
+  const from = s.lastSettledAt;
+  const to = Math.min(nowMs, from + capMs);
+  const deltaMs = Math.max(0, to - from);
+  const deltaSec = deltaMs / 1000;
+
   const cultMult = buildingCultivationMult(s) * techniqueCultivationMult(s);
   const spiritMult = buildingSpiritMult(s);
+  const herbRate = spiritFieldRate(s);
+
+  let spiritStoneGain = 0;
+  const durMs = CONFIG.suppressionDurationHours * 3600 * 1000;
+  for (const mid of Object.keys(MAP_CFG) as MapId[]) {
+    const nodeId = s.suppression[mid];
+    if (!nodeId) continue;
+    const rate = MAP_CFG[mid].nodes[nodeId].suppressRate;
+    const since = s.suppressionSince[mid] || 0;
+    if (since <= 0) {
+      spiritStoneGain += rate * deltaSec;
+      continue;
+    }
+    const expiresAt = since + durMs;
+    if (expiresAt <= from) {
+      s.suppression[mid] = null;
+      s.suppressionSince[mid] = 0;
+      s.recentLogs.push(`${MAP_CFG[mid].nodes[nodeId].name}妖气复聚，镇压失效。`);
+    } else if (expiresAt > to) {
+      spiritStoneGain += rate * deltaSec;
+    } else {
+      spiritStoneGain += rate * (expiresAt - from) / 1000;
+      s.suppression[mid] = null;
+      s.suppressionSince[mid] = 0;
+      s.recentLogs.push(`${MAP_CFG[mid].nodes[nodeId].name}妖气复聚，镇压失效。`);
+    }
+  }
+
   s.resources.cultivation += CONFIG.baseCultivationPerSecond * cultMult * deltaSec;
   s.resources.spirit += CONFIG.baseSpiritPerSecond * spiritMult * deltaSec;
-  s.resources.herb += spiritFieldRate(s) * deltaSec;
-  s.resources.spiritStone += suppressionRate(s) * deltaSec;
+  s.resources.herb += herbRate * deltaSec;
+  s.resources.spiritStone += spiritStoneGain;
   s.lastSettledAt = Math.max(s.lastSettledAt, nowMs);
   s.revision += 1;
   return s;
@@ -352,7 +358,6 @@ export function breakthrough(state: SaveState, nowMs: number): Result<SaveState>
   s.realm = next.id as RealmId;
   s.recentLogs.push(`闭关突破，晋入${next.name}。`);
   pushMilestone(s, "breakthrough", nowMs, `晋入${next.name}`);
-  recordDailyEvent(s, nowMs, "breakthrough");
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -424,7 +429,6 @@ export function craftPill(state: SaveState, nowMs: number): Result<SaveState> {
   s.resources.spiritStone -= c.pillStoneCost;
   s.inventory.tribulationPill = (s.inventory.tribulationPill || 0) + 1;
   s.recentLogs.push("开炉炼丹，得护劫丹一枚。");
-  recordDailyEvent(s, nowMs, "craft");
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -501,6 +505,7 @@ function triggerEncounter(s: SaveState, mapId: MapId, eventId: string): void {
 function runBattle(
   stats: { attack: number; defense: number; hp: number },
   enemy: { attack: number; defense: number; hp: number },
+  dmgMult = 1,
 ): { won: boolean; log: string[] } {
   const log: string[] = [];
   let pHp = stats.hp;
@@ -510,7 +515,7 @@ function runBattle(
   let guard = 0;
   while (guard++ < 100) {
     if (playerTurn) {
-      const dmg = Math.max(1, stats.attack - enemy.defense);
+      const dmg = Math.max(1, Math.round((stats.attack - enemy.defense) * dmgMult));
       eHp -= dmg;
       log.push(`你出手，伤敌${dmg}点，敌余${Math.max(0, eHp)}气血。`);
       if (eHp <= 0) {
@@ -547,8 +552,8 @@ export function predictFight(state: SaveState, mapId: MapId, nodeId: string): Fi
   if (realmIndex(state.realm) < realmIndex(nodeCfg.gate as RealmId)) {
     return { ok: false, reason: `需${realmName(nodeCfg.gate as RealmId)}方可挑战`, won: false, log: [], enemy: empty, player: empty };
   }
-  const stats = battleStats(state);
-  const battle = runBattle(stats, nodeCfg.enemy);
+  const stats = playerStats(state);
+  const battle = runBattle(stats, nodeCfg.enemy, battleDamageMult(state));
   return { ok: true, reason: "", won: battle.won, log: battle.log, enemy: { ...nodeCfg.enemy }, player: stats };
 }
 
@@ -563,11 +568,20 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     return { ok: false, reason: `需${realmName(nodeCfg.gate as RealmId)}方可挑战`, state: s, log: [], won: false, encounterTriggered: false };
   }
 
-  const stats = battleStats(s);
-  const battle = runBattle(stats, nodeCfg.enemy);
+  const stats = playerStats(s);
+  const dmgMult = battleDamageMult(s);
+  const battle = runBattle(stats, nodeCfg.enemy, dmgMult);
   const log = battle.log;
   const won = battle.won;
-  recordDailyEvent(s, nowMs, "battle");
+  s.daily.goals.battle.progress = Math.min(s.daily.goals.battle.progress + 1, CONFIG.dailyGoals.battle.target);
+  if (!s.daily.astrology.used && s.daily.astrology.id !== "none") {
+    if (s.daily.astrology.id === "war") {
+      s.daily.astrology.used = true;
+    } else if (s.daily.astrology.id === "lucky" && won) {
+      s.daily.astrology.used = true;
+      applyReward(s, CONFIG.astrologies.lucky.reward);
+    }
+  }
 
   if (!won) {
     log.push(analyzeFailure(stats, nodeCfg.enemy));
@@ -625,7 +639,7 @@ export function setSuppression(state: SaveState, nowMs: number, mapId: MapId, no
   if (mapId === "map_qingyun" && nodeId === Object.keys(MAP_CFG.map_qingyun.nodes)[0]) {
     s.firsts.suppressedFirstNodeOnce = true;
   }
-  recordDailyEvent(s, nowMs, "suppress");
+  s.daily.goals.suppress.progress = Math.min(s.daily.goals.suppress.progress + 1, CONFIG.dailyGoals.suppress.target);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -649,7 +663,6 @@ export function resolveEncounter(state: SaveState, nowMs: number, optionId: stri
   s.encounter.pending = null;
   s.recentLogs.push(`际遇「${evt.title}」已定，选择「${opt.label}」。`);
   pushMilestone(s, "encounter", nowMs, `际遇「${evt.title}」`);
-  recordDailyEvent(s, nowMs, "encounter");
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -778,11 +791,17 @@ export function migrateSave(raw: SaveState): SaveState {
       viewedTribPreviewOnce: false,
     };
   }
-  if (!s.daily || typeof s.daily !== "object") {
+  const rawDaily = s.daily as Record<string, unknown> | undefined;
+  const hasNewDaily = !!rawDaily && typeof rawDaily.weather === "object" && typeof rawDaily.astrology === "object";
+  if (!hasNewDaily) {
     s.daily = emptyDaily(todayStr(Date.now()));
   }
+  const lastSettled = (s.lastSettledAt as number) || Date.now();
   if (!s.suppressionSince || typeof s.suppressionSince !== "object") {
-    s.suppressionSince = { map_qingyun: 0, map_nether: 0 };
+    s.suppressionSince = {
+      map_qingyun: suppression["map_qingyun"] ? lastSettled : 0,
+      map_nether: suppression["map_nether"] ? lastSettled : 0,
+    };
   }
   s.schemaVersion = SCHEMA_VERSION;
   return s as unknown as SaveState;
@@ -875,6 +894,34 @@ function validateMilestonesAndFirsts(milestones: unknown, firsts: unknown): stri
   return null;
 }
 
+function validateDaily(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  const d = v as Record<string, unknown>;
+  if (typeof d.date !== "string") return "每日数据日期无效";
+  const weather = d.weather as Record<string, unknown> | undefined;
+  const astrology = d.astrology as Record<string, unknown> | undefined;
+  const goals = d.goals as Record<string, unknown> | undefined;
+  if (weather && (typeof weather.id !== "string" || typeof weather.used !== "boolean")) return "天气数据无效";
+  if (astrology && (typeof astrology.id !== "string" || typeof astrology.used !== "boolean")) return "星象数据无效";
+  if (goals) {
+    for (const gid of ["battle", "suppress"]) {
+      const g = goals[gid] as Record<string, unknown> | undefined;
+      if (g && (typeof g.progress !== "number" || typeof g.claimed !== "boolean")) return "每日目标数据无效";
+    }
+  }
+  return null;
+}
+
+function validateSuppressionSince(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  const s = v as Record<string, unknown>;
+  for (const mid of Object.keys(MAP_CFG)) {
+    const x = s[mid];
+    if (x !== undefined && (typeof x !== "number" || !Number.isFinite(x) || x < 0)) return "镇压时间无效";
+  }
+  return null;
+}
+
 export function importSave(json: string): Result<SaveState> {
   let d: unknown;
   try {
@@ -885,7 +932,9 @@ export function importSave(json: string): Result<SaveState> {
   if (!d || typeof d !== "object") return fail("存档结构无效");
   const o = d as Record<string, unknown>;
   const ver = o.schemaVersion;
-  if (ver !== 1 && ver !== SCHEMA_VERSION) return fail(`存档版本不兼容（支持版本 1 或 ${SCHEMA_VERSION}）`);
+  if (typeof ver !== "number" || ver < 1 || ver > SCHEMA_VERSION) {
+    return fail(`存档版本不兼容（支持版本 1～${SCHEMA_VERSION}）`);
+  }
   if (typeof o.name !== "string" || !o.name.trim()) return fail("存档缺少姓名");
   if (!realmOrder.includes(o.realm as RealmId)) return fail("境界无效");
   if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt)) return fail("时间数据无效");
@@ -898,6 +947,8 @@ export function importSave(json: string): Result<SaveState> {
     validateMaps(o.maps, o.suppression),
     validateEncounter(o.encounter),
     validateMilestonesAndFirsts(o.milestones, o.firsts),
+    validateDaily(o.daily),
+    validateSuppressionSince(o.suppressionSince),
   ];
   for (const c of checks) if (c) return fail(c);
 
@@ -923,7 +974,9 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.recentLogs = Array.isArray(o.recentLogs) ? (o.recentLogs as string[]).slice(-20) : base.recentLogs;
   base.milestones = Array.isArray(o.milestones) ? (o.milestones as Milestone[]) : [];
   base.firsts = { ...base.firsts, ...((o.firsts as Partial<SaveState["firsts"]>) || {}) };
-  base.daily = (o.daily as DailyState) ?? emptyDaily(todayStr(Date.now()));
+  const rawDaily = o.daily as Record<string, unknown> | undefined;
+  const hasNewDaily = !!rawDaily && typeof rawDaily.weather === "object" && typeof rawDaily.astrology === "object";
+  base.daily = hasNewDaily ? (rawDaily as unknown as DailyState) : emptyDaily(todayStr(Date.now()));
   base.suppressionSince = { map_qingyun: 0, map_nether: 0, ...((o.suppressionSince as Partial<SaveState["suppressionSince"]>) || {}) };
   base.lastSettledAt = o.lastSettledAt as number;
   base.revision = ((o.revision as number) || 0) + 1;

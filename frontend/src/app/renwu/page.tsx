@@ -5,7 +5,7 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { playerStats } from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS, DAILY_QUESTS, RESOURCE_LABELS } from "@/lib/labels";
+import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS, DAILY_GOALS, RESOURCE_LABELS } from "@/lib/labels";
 import { getTheme, setTheme, getReduceMotion, setReduceMotion, getCopyMode, setCopyMode, type Theme, type CopyMode } from "@/lib/prefs";
 import type { MapId } from "@/engine/types";
 
@@ -27,7 +27,7 @@ const MAPS_CFG = CONFIG.maps as unknown as Record<
 >;
 
 export default function RenwuPage() {
-  const { state, doExport, doImport, doReset, doRestoreBackup } = useGame();
+  const { state, doExport, doImport, doReset, doRestoreBackup, claimGoal } = useGame();
   const fileRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState(() =>
     typeof localStorage !== "undefined" ? localStorage.getItem("qingyun_access_code") || "" : "",
@@ -115,28 +115,33 @@ export default function RenwuPage() {
         )}
       </Section>
 
-      <Section title="今日任务">
-        {state.daily.quests.length === 0 ? (
-          <p className="text-sm text-muted">今日暂无任务</p>
-        ) : (
-          state.daily.quests.map((q) => {
-            const cfg = DAILY_QUESTS[q.id];
-            if (!cfg) return null;
-            const cur = Math.min(state.daily.counters[q.id as keyof typeof state.daily.counters] || 0, cfg.target);
-            const rewardTxt = Object.entries(cfg.reward)
-              .map(([k, v]) => `${RESOURCE_LABELS[k] || k} +${v}`)
-              .join(" ");
-            return (
-              <div key={q.id} className="flex items-center justify-between border-b border-line/60 py-1.5 last:border-0">
-                <div className="text-sm">
-                  {q.done ? <span className="text-gold">✓</span> : <span className="text-muted">○</span>} {cfg.title}
-                  <span className="ml-1 text-xs text-muted">({cur}/{cfg.target})</span>
-                </div>
-                <span className="text-xs text-muted">{rewardTxt}</span>
+      <Section title="今日目标">
+        {(["battle", "suppress"] as const).map((gid) => {
+          const cfg = DAILY_GOALS[gid];
+          const g = state.daily.goals[gid];
+          const cur = Math.min(g.progress, cfg.target);
+          const rewardTxt = Object.entries(cfg.reward)
+            .map(([k, v]) => `${RESOURCE_LABELS[k] || k} +${v}`)
+            .join(" ");
+          const claimable = !g.claimed && g.progress >= cfg.target;
+          return (
+            <div key={gid} className="flex items-center justify-between border-b border-line/60 py-1.5 last:border-0">
+              <div className="text-sm">
+                {g.claimed ? <span className="text-gold">✓</span> : <span className="text-muted">○</span>} {cfg.title}
+                <span className="ml-1 text-xs text-muted">({cur}/{cfg.target})</span>
               </div>
-            );
-          })
-        )}
+              {g.claimed ? (
+                <span className="text-xs text-muted">已领取</span>
+              ) : claimable ? (
+                <button onClick={() => claimGoal(gid)} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs text-cinnabar">
+                  领取
+                </button>
+              ) : (
+                <span className="text-xs text-muted">{rewardTxt}</span>
+              )}
+            </div>
+          );
+        })}
       </Section>
 
       <Section title="修仙录">

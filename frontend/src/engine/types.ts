@@ -58,25 +58,21 @@ export interface Firsts {
   viewedTribPreviewOnce: boolean;
 }
 
-export interface QuestState {
-  id: string;
-  done: boolean;
+export interface DailyGoalState {
+  progress: number;
+  claimed: boolean;
 }
 
-export interface DailyCounters {
-  settle: number;
-  battle: number;
-  craft: number;
-  suppress: number;
-  breakthrough: number;
-  encounter: number;
+export interface DailyGoals {
+  battle: DailyGoalState;
+  suppress: DailyGoalState;
 }
 
 export interface DailyState {
   date: string;
-  weather: string;
-  quests: QuestState[];
-  counters: DailyCounters;
+  weather: { id: string; used: boolean };
+  astrology: { id: string; used: boolean };
+  goals: DailyGoals;
 }
 
 export interface SaveState {

@@ -71,6 +71,7 @@ interface GameContextValue {
   markTribPreviewViewed: () => void;
   showDataNotice: boolean;
   dismissDataNotice: (mode: CopyMode) => void;
+  claimGoal: (goalId: "battle" | "suppress") => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -252,6 +253,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const res = await persistSave(next);
     if (!res.conflict) setState(next);
   }, [state]);
+
+  const claimGoal = useCallback(
+    async (goalId: "battle" | "suppress") => {
+      if (!state) return;
+      const before = state;
+      const r = eng.claimDailyGoal(before, Date.now(), goalId);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      const ok = await apply(r.state, "已领取今日目标奖励");
+      if (ok) setLastResult({ title: "领取目标奖励", lines: deltaLines(before, r.state) });
+    },
+    [state, apply],
+  );
 
   const create = useCallback(
     async (name: string, root: SpiritRoot) => {
@@ -550,6 +566,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     markTribPreviewViewed,
     showDataNotice,
     dismissDataNotice,
+    claimGoal,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

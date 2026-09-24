@@ -18,6 +18,8 @@ import {
   exportSave,
   importSave,
   migrateSave,
+  recordDailySettle,
+  claimDailyGoal,
   playerStats,
   productionBreakdown,
   predictFight,
@@ -29,8 +31,9 @@ const T0 = 1_700_000_000_000;
 
 function fresh(nowMs = T0): SaveState {
   const s = createGame("林青", "金", nowMs);
-  s.daily.quests = [];
-  s.daily.weather = "none";
+  s.daily.weather = { id: "none", used: false };
+  s.daily.astrology = { id: "none", used: false };
+  s.daily.goals = { battle: { progress: 0, claimed: false }, suppress: { progress: 0, claimed: false } };
   return s;
 }
 
@@ -391,15 +394,14 @@ describe("产速与胜负预估", () => {
     expect(productionBreakdown(s2).cultivationPerSec).toBeCloseTo(1.2, 5);
   });
 
-  it("天气加成作用于产速", () => {
+  it("天气限次奖励：首次领取收益发奖并标记已用", () => {
     const s = fresh();
-    s.daily.weather = "clear";
-    expect(productionBreakdown(s).cultivationPerSec).toBeCloseTo(1.15, 5);
-    expect(productionBreakdown(s).spiritPerSec).toBeCloseTo(0.2875, 5);
-    const s2 = fresh();
-    s2.daily.weather = "rain";
-    s2.buildings.spiritField = 1;
-    expect(productionBreakdown(s2).herbPerSec).toBeCloseTo(0.05 * 1.5, 5);
+    s.daily.weather = { id: "clear", used: false }; // 晴明 +100 修为
+    const after = recordDailySettle(s, T0);
+    expect(after.resources.cultivation).toBe(100);
+    expect(after.daily.weather.used).toBe(true);
+    const after2 = recordDailySettle(after, T0 + 1);
+    expect(after2.resources.cultivation).toBe(100); // 不重复发
   });
 
   it("确定性胜负预估与战斗一致", () => {
@@ -412,36 +414,52 @@ describe("产速与胜负预估", () => {
   });
 });
 
-describe("每日任务", () => {
-  it("战斗任务完成后发奖且不重复", () => {
+describe("每日目标", () => {
+  it("战斗目标达 3 次后可手动领取，不重复发", () => {
     const s = fresh();
-    s.daily.quests = [{ id: "battle", done: false }];
-    s.daily.counters.battle = 2;
+    s.daily.goals.battle.progress = 2;
     const r = fightNode(s, T0, "map_qingyun", "node_wolf");
-    const st = r.state;
-    expect(st.daily.counters.battle).toBe(3);
-    expect(st.daily.quests.find((q) => q.id === "battle")?.done).toBe(true);
-    expect(st.resources.page).toBe(8); // 首通 +5 + 任务 +3
+    expect(r.state.daily.goals.battle.progress).toBe(3);
+    expect(r.state.resources.page).toBe(5); // 仅首通 +5，未领取不发
+    const cl = claimDailyGoal(r.state, T0, "battle");
+    expect(cl.ok).toBe(true);
+    expect((cl.state as SaveState).resources.page).toBe(8); // +3
+    expect(claimDailyGoal(cl.state as SaveState, T0, "battle").ok).toBe(false);
   });
 
-  it("跨天重置任务", () => {
+  it("跨天重置目标", () => {
     const s = fresh();
     const r = fightNode(s, T0, "map_qingyun", "node_wolf");
     const next = settle(r.state, T0 + 24 * 3600 * 1000);
     expect(next.daily.date).not.toBe(r.state.daily.date);
-    expect(next.daily.counters.battle).toBe(0);
+    expect(next.daily.goals.battle.progress).toBe(0);
   });
 });
 
 describe("镇压复聚", () => {
-  it("镇压到期后自动失效", () => {
+  it("镇压 24 小时到期后自动失效", () => {
     const s = fresh();
     s.maps.map_qingyun.node_wolf.cleared = true;
     const r = setSuppression(s, T0, "map_qingyun", "node_wolf");
-    expect(r.ok).toBe(true);
     const st = r.state as SaveState;
     expect(st.suppression.map_qingyun).toBe("node_wolf");
-    const after = settle(st, T0 + 12 * 3600 * 1000 + 1);
+    // 先结算 12h（离线上限），镇压仍在
+    const mid = settle(st, T0 + 12 * 3600 * 1000);
+    expect(mid.suppression.map_qingyun).toBe("node_wolf");
+    // 再结算 12h+1ms，跨过 24h 到期点
+    const after = settle(mid, T0 + 24 * 3600 * 1000 + 1);
     expect(after.suppression.map_qingyun).toBe(null);
+  });
+
+  it("跨到期点按有效时段结算，不吞到期前收益", () => {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    const r = setSuppression(s, T0, "map_qingyun", "node_wolf");
+    const st = r.state as SaveState;
+    const mid = settle(st, T0 + 12 * 3600 * 1000);
+    expect(mid.resources.spiritStone).toBeCloseTo(4320, 0); // 0.1/s * 12h
+    const end = settle(mid, T0 + 24 * 3600 * 1000 + 1);
+    expect(end.resources.spiritStone).toBeCloseTo(8640, 0); // 再 12h
+    expect(end.suppression.map_qingyun).toBe(null);
   });
 });
