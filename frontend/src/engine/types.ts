@@ -46,6 +46,18 @@ export interface TribulationLog {
   log: string[];
 }
 
+export interface Milestone {
+  type: string;
+  time: number; // epoch ms
+  text: string;
+}
+
+export interface Firsts {
+  settledOnce: boolean;
+  suppressedFirstNodeOnce: boolean;
+  viewedTribPreviewOnce: boolean;
+}
+
 export interface SaveState {
   schemaVersion: number;
   id: string;
@@ -64,6 +76,8 @@ export interface SaveState {
   encounter: EncounterState;
   tribulationLog: TribulationLog | null;
   recentLogs: string[];
+  milestones: Milestone[];
+  firsts: Firsts;
   lastSettledAt: number; // epoch ms
   revision: number;
 }

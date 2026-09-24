@@ -2,6 +2,7 @@ import { CONFIG } from "./config";
 import type {
   BuildingId,
   MapId,
+  Milestone,
   RealmId,
   Resources,
   Result,
@@ -12,7 +13,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -89,6 +90,10 @@ function fail<T>(reason: string): Result<T> {
   return { ok: false, reason };
 }
 
+function pushMilestone(s: SaveState, type: string, time: number, text: string): void {
+  s.milestones.push({ type, time, text });
+}
+
 // ---- 新建 / 重置 ----
 
 export function createGame(name: string, spiritRoot: SpiritRoot, nowMs = Date.now()): SaveState {
@@ -120,6 +125,8 @@ export function createGame(name: string, spiritRoot: SpiritRoot, nowMs = Date.no
     encounter: { pending: null, triggeredToday: 0, lastTriggerDate: todayStr(nowMs), guideDone: false },
     tribulationLog: null,
     recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}。`],
+    milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}` }],
+    firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
     lastSettledAt: nowMs,
     revision: 0,
   };
@@ -171,6 +178,35 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
   return { attack, defense, hp };
 }
 
+function n1(x: number): string {
+  return Number.isInteger(x) ? String(x) : x.toFixed(1);
+}
+
+export interface ProductionBreakdown {
+  cultivationPerSec: number;
+  spiritPerSec: number;
+  herbPerSec: number;
+  spiritStonePerSec: number;
+  lines: string[];
+}
+
+export function productionBreakdown(state: SaveState): ProductionBreakdown {
+  const cultBuilding = buildingCultivationMult(state);
+  const cultTech = techniqueCultivationMult(state);
+  const spiritBuilding = buildingSpiritMult(state);
+  const herb = spiritFieldRate(state);
+  const stone = suppressionRate(state);
+  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech;
+  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding;
+  const lines: string[] = [
+    `修为 ${n1(cultivationPerSec)}/秒（基础 ${n1(CONFIG.baseCultivationPerSecond)}${cultBuilding > 1 ? ` × 修炼室 ${n1(cultBuilding)}` : ""}${cultTech > 1 ? ` × 功法 ${n1(cultTech)}` : ""}）`,
+    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}）`,
+    herb > 0 ? `灵草 ${n1(herb)}/秒（灵田）` : "灵草 0/秒（未建灵田）",
+    stone > 0 ? `灵石 ${n1(stone)}/秒（镇压产出）` : "灵石 0/秒（未镇压节点）",
+  ];
+  return { cultivationPerSec, spiritPerSec, herbPerSec: herb, spiritStonePerSec: stone, lines };
+}
+
 // ---- 时间结算 ----
 
 export function settle(state: SaveState, nowMs: number): SaveState {
@@ -204,6 +240,7 @@ export function breakthrough(state: SaveState, nowMs: number): Result<SaveState>
   s.resources.spirit -= next.spiritCost;
   s.realm = next.id as RealmId;
   s.recentLogs.push(`闭关突破，晋入${next.name}。`);
+  pushMilestone(s, "breakthrough", nowMs, `晋入${next.name}`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -348,6 +385,60 @@ function triggerEncounter(s: SaveState, mapId: MapId, eventId: string): void {
   s.encounter.triggeredToday += 1;
 }
 
+function runBattle(
+  stats: { attack: number; defense: number; hp: number },
+  enemy: { attack: number; defense: number; hp: number },
+): { won: boolean; log: string[] } {
+  const log: string[] = [];
+  let pHp = stats.hp;
+  let eHp = enemy.hp;
+  let playerTurn = true;
+  let won = false;
+  let guard = 0;
+  while (guard++ < 100) {
+    if (playerTurn) {
+      const dmg = Math.max(1, stats.attack - enemy.defense);
+      eHp -= dmg;
+      log.push(`你出手，伤敌${dmg}点，敌余${Math.max(0, eHp)}气血。`);
+      if (eHp <= 0) {
+        won = true;
+        break;
+      }
+    } else {
+      const dmg = Math.max(1, enemy.attack - stats.defense);
+      pHp -= dmg;
+      log.push(`敌反击，伤你${dmg}点，你余${Math.max(0, pHp)}气血。`);
+      if (pHp <= 0) break;
+    }
+    playerTurn = !playerTurn;
+  }
+  return { won, log };
+}
+
+export interface FightPrediction {
+  ok: boolean;
+  reason: string;
+  won: boolean;
+  log: string[];
+  enemy: { attack: number; defense: number; hp: number };
+  player: { attack: number; defense: number; hp: number };
+}
+
+export function predictFight(state: SaveState, mapId: MapId, nodeId: string): FightPrediction {
+  const mapCfg = MAP_CFG[mapId];
+  const nodeCfg = mapCfg?.nodes[nodeId];
+  const nodeState = state.maps[mapId]?.[nodeId];
+  const empty = { attack: 0, defense: 0, hp: 0 };
+  if (!nodeCfg || !nodeState) return { ok: false, reason: "无此节点", won: false, log: [], enemy: empty, player: empty };
+  if (!nodeState.unlocked) return { ok: false, reason: "节点未解锁", won: false, log: [], enemy: empty, player: empty };
+  if (realmIndex(state.realm) < realmIndex(nodeCfg.gate as RealmId)) {
+    return { ok: false, reason: `需${realmName(nodeCfg.gate as RealmId)}方可挑战`, won: false, log: [], enemy: empty, player: empty };
+  }
+  const stats = playerStats(state);
+  const battle = runBattle(stats, nodeCfg.enemy);
+  return { ok: true, reason: "", won: battle.won, log: battle.log, enemy: { ...nodeCfg.enemy }, player: stats };
+}
+
 export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId: string): FightOutcome {
   const s = settle(state, nowMs);
   const mapCfg = MAP_CFG[mapId];
@@ -360,29 +451,9 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   }
 
   const stats = playerStats(s);
-  const log: string[] = [];
-  let pHp = stats.hp;
-  let eHp = nodeCfg.enemy.hp;
-  let playerTurn = true;
-  let won = false;
-  let guard = 0;
-  while (guard++ < 100) {
-    if (playerTurn) {
-      const dmg = Math.max(1, stats.attack - nodeCfg.enemy.defense);
-      eHp -= dmg;
-      log.push(`你出手，伤敌${dmg}点，敌余${Math.max(0, eHp)}气血。`);
-      if (eHp <= 0) {
-        won = true;
-        break;
-      }
-    } else {
-      const dmg = Math.max(1, nodeCfg.enemy.attack - stats.defense);
-      pHp -= dmg;
-      log.push(`敌反击，伤你${dmg}点，你余${Math.max(0, pHp)}气血。`);
-      if (pHp <= 0) break;
-    }
-    playerTurn = !playerTurn;
-  }
+  const battle = runBattle(stats, nodeCfg.enemy);
+  const log = battle.log;
+  const won = battle.won;
 
   if (!won) {
     log.push(analyzeFailure(stats, nodeCfg.enemy));
@@ -403,6 +474,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
       s.recentLogs.push(`得装备「${EQUIP_CFG[fc.equipment].name}」。`);
     }
     s.recentLogs.push(`首通${mapCfg.name}·${nodeCfg.name}。`);
+    pushMilestone(s, "firstClear", nowMs, `首通${mapCfg.name}·${nodeCfg.name}`);
     unlockNext(s, mapId, nodeId);
   } else {
     const rc = nodeCfg.repeat;
@@ -432,7 +504,12 @@ export function setSuppression(state: SaveState, nowMs: number, mapId: MapId, no
   if (!nodeState) return fail("无此节点");
   if (!nodeState.cleared) return fail("需先通关该节点");
   s.suppression[mapId] = nodeId;
-  s.recentLogs.push(`于${MAP_CFG[mapId].name}镇压${MAP_CFG[mapId].nodes[nodeId].name}，得其产出。`);
+  const supText = `于${MAP_CFG[mapId].name}镇压${MAP_CFG[mapId].nodes[nodeId].name}`;
+  s.recentLogs.push(`${supText}，得其产出。`);
+  pushMilestone(s, "suppress", nowMs, supText);
+  if (mapId === "map_qingyun" && nodeId === Object.keys(MAP_CFG.map_qingyun.nodes)[0]) {
+    s.firsts.suppressedFirstNodeOnce = true;
+  }
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -455,6 +532,7 @@ export function resolveEncounter(state: SaveState, nowMs: number, optionId: stri
   if (r.page) s.resources.page += r.page;
   s.encounter.pending = null;
   s.recentLogs.push(`际遇「${evt.title}」已定，选择「${opt.label}」。`);
+  pushMilestone(s, "encounter", nowMs, `际遇「${evt.title}」`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -559,8 +637,10 @@ export function startTribulation(state: SaveState, nowMs: number): Result<SaveSt
   if (sim.success) {
     s.realm = "foundation1";
     s.recentLogs.push("五波天劫尽数扛下，于雷霆中筑基，晋入筑基一层。");
+    pushMilestone(s, "tribulation", nowMs, "渡劫成功，晋入筑基一层");
   } else {
     s.recentLogs.push("渡劫失败，境界不动，可重新积累再试。");
+    pushMilestone(s, "tribulation", nowMs, "渡劫失败");
   }
   s.tribulationLog = { maxHp: sim.maxHp, reduction: sim.reduction, pillUsed: pill, waves: sim.waves, success: sim.success, log: sim.log };
   s.revision += 1;
@@ -645,6 +725,17 @@ function validateEncounter(v: unknown): string | null {
   return null;
 }
 
+function validateMilestonesAndFirsts(milestones: unknown, firsts: unknown): string | null {
+  if (milestones !== undefined && !Array.isArray(milestones)) return "修仙录数据无效";
+  if (firsts !== undefined) {
+    const f = firsts as Record<string, unknown>;
+    for (const k of ["settledOnce", "suppressedFirstNodeOnce", "viewedTribPreviewOnce"]) {
+      if (f[k] !== undefined && typeof f[k] !== "boolean") return "首玩目标数据无效";
+    }
+  }
+  return null;
+}
+
 export function importSave(json: string): Result<SaveState> {
   let d: unknown;
   try {
@@ -654,7 +745,8 @@ export function importSave(json: string): Result<SaveState> {
   }
   if (!d || typeof d !== "object") return fail("存档结构无效");
   const o = d as Record<string, unknown>;
-  if (o.schemaVersion !== SCHEMA_VERSION) return fail(`存档版本不兼容（支持版本 ${SCHEMA_VERSION}）`);
+  const ver = o.schemaVersion;
+  if (ver !== 1 && ver !== SCHEMA_VERSION) return fail(`存档版本不兼容（支持版本 1 或 ${SCHEMA_VERSION}）`);
   if (typeof o.name !== "string" || !o.name.trim()) return fail("存档缺少姓名");
   if (!realmOrder.includes(o.realm as RealmId)) return fail("境界无效");
   if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt)) return fail("时间数据无效");
@@ -666,6 +758,7 @@ export function importSave(json: string): Result<SaveState> {
     validateEquipmentAndInventory(o.equipment, o.inventory),
     validateMaps(o.maps, o.suppression),
     validateEncounter(o.encounter),
+    validateMilestonesAndFirsts(o.milestones, o.firsts),
   ];
   for (const c of checks) if (c) return fail(c);
 
@@ -689,6 +782,8 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };
   base.tribulationLog = (o.tribulationLog as TribulationLog | null) ?? null;
   base.recentLogs = Array.isArray(o.recentLogs) ? (o.recentLogs as string[]).slice(-20) : base.recentLogs;
+  base.milestones = Array.isArray(o.milestones) ? (o.milestones as Milestone[]) : [];
+  base.firsts = { ...base.firsts, ...((o.firsts as Partial<SaveState["firsts"]>) || {}) };
   base.lastSettledAt = o.lastSettledAt as number;
   base.revision = ((o.revision as number) || 0) + 1;
   return base;

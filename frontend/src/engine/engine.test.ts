@@ -18,6 +18,8 @@ import {
   exportSave,
   importSave,
   playerStats,
+  productionBreakdown,
+  predictFight,
 } from "./engine";
 import type { SaveState, RealmId, MapId } from "./types";
 
@@ -347,5 +349,40 @@ describe("数值可达性", () => {
     for (const step of order) {
       expect(s.maps[step.map][step.node].cleared).toBe(true);
     }
+  });
+});
+
+describe("v1 存档迁移", () => {
+  it("v1 存档升级到 v2，补默认字段", () => {
+    const s = fresh();
+    const v1 = { ...s, schemaVersion: 1 } as Record<string, unknown>;
+    delete (v1 as Record<string, unknown>).milestones;
+    delete (v1 as Record<string, unknown>).firsts;
+    const r = importSave(JSON.stringify(v1));
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.schemaVersion).toBe(2);
+    expect(st.milestones).toEqual([]);
+    expect(st.firsts).toEqual({ settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false });
+  });
+});
+
+describe("产速与胜负预估", () => {
+  it("产速来源计算正确", () => {
+    const s = fresh();
+    expect(productionBreakdown(s).cultivationPerSec).toBeCloseTo(1, 5);
+    expect(productionBreakdown(s).spiritPerSec).toBeCloseTo(0.25, 5);
+    const s2 = fresh();
+    s2.buildings.cultivationRoom = 1;
+    expect(productionBreakdown(s2).cultivationPerSec).toBeCloseTo(1.2, 5);
+  });
+
+  it("确定性胜负预估与战斗一致", () => {
+    const s = fresh();
+    const p = predictFight(s, "map_qingyun", "node_wolf");
+    expect(p.ok).toBe(true);
+    expect(p.won).toBe(true);
+    const r = fightNode(fresh(), T0, "map_qingyun", "node_wolf");
+    expect(r.won).toBe(p.won);
   });
 });

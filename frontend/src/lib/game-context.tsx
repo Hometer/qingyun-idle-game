@@ -14,6 +14,7 @@ import { CONFIG } from "@/engine/config";
 import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId } from "@/engine/types";
 import { loadSave, persistSave, replaceSave, backupSave, clearSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
+import { getCopyMode } from "@/lib/prefs";
 import { RESOURCE_LABELS, fmt, resourceGains } from "@/lib/labels";
 
 export interface EncounterCopy {
@@ -137,7 +138,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       recent_logs: state.recentLogs.slice(-2),
     };
     (async () => {
-      const resp: EncounterResponse | null = await generateEncounter(body);
+      const resp: EncounterResponse | null =
+        getCopyMode() === "template" ? null : await generateEncounter(body);
       if (cancelled) return;
       if (resp) {
         setEncounter({
