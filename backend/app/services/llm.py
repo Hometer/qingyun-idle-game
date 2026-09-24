@@ -1,7 +1,9 @@
 """模型调用：超时、有限重试、结构化解析、模板降级。"""
 
 import json
+import logging
 import re
+import time
 from pathlib import Path
 
 from openai import OpenAI
@@ -14,6 +16,8 @@ _PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "encounter.t
 _PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 _MAX_ATTEMPTS = 2
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_json(text: str) -> dict | None:
@@ -65,6 +69,7 @@ def _template_response(req: GenerateRequest) -> GenerateResponse:
 def generate_encounter(req: GenerateRequest) -> GenerateResponse:
     # 无 Key：直接模板，不发起任何网络调用
     if not settings.model_api_key:
+        logger.info("fallback event=%s reason=no_key", req.event_id)
         return _template_response(req)
 
     prompt = _build_prompt(req)
@@ -75,9 +80,12 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
             timeout=settings.model_timeout_seconds,
         )
     except Exception:
+        logger.info("fallback event=%s reason=sdk_init", req.event_id)
         return _template_response(req)
 
+    reason = "unknown"
     for _ in range(_MAX_ATTEMPTS):
+        start = time.perf_counter()
         try:
             resp = client.chat.completions.create(
                 model=settings.model_name,
@@ -86,14 +94,25 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
                 max_tokens=400,
             )
             text = resp.choices[0].message.content or ""
-        except Exception:
+            latency = time.perf_counter() - start
+        except Exception as e:
+            reason = f"call_error:{type(e).__name__}"
             continue
         parsed = _parse_json(text)
         if parsed is None:
+            reason = "parse_fail"
             continue
-        ok, _ = moderation.validate_result(parsed, req)
+        ok, r = moderation.validate_result(parsed, req)
         if not ok:
+            reason = f"validation:{r}"
             continue
+        logger.info(
+            "model_ok event=%s model=%s latency=%.2fs tokens=%s",
+            req.event_id,
+            settings.model_name,
+            latency,
+            getattr(getattr(resp, "usage", None), "total_tokens", None),
+        )
         return GenerateResponse(
             source="model",
             event_id=req.event_id,
@@ -102,4 +121,5 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
             options=[OptionOut(option_id=o["option_id"], option_text=o["option_text"]) for o in parsed["options"]],
         )
 
+    logger.info("fallback event=%s reason=%s", req.event_id, reason)
     return _template_response(req)
