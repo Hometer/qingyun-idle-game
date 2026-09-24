@@ -179,7 +179,9 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
 }
 
 function n1(x: number): string {
-  return Number.isInteger(x) ? String(x) : x.toFixed(1);
+  if (Number.isInteger(x)) return String(x);
+  const r = Math.round(x * 100) / 100;
+  return String(r);
 }
 
 export interface ProductionBreakdown {
@@ -651,9 +653,15 @@ export function startTribulation(state: SaveState, nowMs: number): Result<SaveSt
 
 export function migrateSave(raw: SaveState): SaveState {
   const s = structuredClone(raw) as unknown as Record<string, unknown>;
+  const firstNode = Object.keys(MAP_CFG.map_qingyun.nodes)[0];
+  const suppression = (s.suppression ?? {}) as Record<string, unknown>;
   if (!Array.isArray(s.milestones)) s.milestones = [];
   if (!s.firsts || typeof s.firsts !== "object") {
-    s.firsts = { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false };
+    s.firsts = {
+      settledOnce: false,
+      suppressedFirstNodeOnce: suppression["map_qingyun"] === firstNode,
+      viewedTribPreviewOnce: false,
+    };
   }
   s.schemaVersion = SCHEMA_VERSION;
   return s as unknown as SaveState;

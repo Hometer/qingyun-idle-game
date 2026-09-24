@@ -17,6 +17,7 @@ import {
   startTribulation,
   exportSave,
   importSave,
+  migrateSave,
   playerStats,
   productionBreakdown,
   predictFight,
@@ -364,6 +365,16 @@ describe("v1 存档迁移", () => {
     expect(st.schemaVersion).toBe(2);
     expect(st.milestones).toEqual([]);
     expect(st.firsts).toEqual({ settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false });
+  });
+
+  it("迁移旧档时由镇压事实还原首玩标记", () => {
+    const s = fresh();
+    const v1 = { ...s, schemaVersion: 1, suppression: { map_qingyun: "node_wolf", map_nether: null } } as unknown as SaveState;
+    delete (v1 as unknown as Record<string, unknown>).milestones;
+    delete (v1 as unknown as Record<string, unknown>).firsts;
+    const migrated = migrateSave(v1);
+    expect(migrated.firsts.suppressedFirstNodeOnce).toBe(true);
+    expect(migrated.schemaVersion).toBe(2);
   });
 });
 

@@ -146,22 +146,22 @@ export const CONFIG = {
     event_well: {
       title: "古井奇遇",
       options: {
-        well_a: { label: "探查井底", meaning: "冒险下井一探", reward: { spiritStone: 30, herb: 5 } },
-        well_b: { label: "绕行而去", meaning: "不理会，绕路离开", reward: { cultivation: 15 } },
+        well_a: { label: "探查井底", meaning: "冒险下井一探", result: "你缘索下井，于井底见旧刻残文，若有所悟。", reward: { spiritStone: 30, herb: 5 } },
+        well_b: { label: "绕行而去", meaning: "不理会，绕路离开", result: "你绕井而行，心境渐澄，修行略有精进。", reward: { cultivation: 15 } },
       },
     },
     event_beast: {
       title: "灵兽现踪",
       options: {
-        beast_a: { label: "出手相救", meaning: "救下被困的幼鹿", reward: { page: 3 } },
-        beast_b: { label: "静观其变", meaning: "不插手，远远观察", reward: { spiritStone: 20 } },
+        beast_a: { label: "出手相救", meaning: "救下被困的幼鹿", result: "你救下幼鹿，灵鹿衔来几页残卷相谢。", reward: { page: 3 } },
+        beast_b: { label: "静观其变", meaning: "不插手，远远观察", result: "你静观其变，待灵兽自去，拾得几块遗落灵石。", reward: { spiritStone: 20 } },
       },
     },
     event_cave: {
       title: "残破洞府",
       options: {
-        cave_a: { label: "推门而入", meaning: "进入洞府查探", reward: { cultivation: 30, page: 2 } },
-        cave_b: { label: "记下位置", meaning: "记下位置，日后再来", reward: { herb: 8 } },
+        cave_a: { label: "推门而入", meaning: "进入洞府查探", result: "你推门而入，于洞中得见前人札记，略有所得。", reward: { cultivation: 30, page: 2 } },
+        cave_b: { label: "记下位置", meaning: "记下位置，日后再来", result: "你记下方位，先在洞外采得几株灵草。", reward: { herb: 8 } },
       },
     },
   } as const,

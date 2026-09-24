@@ -39,6 +39,7 @@ export default function XiulianPage() {
   const isQi4 = state.realm === "qi4";
   const isMax = state.realm === "foundation1";
   const prod = productionBreakdown(state);
+  const enough = !isMax && !!next && view.resources.cultivation >= next.cultivationCost && view.resources.spirit >= next.spiritCost;
 
   useEffect(() => {
     if (isQi4 && tribPreview?.ok) markTribPreviewViewed();
@@ -60,9 +61,16 @@ export default function XiulianPage() {
           </>
         )}
         {!isMax && !isQi4 && (
-          <button onClick={doBreakthrough} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white">
-            小进阶
-          </button>
+          <>
+            {!enough && next && (
+              <p className="mt-1 text-xs text-cinnabar">
+                还差 {fmt(Math.max(0, next.cultivationCost - view.resources.cultivation))} 修为、{fmt(Math.max(0, next.spiritCost - view.resources.spirit))} 灵气
+              </p>
+            )}
+            <button onClick={doBreakthrough} disabled={!enough} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white disabled:opacity-40">
+              小进阶
+            </button>
+          </>
         )}
       </Section>
 

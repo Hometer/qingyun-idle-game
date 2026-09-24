@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { playerStats } from "@/engine/engine";
+import { CONFIG } from "@/engine/config";
 import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS } from "@/lib/labels";
 import { getTheme, setTheme, getReduceMotion, setReduceMotion, getCopyMode, setCopyMode, type Theme, type CopyMode } from "@/lib/prefs";
 import type { MapId } from "@/engine/types";
@@ -19,6 +20,11 @@ function applyTheme(theme: Theme) {
     theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", dark);
 }
+
+const MAPS_CFG = CONFIG.maps as unknown as Record<
+  string,
+  { name: string; nodes: Record<string, { name: string; firstClear: { equipment: string | null } }> }
+>;
 
 export default function RenwuPage() {
   const { state, doExport, doImport, doReset, doRestoreBackup } = useGame();
@@ -38,12 +44,29 @@ export default function RenwuPage() {
   if (!state) return null;
 
   const stats = playerStats(state);
+  const base = { attack: CONFIG.baseAttack, defense: CONFIG.baseDefense, hp: CONFIG.baseHp };
   const wearing = [state.equipment.weapon, state.equipment.armor, state.equipment.accessory].filter(Boolean) as string[];
+  const eqContrib: string[] = [];
+  for (const slot of ["weapon", "armor", "accessory"] as const) {
+    const id = state.equipment[slot];
+    if (id) {
+      const e = EQUIPMENT[id];
+      const bits: string[] = [];
+      if (e.attack) bits.push(`攻+${e.attack}`);
+      if (e.defense) bits.push(`防+${e.defense}`);
+      if (e.hp) bits.push(`气血+${e.hp}`);
+      if (bits.length) eqContrib.push(`${e.name} ${bits.join(" ")}`);
+    }
+  }
 
   const clearedNodes: string[] = [];
-  for (const mid of Object.keys(MAPS) as MapId[]) {
-    for (const [nid, n] of Object.entries(MAPS[mid].nodes)) {
-      if (state.maps[mid][nid]?.cleared) clearedNodes.push(`${MAPS[mid].name}·${n.name}`);
+  const equipSource: Record<string, string> = {};
+  let totalEnemies = 0;
+  for (const mid of Object.keys(MAPS_CFG) as MapId[]) {
+    totalEnemies += Object.keys(MAPS_CFG[mid].nodes).length;
+    for (const [nid, n] of Object.entries(MAPS_CFG[mid].nodes)) {
+      if (state.maps[mid][nid]?.cleared) clearedNodes.push(`${MAPS_CFG[mid].name}·${n.name}`);
+      if (n.firstClear.equipment) equipSource[n.firstClear.equipment] = `${MAPS_CFG[mid].name}·${n.name}首通`;
     }
   }
   const ownedEquip = Object.keys(EQUIPMENT).filter((id) => (state.inventory[id] || 0) > 0);
@@ -80,8 +103,12 @@ export default function RenwuPage() {
         <p className="text-sm">
           {state.name}（灵根：{state.spiritRoot}）· {REALM_NAMES[state.realm]}
         </p>
-        <p className="mt-1 text-sm">
-          攻 {stats.attack} ／ 防 {stats.defense} ／ 气血 {stats.hp}
+        <p className="mt-1 text-sm text-muted">
+          基础 攻{base.attack} 防{base.defense} 气血{base.hp}
+        </p>
+        {eqContrib.length > 0 && <p className="mt-0.5 text-sm text-muted">装备：{eqContrib.join("；")}</p>}
+        <p className="mt-1 text-sm font-medium">
+          合计 攻 {stats.attack} ／ 防 {stats.defense} ／ 气血 {stats.hp}
         </p>
         {wearing.length > 0 && (
           <p className="mt-1 text-sm text-muted">穿戴：{wearing.map((id) => EQUIPMENT[id].name).join("、")}</p>
@@ -113,19 +140,42 @@ export default function RenwuPage() {
           <div className="space-y-2 text-sm">
             <div>
               <div className="text-xs text-muted">敌人与地图</div>
-              {clearedNodes.length ? clearedNodes.map((n) => <div key={n}>{n}</div>) : <div className="text-muted">尚未遇见</div>}
+              {clearedNodes.map((n) => (
+                <div key={n}>{n}</div>
+              ))}
+              {totalEnemies - clearedNodes.length > 0 && (
+                <div className="text-muted">另有 {totalEnemies - clearedNodes.length} 个尚未遇见</div>
+              )}
             </div>
             <div>
               <div className="text-xs text-muted">装备</div>
-              {ownedEquip.length ? ownedEquip.map((id) => <div key={id}>{EQUIPMENT[id].name}</div>) : <div className="text-muted">尚未获得</div>}
+              {ownedEquip.map((id) => (
+                <div key={id}>
+                  {EQUIPMENT[id].name}
+                  <span className="text-xs text-muted">（{equipSource[id] ?? "来源未知"}）</span>
+                </div>
+              ))}
+              {Object.keys(EQUIPMENT).length - ownedEquip.length > 0 && (
+                <div className="text-muted">另有 {Object.keys(EQUIPMENT).length - ownedEquip.length} 件尚未获得</div>
+              )}
             </div>
             <div>
               <div className="text-xs text-muted">功法</div>
-              {learnedTech.length ? learnedTech.map((id) => <div key={id}>{TECHNIQUES[id].name}</div>) : <div className="text-muted">尚未修习</div>}
+              {learnedTech.map((id) => (
+                <div key={id}>{TECHNIQUES[id].name}</div>
+              ))}
+              {Object.keys(TECHNIQUES).length - learnedTech.length > 0 && (
+                <div className="text-muted">另有 {Object.keys(TECHNIQUES).length - learnedTech.length} 门尚未修习</div>
+              )}
             </div>
             <div>
               <div className="text-xs text-muted">建筑</div>
-              {built.length ? built.map((id) => <div key={id}>{BUILDINGS[id].name}</div>) : <div className="text-muted">尚未建造</div>}
+              {built.map((id) => (
+                <div key={id}>{BUILDINGS[id].name}</div>
+              ))}
+              {Object.keys(BUILDINGS).length - built.length > 0 && (
+                <div className="text-muted">另有 {Object.keys(BUILDINGS).length - built.length} 座尚未建造</div>
+              )}
             </div>
           </div>
         )}

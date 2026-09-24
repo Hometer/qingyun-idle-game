@@ -1,14 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useGame } from "@/lib/game-context";
+import type { CopyMode } from "@/lib/prefs";
 import { BottomNav } from "./BottomNav";
 import { ResourceBar } from "./ResourceBar";
 import { EncounterModal } from "./EncounterModal";
 import { CreateCharacter } from "./CreateCharacter";
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { ready, state, notice, clearNotice, lastResult, clearResult, targets } = useGame();
+  const { ready, state, notice, clearNotice, lastResult, clearResult, targets, showDataNotice, dismissDataNotice } = useGame();
+  const [noticeMode, setNoticeMode] = useState<CopyMode>("ai");
 
   if (!ready) {
     return <div className="flex min-h-screen items-center justify-center text-muted">载入中…</div>;
@@ -33,12 +36,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 {t.label}
                 {t.later && <span className="text-xs text-muted">（后续目标）</span>}
               </div>
-              {!t.done && t.href && (
+              {!t.done && !t.later && t.href && (
                 <Link href={t.href} className="text-sm text-cinnabar">
                   去完成
                 </Link>
               )}
-              {!t.done && t.hint && <span className="text-xs text-muted">{t.hint}</span>}
+              {!t.done && !t.later && t.hint && <span className="text-xs text-muted">{t.hint}</span>}
             </div>
           ))}
         </div>
@@ -70,6 +73,35 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
             <button onClick={clearResult} className="mt-4 w-full rounded-lg bg-cinnabar py-2 text-white">
               继续修行
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showDataNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-[480px] rounded-2xl border border-line bg-card p-5">
+            <h2 className="text-lg font-semibold">开始前说明</h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink/80">
+              游戏进度保存在当前浏览器本地，清理浏览器数据或换设备会丢失，请定期导出存档。
+              AI 际遇会把事件类型、道号或称呼、灵根、境界、地图、最近两条修行摘要及选项含义发送给国内模型服务，完整存档不会发送。
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => setNoticeMode("ai")}
+                className={`flex-1 rounded-lg border py-2 text-sm ${noticeMode === "ai" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+              >
+                AI 文案
+              </button>
+              <button
+                onClick={() => setNoticeMode("template")}
+                className={`flex-1 rounded-lg border py-2 text-sm ${noticeMode === "template" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+              >
+                仅用模板
+              </button>
+            </div>
+            <button onClick={() => dismissDataNotice(noticeMode)} className="mt-4 w-full rounded-lg bg-cinnabar py-2 text-white">
+              确认并继续
             </button>
           </div>
         </div>
