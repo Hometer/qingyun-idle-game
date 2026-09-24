@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, fmt } from "@/lib/labels";
+import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, fmt } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
 import { predictFight } from "@/engine/engine";
 import type { MapId } from "@/engine/types";
@@ -36,6 +36,13 @@ export default function LilianPage() {
   const [selected, setSelected] = useState<string | null>(null);
   if (!state) return null;
 
+  const remainingHours = (mid: MapId): number => {
+    const since = state.suppressionSince[mid] || 0;
+    if (!since) return 0;
+    const remainMs = SUPPRESSION_DURATION_HOURS * 3600 * 1000 - (Date.now() - since);
+    return Math.max(0, Math.ceil(remainMs / 3600000));
+  };
+
   const sel = selected ? (selected.split("|") as [MapId, string]) : null;
   const selCfg = sel ? MAPS_CFG[sel[0]]?.nodes[sel[1]] : null;
   const selPred = sel ? predictFight(state, sel[0], sel[1]) : null;
@@ -56,7 +63,7 @@ export default function LilianPage() {
                   {!ns.unlocked && <span className="text-muted">（需{REALM_NAMES[n.gate]}解锁）</span>}
                   {ns.unlocked && !enough && <span className="text-cinnabar">（需{REALM_NAMES[n.gate]}方可挑战）</span>}
                   {ns.cleared && <span className="text-muted">·已通关</span>}
-                  {supped && <span className="text-cinnabar">·镇压中</span>}
+                  {supped && <span className="text-cinnabar">·镇压中·剩 {remainingHours(mid)} 时</span>}
                 </div>
                 <div className="flex gap-2">
                   {ns.unlocked && (

@@ -180,4 +180,23 @@ export const CONFIG = {
     pillHealPct: 0.3,
     pillWave: 3, // 第三波结束后恢复
   },
+
+  suppressionDurationHours: 12,
+
+  dailyQuests: {
+    settle: { title: "领取一次收益", target: 1, reward: { spiritStone: 30 } },
+    breakthrough: { title: "完成一次小进阶", target: 1, reward: { cultivation: 50 } },
+    battle: { title: "完成 3 次战斗", target: 3, reward: { page: 3 } },
+    suppress: { title: "镇压一个节点", target: 1, reward: { spiritStone: 40 } },
+    craft: { title: "炼制一枚护劫丹", target: 1, reward: { herb: 10 } },
+    encounter: { title: "完成一次际遇", target: 1, reward: { page: 2 } },
+  },
+
+  weathers: {
+    clear: { name: "晴明", desc: "修为/灵气产出 +15%", cultivationMult: 1.15, spiritMult: 1.15 },
+    rain: { name: "灵雨", desc: "灵草产出 +50%", herbMult: 1.5 },
+    spirit_vein: { name: "灵脉涌", desc: "灵石产出 +30%", spiritStoneMult: 1.3 },
+    battle_mark: { name: "杀伐", desc: "战斗伤害 +10%", battleAtkMult: 1.1 },
+    none: { name: "平常", desc: "无加成" },
+  },
 } as const;

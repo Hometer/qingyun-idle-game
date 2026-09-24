@@ -58,6 +58,27 @@ export interface Firsts {
   viewedTribPreviewOnce: boolean;
 }
 
+export interface QuestState {
+  id: string;
+  done: boolean;
+}
+
+export interface DailyCounters {
+  settle: number;
+  battle: number;
+  craft: number;
+  suppress: number;
+  breakthrough: number;
+  encounter: number;
+}
+
+export interface DailyState {
+  date: string;
+  weather: string;
+  quests: QuestState[];
+  counters: DailyCounters;
+}
+
 export interface SaveState {
   schemaVersion: number;
   id: string;
@@ -78,6 +99,8 @@ export interface SaveState {
   recentLogs: string[];
   milestones: Milestone[];
   firsts: Firsts;
+  daily: DailyState;
+  suppressionSince: Record<MapId, number>;
   lastSettledAt: number; // epoch ms
   revision: number;
 }

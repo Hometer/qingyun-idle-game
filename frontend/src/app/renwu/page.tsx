@@ -5,7 +5,7 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { playerStats } from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS } from "@/lib/labels";
+import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS, DAILY_QUESTS, RESOURCE_LABELS } from "@/lib/labels";
 import { getTheme, setTheme, getReduceMotion, setReduceMotion, getCopyMode, setCopyMode, type Theme, type CopyMode } from "@/lib/prefs";
 import type { MapId } from "@/engine/types";
 
@@ -112,6 +112,30 @@ export default function RenwuPage() {
         </p>
         {wearing.length > 0 && (
           <p className="mt-1 text-sm text-muted">穿戴：{wearing.map((id) => EQUIPMENT[id].name).join("、")}</p>
+        )}
+      </Section>
+
+      <Section title="今日任务">
+        {state.daily.quests.length === 0 ? (
+          <p className="text-sm text-muted">今日暂无任务</p>
+        ) : (
+          state.daily.quests.map((q) => {
+            const cfg = DAILY_QUESTS[q.id];
+            if (!cfg) return null;
+            const cur = Math.min(state.daily.counters[q.id as keyof typeof state.daily.counters] || 0, cfg.target);
+            const rewardTxt = Object.entries(cfg.reward)
+              .map(([k, v]) => `${RESOURCE_LABELS[k] || k} +${v}`)
+              .join(" ");
+            return (
+              <div key={q.id} className="flex items-center justify-between border-b border-line/60 py-1.5 last:border-0">
+                <div className="text-sm">
+                  {q.done ? <span className="text-gold">✓</span> : <span className="text-muted">○</span>} {cfg.title}
+                  <span className="ml-1 text-xs text-muted">({cur}/{cfg.target})</span>
+                </div>
+                <span className="text-xs text-muted">{rewardTxt}</span>
+              </div>
+            );
+          })
         )}
       </Section>
 

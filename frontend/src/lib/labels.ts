@@ -40,6 +40,14 @@ export const MAPS = CONFIG.maps as unknown as Record<
   { name: string; nodes: Record<string, { name: string; gate: string; [k: string]: unknown }> }
 >;
 
+export const DAILY_QUESTS = CONFIG.dailyQuests as unknown as Record<
+  string,
+  { title: string; target: number; reward: Record<string, number> }
+>;
+
+export const WEATHERS = CONFIG.weathers as unknown as Record<string, { name: string; desc: string }>;
+export const SUPPRESSION_DURATION_HOURS = CONFIG.suppressionDurationHours;
+
 export function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }

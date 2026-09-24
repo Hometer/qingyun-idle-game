@@ -269,12 +269,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!state) return;
     const settled = eng.settle(state, Date.now());
     settled.firsts.settledOnce = true;
-    const delta = resourceGains(state, settled);
+    const withDaily = eng.recordDailySettle(settled, Date.now());
+    const delta = resourceGains(state, withDaily);
     const parts = Object.entries(delta)
       .filter(([, v]) => v > 0)
       .map(([k, v]) => `${RESOURCE_LABELS[k]} +${fmt(v)}`)
       .join("、");
-    await apply(settled, parts ? `本次领取：${parts}` : "暂无新收益");
+    await apply(withDaily, parts ? `本次领取：${parts}` : "暂无新收益");
   }, [state, apply]);
 
   const doBreakthrough = useCallback(async () => {
