@@ -20,15 +20,26 @@ export interface EncounterResponse {
   options: { option_id: string; option_text: string }[];
 }
 
+function accessCode(): string {
+  try {
+    return typeof localStorage !== "undefined" ? localStorage.getItem("qingyun_access_code") || "" : "";
+  } catch {
+    return "";
+  }
+}
+
 export async function generateEncounter(
   body: EncounterRequestBody,
 ): Promise<EncounterResponse | null> {
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const code = accessCode();
+    if (code) headers["x-access-code"] = code;
     const resp = await fetch("/api/v1/encounter/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(4000),
     });
     const data = await resp.json();
     if (resp.ok && data && data.options) return data as EncounterResponse;

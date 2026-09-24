@@ -206,7 +206,7 @@ describe("天劫", () => {
     s.resources.cultivation = 1500;
     s.resources.spirit = 200;
     const p = previewTribulation(s);
-    expect(p.waves).toEqual([20, 25, 30, 35, 40]);
+    expect(p.waves.map((w) => w.damage)).toEqual([20, 25, 30, 35, 40]);
     expect(p.success).toBe(false);
     const r = startTribulation(s, T0);
     expect(r.ok).toBe(true);

@@ -29,6 +29,15 @@ def test_health():
     assert r.json() == {"status": "ok"}
 
 
+def test_malformed_body_unified_error():
+    # 缺少必填字段 → 参数校验错误也统一为 {"error":{"code","message"}}
+    r = client.post("/api/v1/encounter/generate", json={})
+    assert r.status_code == 422
+    body = r.json()
+    assert "error" in body
+    assert body["error"]["code"] == "INVALID_REQUEST"
+
+
 def test_no_key_returns_template(monkeypatch):
     monkeypatch.setattr(settings, "model_api_key", "")
     r = client.post("/api/v1/encounter/generate", json=_req())

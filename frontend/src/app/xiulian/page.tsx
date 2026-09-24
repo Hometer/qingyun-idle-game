@@ -68,9 +68,7 @@ export default function XiulianPage() {
                 </div>
                 <p className="mt-1 text-xs text-muted">
                   {eff(id, lvl)}
-                  {nextLvl
-                    ? ` → 下级 ${eff(id, lvl + 1)}（需残页 ${nextLvl.pageCost}）`
-                    : " · 已满级"}
+                  {nextLvl ? ` → 下级 ${eff(id, lvl + 1)}（需残页 ${nextLvl.pageCost}）` : " · 已满级"}
                 </p>
               </div>
             );
@@ -87,20 +85,52 @@ export default function XiulianPage() {
         <Section title="渡劫预览">
           {tribPreview.ok ? (
             <>
-              <p className="text-sm">五波伤害：{tribPreview.waves.join(" / ")}</p>
+              <p className="text-sm">当前气血 {tribPreview.maxHp}</p>
               <p className="mt-1 text-sm">
-                减伤 {Math.round(tribPreview.reduction * 100)}% ｜ 丹药{tribPreview.pillPrepared ? "已预置" : "未预置"}
+                减伤 {Math.round(tribPreview.reduction * 100)}%
+                {tribPreview.sources.length > 0
+                  ? `（${tribPreview.sources.map((s) => `${s.name} ${Math.round(s.pct * 100)}%`).join(" + ")}）`
+                  : "（无减伤来源）"}
               </p>
-              <p className="mt-1 text-sm">
-                预计结果：
-                {tribPreview.success ? <span className="text-cinnabar">渡劫成功</span> : <span className="text-muted">可能失败</span>}
+              <div className="mt-2 space-y-0.5 text-sm">
+                {tribPreview.waves.map((w, i) => (
+                  <p key={i}>
+                    第{i + 1}波：伤 {w.damage}，余 {w.hpAfter}
+                    {tribPreview.pillHealed?.wave === i + 1 && (
+                      <span className="text-cinnabar">（丹药回 {tribPreview.pillHealed.amount}）</span>
+                    )}
+                  </p>
+                ))}
+              </div>
+              <p className="mt-2 text-sm">
+                丹药{tribPreview.pillPrepared ? "已预置" : "未预置"} ｜ 预计
+                {tribPreview.success ? <span className="text-cinnabar">成功</span> : <span className="text-muted">失败</span>}
               </p>
+              {!tribPreview.success && (
+                <p className="mt-1 text-xs text-muted">建议：主修玄龟诀提升护劫减伤、穿戴减伤装备、预置护劫丹。</p>
+              )}
               <button onClick={startTrib} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white">
                 开始渡劫
               </button>
             </>
           ) : (
             <p className="text-sm">{tribPreview.reason}</p>
+          )}
+        </Section>
+      )}
+
+      {state.tribulationLog && (
+        <Section title="渡劫战报">
+          {state.tribulationLog.log.map((l, i) => (
+            <p key={i} className="py-0.5 text-sm text-ink/80">
+              {l}
+            </p>
+          ))}
+          <p className="mt-1 text-sm font-medium">
+            {state.tribulationLog.success ? <span className="text-cinnabar">渡劫成功</span> : <span className="text-muted">渡劫失败</span>}
+          </p>
+          {!state.tribulationLog.success && (
+            <p className="mt-1 text-xs text-muted">重新积累门槛，建议提升减伤与气血后再试。</p>
           )}
         </Section>
       )}

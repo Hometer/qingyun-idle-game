@@ -2,13 +2,19 @@
 
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { EQUIPMENT } from "@/lib/labels";
+import { EQUIPMENT, BUILDINGS } from "@/lib/labels";
 
 export default function BeibaoPage() {
   const { state, equip, craftPill, togglePill } = useGame();
   if (!state) return null;
 
   const ownedEquip = Object.keys(EQUIPMENT).filter((id) => (state.inventory[id] || 0) > 0);
+  const furnaceLvl = state.buildings.alchemyFurnace;
+  const recipe = furnaceLvl >= 1 ? BUILDINGS.alchemyFurnace.levels[furnaceLvl - 1] : null;
+  const canCraft =
+    recipe !== null &&
+    state.resources.herb >= (recipe.pillHerbCost ?? 0) &&
+    state.resources.spiritStone >= (recipe.pillStoneCost ?? 0);
 
   return (
     <>
@@ -16,8 +22,19 @@ export default function BeibaoPage() {
         <p className="text-sm">
           持有 {state.inventory.tribulationPill || 0} 枚{state.preparedPill ? "（已预置）" : ""}
         </p>
+        {recipe ? (
+          <p className="mt-1 text-xs text-muted">
+            配方：灵草 {recipe.pillHerbCost} + 灵石 {recipe.pillStoneCost}
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-muted">需先建造炼丹炉方可炼丹</p>
+        )}
         <div className="mt-2 flex gap-2">
-          <button onClick={craftPill} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">
+          <button
+            onClick={craftPill}
+            disabled={!canCraft}
+            className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
+          >
             炼丹
           </button>
           <button onClick={togglePill} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">
@@ -38,6 +55,11 @@ export default function BeibaoPage() {
               <div key={id} className="flex items-center justify-between border-b border-line/60 py-2 last:border-0">
                 <div className="text-sm">
                   {e.name}
+                  <span className="ml-1 text-xs text-muted">
+                    {e.attack ? `攻+${e.attack}` : ""}
+                    {e.defense ? ` 防+${e.defense}` : ""}
+                    {e.hp ? ` 气血+${e.hp}` : ""}
+                  </span>
                   {wearing && <span className="text-muted">（穿戴中）</span>}
                 </div>
                 <button

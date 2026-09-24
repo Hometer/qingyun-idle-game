@@ -2,7 +2,7 @@
 
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { MAPS } from "@/lib/labels";
+import { MAPS, REALM_NAMES, REALM_ORDER } from "@/lib/labels";
 import type { MapId } from "@/engine/types";
 
 export default function LilianPage() {
@@ -16,17 +16,23 @@ export default function LilianPage() {
           {Object.entries(MAPS[mid].nodes).map(([nid, n]) => {
             const ns = state.maps[mid][nid];
             const supped = state.suppression[mid] === nid;
+            const enough = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf(n.gate);
             return (
               <div key={nid} className="flex items-center justify-between border-b border-line/60 py-2 last:border-0">
                 <div className="text-sm">
                   {n.name}
-                  {!ns.unlocked && <span className="text-muted">（未解锁）</span>}
+                  {!ns.unlocked && <span className="text-muted">（需{REALM_NAMES[n.gate]}解锁）</span>}
+                  {ns.unlocked && !enough && <span className="text-cinnabar">（需{REALM_NAMES[n.gate]}方可挑战）</span>}
                   {ns.cleared && <span className="text-muted">·已通关</span>}
                   {supped && <span className="text-cinnabar">·镇压中</span>}
                 </div>
                 <div className="flex gap-2">
                   {ns.unlocked && (
-                    <button onClick={() => fight(mid, nid)} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">
+                    <button
+                      onClick={() => fight(mid, nid)}
+                      disabled={!enough}
+                      className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
+                    >
                       战斗
                     </button>
                   )}
@@ -45,7 +51,7 @@ export default function LilianPage() {
       {battleLog.length > 0 && (
         <Section title="战报">
           {battleLog.map((l, i) => (
-            <p key={i} className="py-0.5 text-sm text-ink/80">
+            <p key={i} className={`py-0.5 text-sm ${l.startsWith("短板") ? "text-cinnabar" : "text-ink/80"}`}>
               {l}
             </p>
           ))}

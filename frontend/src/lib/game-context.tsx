@@ -14,6 +14,7 @@ import { CONFIG } from "@/engine/config";
 import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId } from "@/engine/types";
 import { loadSave, persistSave, replaceSave, backupSave, clearSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
+import { RESOURCE_LABELS, fmt, resourceGains } from "@/lib/labels";
 
 export interface EncounterCopy {
   title: string;
@@ -83,12 +84,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
     (async () => {
       const saved = await loadSave().catch(() => null);
       if (saved) {
-        const settled = eng.settle(saved, Date.now());
+        const nowMs = Date.now();
+        const hours = Math.max(0, (nowMs - saved.lastSettledAt) / 3600000);
+        const capped = Math.min(hours, CONFIG.offlineCapHours);
+        const settled = eng.settle(saved, nowMs);
+        const delta = resourceGains(saved, settled);
         setState(settled);
         const res = await persistSave(settled);
         if (res.conflict) {
           const latest = await loadSave();
           setState(latest ? eng.settle(latest, Date.now()) : null);
+        }
+        if (hours > 0) {
+          const parts = Object.entries(delta)
+            .filter(([, v]) => v > 0)
+            .map(([k, v]) => `${RESOURCE_LABELS[k]} +${fmt(v)}`)
+            .join("、");
+          if (parts) {
+            setNotice(`离线 ${capped >= 1 ? fmt(capped) + " 小时" : Math.round(capped * 60) + " 分钟"}，收获 ${parts}${hours > CONFIG.offlineCapHours ? "（已按 12 小时封顶）" : ""}`);
+          }
         }
       }
       setReady(true);
@@ -175,7 +189,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const settleNow = useCallback(async () => {
     if (!state) return;
-    await apply(eng.settle(state, Date.now()), "已领取挂机收益");
+    const settled = eng.settle(state, Date.now());
+    const delta = resourceGains(state, settled);
+    const parts = Object.entries(delta)
+      .filter(([, v]) => v > 0)
+      .map(([k, v]) => `${RESOURCE_LABELS[k]} +${fmt(v)}`)
+      .join("、");
+    await apply(settled, parts ? `本次领取：${parts}` : "暂无新收益");
   }, [state, apply]);
 
   const doBreakthrough = useCallback(async () => {

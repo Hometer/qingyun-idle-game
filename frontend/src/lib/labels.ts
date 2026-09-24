@@ -1,4 +1,5 @@
 import { CONFIG } from "@/engine/config";
+import type { SaveState } from "@/engine/types";
 
 export const REALM_NAMES: Record<string, string> = Object.fromEntries(
   (CONFIG.realms as unknown as Array<{ id: string; name: string }>).map((r) => [r.id, r.name]),
@@ -41,4 +42,14 @@ export const MAPS = CONFIG.maps as unknown as Record<
 
 export function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+export const REALM_ORDER: string[] = REALM_LIST.map((r) => r.id);
+
+export function resourceGains(from: SaveState, to: SaveState): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const k of Object.keys(to.resources)) {
+    out[k] = to.resources[k as keyof typeof to.resources] - from.resources[k as keyof typeof from.resources];
+  }
+  return out;
 }

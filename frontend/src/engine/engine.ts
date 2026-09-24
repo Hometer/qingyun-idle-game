@@ -9,6 +9,7 @@ import type {
   SpiritRoot,
   TechniqueId,
   TribulationLog,
+  TribulationWave,
 } from "./types";
 
 export const SCHEMA_VERSION = 1;
@@ -144,20 +145,6 @@ function techniqueCultivationMult(s: SaveState): number {
     return CONFIG.techniques.qingYun.levels[s.techniqueLevel.qingYun - 1].cultivationMult;
   }
   return 1;
-}
-function techniqueReduction(s: SaveState): number {
-  if (s.technique === "xuanGui" && s.techniqueLevel.xuanGui >= 1) {
-    return CONFIG.techniques.xuanGui.levels[s.techniqueLevel.xuanGui - 1].tribulationReduction;
-  }
-  return 0;
-}
-function equipmentReduction(s: SaveState): number {
-  let r = 0;
-  for (const slot of ["weapon", "armor", "accessory"] as const) {
-    const eqId = s.equipment[slot];
-    if (eqId && EQUIP_CFG[eqId]?.tribulationReduction) r += EQUIP_CFG[eqId].tribulationReduction as number;
-  }
-  return r;
 }
 function suppressionRate(s: SaveState): number {
   let rate = 0;
@@ -314,6 +301,17 @@ export interface FightOutcome {
   encounterTriggered: boolean;
 }
 
+function analyzeFailure(
+  stats: { attack: number; defense: number; hp: number },
+  enemy: { attack: number; defense: number; hp: number },
+): string {
+  const dmg = Math.max(1, stats.attack - enemy.defense);
+  const taken = Math.max(1, enemy.attack - stats.defense);
+  if (dmg <= 1) return `短板：攻击不足、无法破防（对方防御 ${enemy.defense}），建议更换更强武器。`;
+  if (taken >= stats.hp / 3) return `短板：承伤过高（每击受 ${taken} 点），建议强化护甲与佩饰提升防御/气血。`;
+  return `短板：输出不足（每击仅 ${dmg} 点），建议提升攻击或先通关可得装备的节点。`;
+}
+
 function unlockNext(s: SaveState, mapId: MapId, nodeId: string): void {
   const nodeIds = Object.keys(MAP_CFG[mapId].nodes);
   const i = nodeIds.indexOf(nodeId);
@@ -387,6 +385,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   }
 
   if (!won) {
+    log.push(analyzeFailure(stats, nodeCfg.enemy));
     s.recentLogs.push(`与${nodeCfg.name}交手，不敌落败。`);
     s.revision += 1;
     return { ok: true, reason: "战败", state: s, log, won: false, encounterTriggered: false };
@@ -462,36 +461,82 @@ export function resolveEncounter(state: SaveState, nowMs: number, optionId: stri
 
 // ---- 天劫 ----
 
+export interface ReductionSource {
+  name: string;
+  pct: number;
+}
+
+export function tribulationReductionInfo(state: SaveState): { reduction: number; sources: ReductionSource[] } {
+  const sources: ReductionSource[] = [];
+  if (state.technique === "xuanGui" && state.techniqueLevel.xuanGui >= 1) {
+    sources.push({
+      name: CONFIG.techniques.xuanGui.name,
+      pct: CONFIG.techniques.xuanGui.levels[state.techniqueLevel.xuanGui - 1].tribulationReduction,
+    });
+  }
+  for (const slot of ["weapon", "armor", "accessory"] as const) {
+    const eqId = state.equipment[slot];
+    if (eqId && EQUIP_CFG[eqId]?.tribulationReduction) {
+      sources.push({ name: EQUIP_CFG[eqId].name, pct: EQUIP_CFG[eqId].tribulationReduction as number });
+    }
+  }
+  const sum = sources.reduce((a, x) => a + x.pct, 0);
+  return { reduction: Math.min(CONFIG.tribulation.reductionCap, sum), sources };
+}
+
+export interface TribulationSim {
+  maxHp: number;
+  reduction: number;
+  sources: ReductionSource[];
+  waves: TribulationWave[];
+  pillHealed: { wave: number; amount: number } | null;
+  success: boolean;
+  log: string[];
+}
+
+export function simulateTribulation(state: SaveState): TribulationSim {
+  const maxHp = playerStats(state).hp;
+  const info = tribulationReductionInfo(state);
+  const pill = state.preparedPill;
+  let hp = maxHp;
+  let success = true;
+  const waves: TribulationWave[] = [];
+  const log: string[] = [];
+  let pillHealed: { wave: number; amount: number } | null = null;
+  CONFIG.tribulation.wavesPct.forEach((pct, i) => {
+    const dmg = Math.ceil(maxHp * pct * (1 - info.reduction));
+    hp -= dmg;
+    log.push(`第${i + 1}波天劫，伤${dmg}点，余${Math.max(0, hp)}气血。`);
+    if (i + 1 === CONFIG.tribulation.pillWave && pill && hp > 0) {
+      const healed = Math.round(maxHp * CONFIG.tribulation.pillHealPct);
+      hp = Math.min(maxHp, hp + healed);
+      pillHealed = { wave: i + 1, amount: healed };
+      log.push(`护劫丹生效，回复${healed}点气血。`);
+    }
+    waves.push({ damage: dmg, hpAfter: Math.max(0, hp) });
+    if (hp <= 0) success = false;
+  });
+  return { maxHp, reduction: info.reduction, sources: info.sources, waves, pillHealed, success, log };
+}
+
 export interface TribulationPreview {
   ok: boolean;
   reason: string;
   maxHp: number;
   reduction: number;
-  waves: number[];
+  sources: ReductionSource[];
+  waves: TribulationWave[];
+  pillHealed: { wave: number; amount: number } | null;
   success: boolean;
   pillPrepared: boolean;
 }
 
 export function previewTribulation(state: SaveState): TribulationPreview {
   if (state.realm !== "qi4") {
-    return { ok: false, reason: "仅炼气圆满可渡劫", maxHp: 0, reduction: 0, waves: [], success: false, pillPrepared: false };
+    return { ok: false, reason: "仅炼气圆满可渡劫", maxHp: 0, reduction: 0, sources: [], waves: [], pillHealed: null, success: false, pillPrepared: false };
   }
-  const maxHp = playerStats(state).hp;
-  const reduction = Math.min(CONFIG.tribulation.reductionCap, techniqueReduction(state) + equipmentReduction(state));
-  const pill = state.preparedPill;
-  let hp = maxHp;
-  let success = true;
-  const waves: number[] = [];
-  CONFIG.tribulation.wavesPct.forEach((pct, i) => {
-    const dmg = Math.ceil(maxHp * pct * (1 - reduction));
-    hp -= dmg;
-    if (i + 1 === CONFIG.tribulation.pillWave && pill && hp > 0) {
-      hp = Math.min(maxHp, hp + maxHp * CONFIG.tribulation.pillHealPct);
-    }
-    if (hp <= 0 && success) success = false;
-    waves.push(dmg);
-  });
-  return { ok: true, reason: "", maxHp, reduction, waves, success, pillPrepared: pill };
+  const sim = simulateTribulation(state);
+  return { ok: true, reason: "", maxHp: sim.maxHp, reduction: sim.reduction, sources: sim.sources, waves: sim.waves, pillHealed: sim.pillHealed, success: sim.success, pillPrepared: state.preparedPill };
 }
 
 export function startTribulation(state: SaveState, nowMs: number): Result<SaveState> {
@@ -506,38 +551,18 @@ export function startTribulation(state: SaveState, nowMs: number): Result<SaveSt
   s.resources.cultivation -= next.cultivationCost;
   s.resources.spirit -= next.spiritCost;
 
-  const maxHp = playerStats(s).hp;
-  const reduction = Math.min(CONFIG.tribulation.reductionCap, techniqueReduction(s) + equipmentReduction(s));
+  const sim = simulateTribulation(s);
   const pill = s.preparedPill;
-  let hp = maxHp;
-  let success = true;
-  const waves: TribulationLog["waves"] = [];
-  const log: string[] = [];
-  CONFIG.tribulation.wavesPct.forEach((pct, i) => {
-    const dmg = Math.ceil(maxHp * pct * (1 - reduction));
-    hp -= dmg;
-    log.push(`第${i + 1}波天劫，伤${dmg}点，余${Math.max(0, hp)}气血。`);
-    if (i + 1 === CONFIG.tribulation.pillWave && pill && hp > 0) {
-      const healed = Math.round(maxHp * CONFIG.tribulation.pillHealPct);
-      hp = Math.min(maxHp, hp + healed);
-      log.push(`护劫丹生效，回复${healed}点气血。`);
-    }
-    waves.push({ damage: dmg, hpAfter: Math.max(0, hp) });
-    if (hp <= 0) success = false;
-  });
-
-  if (pill) {
-    s.inventory.tribulationPill = Math.max(0, (s.inventory.tribulationPill || 0) - 1);
-  }
+  if (pill) s.inventory.tribulationPill = Math.max(0, (s.inventory.tribulationPill || 0) - 1);
   s.preparedPill = false;
 
-  if (success) {
+  if (sim.success) {
     s.realm = "foundation1";
     s.recentLogs.push("五波天劫尽数扛下，于雷霆中筑基，晋入筑基一层。");
   } else {
     s.recentLogs.push("渡劫失败，境界不动，可重新积累再试。");
   }
-  s.tribulationLog = { maxHp, reduction, pillUsed: pill, waves, success, log };
+  s.tribulationLog = { maxHp: sim.maxHp, reduction: sim.reduction, pillUsed: pill, waves: sim.waves, success: sim.success, log: sim.log };
   s.revision += 1;
   return { state: s, ok: true };
 }
