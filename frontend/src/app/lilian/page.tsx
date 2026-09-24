@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, fmt } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
-import { predictFight } from "@/engine/engine";
+import { predictFight, predictLongTask } from "@/engine/engine";
 import type { MapId } from "@/engine/types";
 
 type NodeCfg = {
@@ -32,8 +32,29 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"]): string {
 }
 
 export default function LilianPage() {
-  const { state, fight, suppress, battleLog } = useGame();
+  const { state, fight, suppress, battleLog, startLong } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
+  const [trainNode, setTrainNode] = useState<{ mid: MapId; nid: string } | null>(null);
+  const [trainDifficulty, setTrainDifficulty] = useState<"steady" | "risky">("steady");
+  const [trainDuration, setTrainDuration] = useState(30);
+  const [trainProtection, setTrainProtection] = useState(false);
+
+  const clearedList = useMemo(() => {
+    if (!state) return [] as { mid: MapId; nid: string; name: string }[];
+    const list: { mid: MapId; nid: string; name: string }[] = [];
+    for (const mid of Object.keys(MAPS) as MapId[]) {
+      for (const [nid, n] of Object.entries(MAPS[mid].nodes)) {
+        if (state.maps[mid][nid]?.cleared) list.push({ mid, nid, name: `${MAPS[mid].name}·${n.name}` });
+      }
+    }
+    return list;
+  }, [state]);
+
+  const trainPred = useMemo(() => {
+    if (!state || !trainNode) return null;
+    return predictLongTask(state, "training", trainNode.mid, trainNode.nid, trainDifficulty, trainDuration, trainProtection);
+  }, [state, trainNode, trainDifficulty, trainDuration, trainProtection]);
+
   if (!state) return null;
 
   const remainingHours = (mid: MapId): number => {
@@ -49,6 +70,61 @@ export default function LilianPage() {
 
   return (
     <>
+      {state.firsts.suppressedFirstNodeOnce && (
+        <Section title="持续历练">
+          {!state.longTask ? (
+            <>
+              <p className="text-xs text-muted">选已首通的节点安排一段可离开的历练，到期手动领取。</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {clearedList.map((n) => (
+                  <button key={`${n.mid}|${n.nid}`} onClick={() => setTrainNode({ mid: n.mid, nid: n.nid })} className={`rounded-lg border px-3 py-1.5 text-sm ${trainNode?.nid === n.nid && trainNode?.mid === n.mid ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                    {n.name}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-2">
+                {(["steady", "risky"] as const).map((d) => (
+                  <button key={d} onClick={() => setTrainDifficulty(d)} className={`flex-1 rounded-lg border py-2 text-sm ${trainDifficulty === d ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                    {d === "steady" ? "稳行" : "险行"}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-2">
+                {[30, 60, 120].map((d) => (
+                  <button key={d} onClick={() => setTrainDuration(d)} className={`flex-1 rounded-lg border py-2 text-sm ${trainDuration === d ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                    {d} 分钟
+                  </button>
+                ))}
+              </div>
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={trainProtection} onChange={(e) => setTrainProtection(e.target.checked)} />
+                护行阵（30 灵石，本次防御 +5）
+              </label>
+              {trainPred?.ok && (
+                <div className="mt-2 text-sm">
+                  <p>
+                    预计{trainPred.won ? "可胜" : "难胜"}（我方 {trainPred.playerAttack} 攻 / {trainPred.playerDefense} 防 vs 敌方 {trainPred.enemyAttack} 攻 / {trainPred.enemyDefense} 防）
+                  </p>
+                  <p>
+                    预计所得：修为 {trainPred.reward.cultivation}、残页 {trainPred.reward.page}
+                    {trainProtection ? "（护行阵 30 灵石）" : ""}
+                  </p>
+                </div>
+              )}
+              <button
+                onClick={() => trainNode && startLong({ type: "training", mapId: trainNode.mid, nodeId: trainNode.nid, difficulty: trainDifficulty, durationMinutes: trainDuration, protection: trainProtection })}
+                disabled={!trainNode || !trainPred?.won}
+                className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white disabled:opacity-40"
+              >
+                开始持续历练
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-muted">已有进行中的任务，请先领取或中止。</p>
+          )}
+        </Section>
+      )}
+
       {(Object.keys(MAPS) as MapId[]).map((mid) => (
         <Section key={mid} title={MAPS[mid].name}>
           <p className="mb-2 text-sm text-muted">{WORLD_TEXT[mid]}</p>

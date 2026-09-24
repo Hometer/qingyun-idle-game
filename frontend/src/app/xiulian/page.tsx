@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt } from "@/lib/labels";
-import { productionBreakdown } from "@/engine/engine";
+import { productionBreakdown, predictLongTask } from "@/engine/engine";
 import type { TechniqueId } from "@/engine/types";
 
 function eff(id: string, lvl: number): string {
@@ -32,13 +32,15 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 }
 
 export default function XiulianPage() {
-  const { state, view, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique, markTribPreviewViewed } = useGame();
+  const { state, view, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
+  const [seclusionDuration, setSeclusionDuration] = useState(30);
   if (!state || !view) return null;
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
   const next = REALM_LIST[idx + 1];
   const isQi4 = state.realm === "qi4";
   const isMax = state.realm === "foundation1";
   const prod = productionBreakdown(state);
+  const seclusionPred = useMemo(() => predictLongTask(state, "seclusion", "map_qingyun", "", "steady", seclusionDuration, false), [state, seclusionDuration]);
   const enough = !isMax && !!next && view.resources.cultivation >= next.cultivationCost && view.resources.spirit >= next.spiritCost;
 
   useEffect(() => {
@@ -80,6 +82,35 @@ export default function XiulianPage() {
             {l}
           </p>
         ))}
+      </Section>
+
+      <Section title="闭关">
+        {!state.longTask ? (
+          <>
+            <p className="text-xs text-muted">额外计时修行，不锁住其他操作；到期后手动领取。</p>
+            <div className="mt-2 flex gap-2">
+              {[30, 60, 120].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setSeclusionDuration(d)}
+                  className={`flex-1 rounded-lg border py-2 text-sm ${seclusionDuration === d ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+                >
+                  {d} 分钟
+                </button>
+              ))}
+            </div>
+            {seclusionPred.ok && (
+              <p className="mt-2 text-sm">
+                预计额外获得：修为 {fmt(seclusionPred.reward.cultivation)}、灵气 {fmt(seclusionPred.reward.spirit)}
+              </p>
+            )}
+            <button onClick={() => startLong({ type: "seclusion", durationMinutes: seclusionDuration, protection: false })} className="mt-2 rounded-lg bg-cinnabar px-4 py-2 text-white">
+              开始闭关
+            </button>
+          </>
+        ) : (
+          <p className="text-sm text-muted">已有进行中的任务，请先领取或中止。</p>
+        )}
       </Section>
 
       <Section title="功法">

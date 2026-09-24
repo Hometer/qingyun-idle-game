@@ -75,6 +75,44 @@ export interface DailyState {
   goals: DailyGoals;
 }
 
+export type LongTaskType = "training" | "seclusion";
+export type LongTaskDifficulty = "steady" | "risky";
+
+export interface LongTask {
+  id: string;
+  type: LongTaskType;
+  mapId?: MapId;
+  nodeId?: string;
+  difficulty: LongTaskDifficulty;
+  protectionUsed: boolean;
+  durationMinutes: number;
+  startAt: number;
+  endAt: number;
+  ruleVersion: number;
+  snapshot: {
+    playerAttack: number;
+    playerDefense: number;
+    playerHp: number;
+    cultivationPerSec: number;
+    spiritPerSec: number;
+    enemyAttack?: number;
+    enemyDefense?: number;
+    enemyHp?: number;
+    expectedReward: Resources;
+  };
+}
+
+export interface LongTaskResult {
+  taskId: string;
+  type: LongTaskType;
+  nodeName?: string;
+  difficulty?: string;
+  durationMinutes: number;
+  reward: Resources;
+  completedAt: number;
+  aborted: boolean;
+}
+
 export interface SaveState {
   schemaVersion: number;
   id: string;
@@ -97,6 +135,8 @@ export interface SaveState {
   firsts: Firsts;
   daily: DailyState;
   suppressionSince: Record<MapId, number>;
+  longTask: LongTask | null;
+  lastLongTaskResult: LongTaskResult | null;
   lastSettledAt: number; // epoch ms
   revision: number;
 }

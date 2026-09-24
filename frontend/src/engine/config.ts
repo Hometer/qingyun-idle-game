@@ -200,4 +200,15 @@ export const CONFIG = {
     war: { name: "破军", desc: "今日首次战斗伤害 +20%", battleDamageMult: 1.2 },
     none: { name: "平常", desc: "无" },
   },
+
+  longTask: {
+    durations: [30, 60, 120],
+    multipliers: { 30: 2, 60: 3, 120: 5 },
+    riskyMultiplier: 1.5,
+    protectionCost: 30,
+    protectionDefense: 5,
+    riskyEnemyMultiplier: 1.25,
+    seclusionRateFactor: 0.1,
+    ruleVersion: 1,
+  },
 } as const;

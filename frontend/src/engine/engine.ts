@@ -2,6 +2,10 @@ import { CONFIG } from "./config";
 import type {
   BuildingId,
   DailyState,
+  LongTask,
+  LongTaskDifficulty,
+  LongTaskResult,
+  LongTaskType,
   MapId,
   Milestone,
   RealmId,
@@ -14,7 +18,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -61,6 +65,17 @@ const ENC_CFG = CONFIG.encounters as unknown as Record<
   string,
   { title: string; options: Record<string, { label: string; meaning: string; reward: Partial<Resources> }> }
 >;
+
+const LONG_TASK_CFG = CONFIG.longTask as unknown as {
+  durations: readonly number[];
+  multipliers: Record<number, number>;
+  riskyMultiplier: number;
+  protectionCost: number;
+  protectionDefense: number;
+  riskyEnemyMultiplier: number;
+  seclusionRateFactor: number;
+  ruleVersion: number;
+};
 
 const realmOrder: RealmId[] = ["qi1", "qi2", "qi3", "qi4", "foundation1"];
 
@@ -169,6 +184,191 @@ export function claimDailyGoal(state: SaveState, nowMs: number, goalId: "battle"
   return { state: s, ok: true };
 }
 
+// ---- 长期任务（持续历练 / 闭关） ----
+
+function emptyResources(): Resources {
+  return { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0 };
+}
+
+function trainingReward(nodeCfg: { repeat: { cultivation: number; page: number } }, durationMinutes: number, difficulty: LongTaskDifficulty): Resources {
+  const mult = LONG_TASK_CFG.multipliers[durationMinutes];
+  const risky = difficulty === "risky" ? LONG_TASK_CFG.riskyMultiplier : 1;
+  return {
+    cultivation: Math.floor(nodeCfg.repeat.cultivation * mult * risky),
+    spirit: 0,
+    spiritStone: 0,
+    herb: 0,
+    page: Math.floor(nodeCfg.repeat.page * mult * risky),
+  };
+}
+
+function seclusionReward(cultivationPerSec: number, spiritPerSec: number, durationMinutes: number): Resources {
+  const sec = durationMinutes * 60;
+  const f = LONG_TASK_CFG.seclusionRateFactor;
+  return {
+    cultivation: Math.round(cultivationPerSec * sec * f * 10) / 10,
+    spirit: Math.round(spiritPerSec * sec * f * 10) / 10,
+    spiritStone: 0,
+    herb: 0,
+    page: 0,
+  };
+}
+
+export function canArrange(state: SaveState): boolean {
+  return state.firsts.suppressedFirstNodeOnce;
+}
+
+export interface LongTaskPrediction {
+  ok: boolean;
+  reason: string;
+  won?: boolean;
+  playerAttack: number;
+  playerDefense: number;
+  playerHp: number;
+  enemyAttack?: number;
+  enemyDefense?: number;
+  enemyHp?: number;
+  reward: Resources;
+  protectionCost: number;
+}
+
+export function predictLongTask(
+  state: SaveState,
+  type: LongTaskType,
+  mapId: MapId,
+  nodeId: string,
+  difficulty: LongTaskDifficulty,
+  durationMinutes: number,
+  protection: boolean,
+): LongTaskPrediction {
+  const cost = protection ? LONG_TASK_CFG.protectionCost : 0;
+  const base = playerStats(state);
+  const failPred = (reason: string): LongTaskPrediction => ({
+    ok: false, reason, playerAttack: base.attack, playerDefense: base.defense, playerHp: base.hp,
+    reward: emptyResources(), protectionCost: cost,
+  });
+
+  if (type === "seclusion") {
+    const prod = productionBreakdown(state);
+    return {
+      ok: true, reason: "", playerAttack: base.attack, playerDefense: base.defense, playerHp: base.hp,
+      reward: seclusionReward(prod.cultivationPerSec, prod.spiritPerSec, durationMinutes), protectionCost: cost,
+    };
+  }
+
+  const nodeCfg = MAP_CFG[mapId]?.nodes[nodeId];
+  const nodeState = state.maps[mapId]?.[nodeId];
+  if (!nodeCfg || !nodeState) return failPred("无此节点");
+  if (!nodeState.cleared) return failPred("需先首通该节点");
+  if (realmIndex(state.realm) < realmIndex(nodeCfg.gate as RealmId)) {
+    return failPred(`需${realmName(nodeCfg.gate as RealmId)}境界`);
+  }
+  const defense = base.defense + (protection ? LONG_TASK_CFG.protectionDefense : 0);
+  const enemy = difficulty === "risky"
+    ? {
+        attack: Math.ceil(nodeCfg.enemy.attack * LONG_TASK_CFG.riskyEnemyMultiplier),
+        defense: Math.ceil(nodeCfg.enemy.defense * LONG_TASK_CFG.riskyEnemyMultiplier),
+        hp: Math.ceil(nodeCfg.enemy.hp * LONG_TASK_CFG.riskyEnemyMultiplier),
+      }
+    : { ...nodeCfg.enemy };
+  const battle = runBattle({ attack: base.attack, defense, hp: base.hp }, enemy, 1);
+  return {
+    ok: true, reason: "", won: battle.won,
+    playerAttack: base.attack, playerDefense: defense, playerHp: base.hp,
+    enemyAttack: enemy.attack, enemyDefense: enemy.defense, enemyHp: enemy.hp,
+    reward: trainingReward(nodeCfg, durationMinutes, difficulty), protectionCost: cost,
+  };
+}
+
+export interface StartLongTaskParams {
+  type: LongTaskType;
+  mapId?: MapId;
+  nodeId?: string;
+  difficulty?: LongTaskDifficulty;
+  durationMinutes: number;
+  protection: boolean;
+}
+
+export function startLongTask(state: SaveState, nowMs: number, params: StartLongTaskParams): Result<SaveState> {
+  const s = structuredClone(state);
+  if (s.longTask) return fail("已有进行中的任务，请先领取或中止");
+  const duration = params.durationMinutes;
+  if (!(LONG_TASK_CFG.durations as readonly number[]).includes(duration)) return fail("无效时长");
+  const mapId = params.mapId ?? "map_qingyun";
+  const nodeId = params.nodeId ?? "";
+  const difficulty = params.difficulty ?? "steady";
+  const pred = predictLongTask(s, params.type, mapId, nodeId, difficulty, duration, params.protection);
+  if (!pred.ok) return fail(pred.reason);
+  if (params.type === "training" && !pred.won) return fail("预计难胜，无法开始");
+  const cost = params.protection ? LONG_TASK_CFG.protectionCost : 0;
+  if (cost > 0 && s.resources.spiritStone < cost) return fail(`灵石不足（需 ${cost}）`);
+  if (cost > 0) s.resources.spiritStone -= cost;
+  const prod = productionBreakdown(s);
+  s.longTask = {
+    id: randomId(),
+    type: params.type,
+    mapId: params.type === "training" ? mapId : undefined,
+    nodeId: params.type === "training" ? nodeId : undefined,
+    difficulty,
+    protectionUsed: params.protection,
+    durationMinutes: duration,
+    startAt: nowMs,
+    endAt: nowMs + duration * 60 * 1000,
+    ruleVersion: LONG_TASK_CFG.ruleVersion,
+    snapshot: {
+      playerAttack: pred.playerAttack,
+      playerDefense: pred.playerDefense,
+      playerHp: pred.playerHp,
+      cultivationPerSec: prod.cultivationPerSec,
+      spiritPerSec: prod.spiritPerSec,
+      enemyAttack: pred.enemyAttack,
+      enemyDefense: pred.enemyDefense,
+      enemyHp: pred.enemyHp,
+      expectedReward: pred.reward,
+    },
+  };
+  s.recentLogs.push(`安排${params.type === "training" ? "持续历练" : "闭关"}（${duration} 分钟）。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+function taskNodeName(task: LongTask): string | undefined {
+  return task.nodeId && task.mapId ? MAP_CFG[task.mapId].nodes[task.nodeId].name : undefined;
+}
+
+export function claimLongTask(state: SaveState, nowMs: number): Result<SaveState> {
+  const s = structuredClone(state);
+  const task = s.longTask;
+  if (!task) return fail("无进行中的任务");
+  if (nowMs < task.endAt) return fail("任务尚未到期");
+  const reward = task.snapshot.expectedReward;
+  applyReward(s, reward);
+  s.lastLongTaskResult = {
+    taskId: task.id, type: task.type, nodeName: taskNodeName(task),
+    difficulty: task.difficulty, durationMinutes: task.durationMinutes,
+    reward, completedAt: nowMs, aborted: false,
+  };
+  s.longTask = null;
+  pushMilestone(s, "longtask", nowMs, `领取${task.type === "training" ? "持续历练" : "闭关"}结果`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function abortLongTask(state: SaveState, nowMs: number): Result<SaveState> {
+  const s = structuredClone(state);
+  const task = s.longTask;
+  if (!task) return fail("无进行中的任务");
+  s.lastLongTaskResult = {
+    taskId: task.id, type: task.type, nodeName: taskNodeName(task),
+    difficulty: task.difficulty, durationMinutes: task.durationMinutes,
+    reward: emptyResources(), completedAt: nowMs, aborted: true,
+  };
+  s.longTask = null;
+  s.recentLogs.push("中止了进行中的任务。");
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
 // ---- 新建 / 重置 ----
 
 export function createGame(name: string, spiritRoot: SpiritRoot, nowMs = Date.now()): SaveState {
@@ -204,6 +404,8 @@ export function createGame(name: string, spiritRoot: SpiritRoot, nowMs = Date.no
     firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
     daily: emptyDaily(todayStr(nowMs)),
     suppressionSince: { map_qingyun: 0, map_nether: 0 },
+    longTask: null,
+    lastLongTaskResult: null,
     lastSettledAt: nowMs,
     revision: 0,
   };
@@ -803,6 +1005,8 @@ export function migrateSave(raw: SaveState): SaveState {
       map_nether: suppression["map_nether"] ? lastSettled : 0,
     };
   }
+  if (s.longTask === undefined) s.longTask = null;
+  if (s.lastLongTaskResult === undefined) s.lastLongTaskResult = null;
   s.schemaVersion = SCHEMA_VERSION;
   return s as unknown as SaveState;
 }
@@ -922,6 +1126,14 @@ function validateSuppressionSince(v: unknown): string | null {
   return null;
 }
 
+function validateLongTask(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  const t = v as Record<string, unknown>;
+  if (typeof t.type !== "string" || !["training", "seclusion"].includes(t.type)) return "长期任务类型无效";
+  if (typeof t.startAt !== "number" || typeof t.endAt !== "number" || !Number.isFinite(t.endAt)) return "长期任务时间无效";
+  return null;
+}
+
 export function importSave(json: string): Result<SaveState> {
   let d: unknown;
   try {
@@ -949,6 +1161,7 @@ export function importSave(json: string): Result<SaveState> {
     validateMilestonesAndFirsts(o.milestones, o.firsts),
     validateDaily(o.daily),
     validateSuppressionSince(o.suppressionSince),
+    validateLongTask(o.longTask),
   ];
   for (const c of checks) if (c) return fail(c);
 
@@ -978,6 +1191,8 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   const hasNewDaily = !!rawDaily && typeof rawDaily.weather === "object" && typeof rawDaily.astrology === "object";
   base.daily = hasNewDaily ? (rawDaily as unknown as DailyState) : emptyDaily(todayStr(Date.now()));
   base.suppressionSince = { map_qingyun: 0, map_nether: 0, ...((o.suppressionSince as Partial<SaveState["suppressionSince"]>) || {}) };
+  base.longTask = (o.longTask as LongTask | null) ?? null;
+  base.lastLongTaskResult = (o.lastLongTaskResult as LongTaskResult | null) ?? null;
   base.lastSettledAt = o.lastSettledAt as number;
   base.revision = ((o.revision as number) || 0) + 1;
   return base;

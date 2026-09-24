@@ -10,7 +10,7 @@ import { EncounterModal } from "./EncounterModal";
 import { CreateCharacter } from "./CreateCharacter";
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { ready, state, notice, clearNotice, lastResult, clearResult, targets, showDataNotice, dismissDataNotice } = useGame();
+  const { ready, state, notice, clearNotice, lastResult, clearResult, targets, showDataNotice, dismissDataNotice, claimLong, abortLong, now } = useGame();
   const [noticeMode, setNoticeMode] = useState<CopyMode>("ai");
 
   if (!ready) {
@@ -25,6 +25,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col pb-16">
       <ResourceBar />
+
+      {state.longTask && (
+        <div className="mx-3 mt-2 rounded-lg border border-line bg-card px-4 py-2">
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              {state.longTask.type === "training" ? "持续历练" : "闭关"} · {state.longTask.durationMinutes} 分钟
+              {now >= state.longTask.endAt ? " · 可领取" : ` · 剩 ${Math.max(0, Math.ceil((state.longTask.endAt - now) / 60000))} 分`}
+            </div>
+            <div className="flex gap-2">
+              {now >= state.longTask.endAt && (
+                <button onClick={claimLong} className="rounded-lg bg-cinnabar px-3 py-1 text-sm text-white">领取</button>
+              )}
+              <button onClick={abortLong} className="rounded-lg border border-line bg-paper px-3 py-1 text-sm">中止</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {incomplete.length > 0 && (
         <div className="mx-3 mt-2 rounded-lg border border-gold/40 bg-[#fdf6e3] px-4 py-3">

@@ -42,6 +42,7 @@ interface GameContextValue {
   ready: boolean;
   state: SaveState | null;
   view: SaveState | null;
+  now: number;
   notice: string;
   battleLog: string[];
   encounter: EncounterCopy | null;
@@ -72,6 +73,16 @@ interface GameContextValue {
   showDataNotice: boolean;
   dismissDataNotice: (mode: CopyMode) => void;
   claimGoal: (goalId: "battle" | "suppress") => void;
+  startLong: (params: {
+    type: "training" | "seclusion";
+    mapId?: MapId;
+    nodeId?: string;
+    difficulty?: "steady" | "risky";
+    durationMinutes: number;
+    protection: boolean;
+  }) => void;
+  claimLong: () => void;
+  abortLong: () => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -268,6 +279,55 @@ export function GameProvider({ children }: { children: ReactNode }) {
     },
     [state, apply],
   );
+
+  const startLong = useCallback(
+    async (params: { type: "training" | "seclusion"; mapId?: MapId; nodeId?: string; difficulty?: "steady" | "risky"; durationMinutes: number; protection: boolean }) => {
+      if (!state) return;
+      const nowMs = Date.now();
+      const settled = eng.settle(state, nowMs);
+      const r = eng.startLongTask(settled, nowMs, params);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      const ok = await apply(r.state, params.type === "training" ? "持续历练已开始" : "闭关已开始");
+      if (ok) {
+        setLastResult({
+          title: params.type === "training" ? "持续历练已开始" : "闭关已开始",
+          lines: [`时长 ${params.durationMinutes} 分钟`, ...deltaLines(settled, r.state)],
+        });
+      }
+    },
+    [state, apply],
+  );
+
+  const claimLong = useCallback(async () => {
+    if (!state) return;
+    const nowMs = Date.now();
+    const settled = eng.settle(state, nowMs);
+    const r = eng.claimLongTask(settled, nowMs);
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    const ok = await apply(r.state, "已领取任务结果");
+    if (ok) {
+      setLastResult({ title: "任务完成", lines: [...deltaLines(settled, r.state), "普通离线收益已按原规则结算"] });
+    }
+  }, [state, apply]);
+
+  const abortLong = useCallback(async () => {
+    if (!state) return;
+    if (!window.confirm("确定中止任务？本次任务奖励为零，护行阵费用不返还。")) return;
+    const nowMs = Date.now();
+    const settled = eng.settle(state, nowMs);
+    const r = eng.abortLongTask(settled, nowMs);
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    await apply(r.state, "已中止任务");
+  }, [state, apply]);
 
   const create = useCallback(
     async (name: string, root: SpiritRoot) => {
@@ -537,6 +597,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     ready,
     state,
     view,
+    now,
     notice,
     battleLog,
     encounter,
@@ -567,6 +628,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     showDataNotice,
     dismissDataNotice,
     claimGoal,
+    startLong,
+    claimLong,
+    abortLong,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

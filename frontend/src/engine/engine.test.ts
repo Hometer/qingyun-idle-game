@@ -20,6 +20,10 @@ import {
   migrateSave,
   recordDailySettle,
   claimDailyGoal,
+  predictLongTask,
+  startLongTask,
+  claimLongTask,
+  abortLongTask,
   playerStats,
   productionBreakdown,
   predictFight,
@@ -368,7 +372,7 @@ describe("v1 存档迁移", () => {
     const r = importSave(JSON.stringify(v1));
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
-    expect(st.schemaVersion).toBe(3);
+    expect(st.schemaVersion).toBe(4);
     expect(st.milestones).toEqual([]);
     expect(st.firsts).toEqual({ settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false });
   });
@@ -380,7 +384,7 @@ describe("v1 存档迁移", () => {
     delete (v1 as unknown as Record<string, unknown>).firsts;
     const migrated = migrateSave(v1);
     expect(migrated.firsts.suppressedFirstNodeOnce).toBe(true);
-    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.schemaVersion).toBe(4);
   });
 });
 
@@ -461,5 +465,77 @@ describe("镇压复聚", () => {
     const end = settle(mid, T0 + 24 * 3600 * 1000 + 1);
     expect(end.resources.spiritStone).toBeCloseTo(8640, 0); // 再 12h
     expect(end.suppression.map_qingyun).toBe(null);
+  });
+});
+
+describe("长期任务", () => {
+  it("持续历练预测与开始", () => {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.firsts.suppressedFirstNodeOnce = true;
+    const p = predictLongTask(s, "training", "map_qingyun", "node_wolf", "steady", 30, false);
+    expect(p.ok).toBe(true);
+    expect(p.won).toBe(true);
+    expect(p.reward.cultivation).toBe(8); // 野狼重复修为 4 × 2
+    expect(p.reward.page).toBe(2); // 1 × 2
+    const r = startLongTask(s, T0, { type: "training", mapId: "map_qingyun", nodeId: "node_wolf", difficulty: "steady", durationMinutes: 30, protection: false });
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.longTask?.type).toBe("training");
+    expect(st.longTask?.endAt).toBe(T0 + 30 * 60 * 1000);
+  });
+
+  it("险行倍率与护行阵扣费", () => {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.resources.spiritStone = 30;
+    const p = predictLongTask(s, "training", "map_qingyun", "node_wolf", "risky", 30, true);
+    expect(p.ok).toBe(true);
+    expect(p.reward.cultivation).toBe(12); // 4 × 2 × 1.5
+    expect(p.protectionCost).toBe(30);
+    const r = startLongTask(s, T0, { type: "training", mapId: "map_qingyun", nodeId: "node_wolf", difficulty: "risky", durationMinutes: 30, protection: true });
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).resources.spiritStone).toBe(0);
+  });
+
+  it("到期才可领取，晚回来不增加", () => {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    const r = startLongTask(s, T0, { type: "training", mapId: "map_qingyun", nodeId: "node_wolf", difficulty: "steady", durationMinutes: 30, protection: false });
+    const st = r.state as SaveState;
+    expect(claimLongTask(st, T0 + 29 * 60 * 1000).ok).toBe(false); // 29 分钟不可领
+    const c = claimLongTask(st, T0 + 30 * 60 * 1000);
+    expect(c.ok).toBe(true);
+    const cs = c.state as SaveState;
+    expect(cs.resources.cultivation).toBe(8);
+    expect(cs.longTask).toBe(null);
+    expect(cs.lastLongTaskResult?.reward.cultivation).toBe(8);
+    // 晚 14 小时回来仍只 8（不增长）
+    const c2 = claimLongTask(st, T0 + 14 * 3600 * 1000);
+    expect(c2.ok).toBe(true);
+    expect((c2.state as SaveState).resources.cultivation).toBe(8);
+  });
+
+  it("闭关按锁定产速计算", () => {
+    const s = fresh();
+    const p = predictLongTask(s, "seclusion", "map_qingyun", "", "steady", 30, false);
+    expect(p.ok).toBe(true);
+    expect(p.reward.cultivation).toBeCloseTo(180, 5); // 1/s × 30×60 × 10%
+    expect(p.reward.spirit).toBeCloseTo(45, 5); // 0.25/s
+    const r = startLongTask(s, T0, { type: "seclusion", durationMinutes: 30, protection: false });
+    const c = claimLongTask(r.state as SaveState, T0 + 30 * 60 * 1000);
+    expect((c.state as SaveState).resources.cultivation).toBeCloseTo(180, 5);
+  });
+
+  it("中止：奖励零、任务清空", () => {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    const r = startLongTask(s, T0, { type: "training", mapId: "map_qingyun", nodeId: "node_wolf", difficulty: "steady", durationMinutes: 30, protection: false });
+    const a = abortLongTask(r.state as SaveState, T0 + 1000);
+    expect(a.ok).toBe(true);
+    const as = a.state as SaveState;
+    expect(as.longTask).toBe(null);
+    expect(as.lastLongTaskResult?.aborted).toBe(true);
+    expect(as.resources.cultivation).toBe(0);
   });
 });
