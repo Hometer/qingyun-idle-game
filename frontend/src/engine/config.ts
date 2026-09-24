@@ -1,0 +1,183 @@
+/**
+ * 首轮试玩基线配置（可调）。所有数值展示与计算共用本表，改这里即改规则。
+ * 体验目标：首次筑基 45～75 分钟（PRD 7.1 调参基线，非硬指标）。
+ */
+
+export const CONFIG = {
+  baseCultivationPerSecond: 1,
+  baseSpiritPerSecond: 0.25,
+  offlineCapHours: 12,
+
+  baseAttack: 10,
+  baseDefense: 5,
+  baseHp: 100,
+
+  realms: [
+    { id: "qi1", name: "炼气一层", cultivationCost: 0, spiritCost: 0 },
+    { id: "qi2", name: "炼气二层", cultivationCost: 120, spiritCost: 20 },
+    { id: "qi3", name: "炼气三层", cultivationCost: 300, spiritCost: 50 },
+    { id: "qi4", name: "炼气圆满", cultivationCost: 700, spiritCost: 100 },
+    { id: "foundation1", name: "筑基一层", cultivationCost: 1500, spiritCost: 200 },
+  ] as const,
+
+  spiritRoots: ["金", "木", "水", "火", "土"] as const,
+
+  buildings: {
+    cultivationRoom: {
+      name: "修炼室",
+      levels: [
+        { cost: 100, cultivationMult: 1.2 },
+        { cost: 300, cultivationMult: 1.5 },
+        { cost: 600, cultivationMult: 2.0 },
+      ],
+    },
+    spiritArray: {
+      name: "聚灵阵",
+      levels: [
+        { cost: 100, spiritMult: 1.2 },
+        { cost: 300, spiritMult: 1.5 },
+        { cost: 600, spiritMult: 2.0 },
+      ],
+    },
+    spiritField: {
+      name: "灵田",
+      levels: [
+        { cost: 150, herbPerSec: 0.05 },
+        { cost: 400, herbPerSec: 0.1 },
+        { cost: 800, herbPerSec: 0.2 },
+      ],
+    },
+    alchemyFurnace: {
+      name: "炼丹炉",
+      levels: [
+        { cost: 200, pillHerbCost: 50, pillStoneCost: 100 },
+        { cost: 500, pillHerbCost: 40, pillStoneCost: 80 },
+        { cost: 1000, pillHerbCost: 30, pillStoneCost: 60 },
+      ],
+    },
+  } as const,
+
+  techniques: {
+    qingYun: {
+      name: "青云诀",
+      levels: [
+        { pageCost: 0, cultivationMult: 1.3 },
+        { pageCost: 5, cultivationMult: 1.6 },
+        { pageCost: 15, cultivationMult: 2.0 },
+      ],
+    },
+    xuanGui: {
+      name: "玄龟诀",
+      levels: [
+        { pageCost: 0, tribulationReduction: 0.05 },
+        { pageCost: 5, tribulationReduction: 0.1 },
+        { pageCost: 15, tribulationReduction: 0.15 },
+      ],
+    },
+  } as const,
+
+  equipment: {
+    w_bronze: { name: "青铜剑", slot: "weapon", attack: 5 },
+    w_azure: { name: "青锋剑", slot: "weapon", attack: 15 },
+    a_cloth: { name: "粗布衣", slot: "armor", defense: 3 },
+    a_iron: { name: "玄铁甲", slot: "armor", defense: 10, tribulationReduction: 0.05 },
+    c_wood: { name: "木牌", slot: "accessory", hp: 20 },
+    c_jade: { name: "玉佩", slot: "accessory", hp: 60, tribulationReduction: 0.05 },
+  } as const,
+
+  initialEquipment: "w_bronze" as const,
+
+  maps: {
+    map_qingyun: {
+      name: "青云山",
+      nodes: {
+        node_wolf: {
+          name: "野狼", gate: "qi1",
+          enemy: { attack: 8, defense: 2, hp: 30 },
+          firstClear: { cultivation: 20, spiritStone: 50, page: 5, equipment: null },
+          repeat: { cultivation: 4, page: 1 },
+          suppressRate: 0.1,
+        },
+        node_bandit: {
+          name: "山匪", gate: "qi2",
+          enemy: { attack: 12, defense: 5, hp: 50 },
+          firstClear: { cultivation: 40, spiritStone: 100, page: 0, equipment: "w_azure" },
+          repeat: { cultivation: 8, page: 2 },
+          suppressRate: 0.2,
+        },
+        node_demon: {
+          name: "妖兽", gate: "qi3",
+          enemy: { attack: 18, defense: 8, hp: 80 },
+          firstClear: { cultivation: 80, spiritStone: 200, page: 0, equipment: "a_iron" },
+          repeat: { cultivation: 16, page: 3 },
+          suppressRate: 0.3,
+        },
+      },
+    },
+    map_nether: {
+      name: "幽冥谷",
+      nodes: {
+        node_shade: {
+          name: "阴魂", gate: "qi3",
+          enemy: { attack: 25, defense: 12, hp: 120 },
+          firstClear: { cultivation: 150, spiritStone: 300, page: 15, equipment: null },
+          repeat: { cultivation: 30, page: 5 },
+          suppressRate: 0.4,
+        },
+        node_ghost: {
+          name: "厉鬼", gate: "qi4",
+          enemy: { attack: 35, defense: 18, hp: 180 },
+          firstClear: { cultivation: 300, spiritStone: 500, page: 0, equipment: "c_jade" },
+          repeat: { cultivation: 60, page: 8 },
+          suppressRate: 0.6,
+        },
+        node_king: {
+          name: "鬼王", gate: "qi4",
+          enemy: { attack: 50, defense: 25, hp: 260 },
+          firstClear: { cultivation: 500, spiritStone: 800, page: 30, equipment: null },
+          repeat: { cultivation: 100, page: 12 },
+          suppressRate: 1.0,
+        },
+      },
+    },
+  } as const,
+
+  encounters: {
+    event_well: {
+      title: "古井奇遇",
+      options: {
+        well_a: { label: "探查井底", meaning: "冒险下井一探", reward: { spiritStone: 30, herb: 5 } },
+        well_b: { label: "绕行而去", meaning: "不理会，绕路离开", reward: { cultivation: 15 } },
+      },
+    },
+    event_beast: {
+      title: "灵兽现踪",
+      options: {
+        beast_a: { label: "出手相救", meaning: "救下被困的幼鹿", reward: { page: 3 } },
+        beast_b: { label: "静观其变", meaning: "不插手，远远观察", reward: { spiritStone: 20 } },
+      },
+    },
+    event_cave: {
+      title: "残破洞府",
+      options: {
+        cave_a: { label: "推门而入", meaning: "进入洞府查探", reward: { cultivation: 30, page: 2 } },
+        cave_b: { label: "记下位置", meaning: "记下位置，日后再来", reward: { herb: 8 } },
+      },
+    },
+  } as const,
+
+  encounter: {
+    probability: 0.2,
+    dailyMax: 3,
+    guideEventId: "event_well",
+    guideMapId: "map_qingyun",
+    guideNodeId: "node_wolf",
+  },
+
+  tribulation: {
+    wavesPct: [0.2, 0.25, 0.3, 0.35, 0.4],
+    reductionCap: 0.4,
+    pillHealPct: 0.3,
+    pillWave: 3, // 第三波结束后恢复
+  },
+} as const;

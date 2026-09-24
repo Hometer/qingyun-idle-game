@@ -1,0 +1,34 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #f4f1ea;
+  color: #2b2620;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+  line-height: 1.6;
+}
+.wrap { max-width: 560px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 22px; text-align: center; }
+h2 { font-size: 17px; margin: 0 0 8px; }
+h3 { font-size: 15px; margin: 8px 0 4px; }
+.card {
+  background: #fffdf8;
+  border: 1px solid #e2d9c8;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 10px 0;
+}
+button {
+  margin: 3px 4px 3px 0;
+  padding: 6px 12px;
+  border: 1px solid #b7a98f;
+  border-radius: 6px;
+  background: #efe8da;
+  color: #2b2620;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:active { background: #ddd2bd; }
+.notice { background: #fdeeca; border: 1px solid #e5cf8e; padding: 8px 10px; border-radius: 6px; margin: 8px 0; }
+.encounter { border-color: #c9b98e; background: #fbf7ec; }
+.src { color: #8a7a55; font-size: 12px; }
+input, select { padding: 6px; font-size: 14px; border: 1px solid #c9bd9f; border-radius: 6px; }
