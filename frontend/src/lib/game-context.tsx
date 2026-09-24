@@ -12,7 +12,7 @@ import {
 import * as eng from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
 import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId } from "@/engine/types";
-import { loadSave, persistSave, replaceSave, backupSave, clearSave } from "@/engine/storage";
+import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode } from "@/lib/prefs";
 import { RESOURCE_LABELS, REALM_ORDER, fmt, resourceGains } from "@/lib/labels";
@@ -63,6 +63,7 @@ interface GameContextValue {
   doExport: () => void;
   doImport: (file: File) => void;
   doReset: () => void;
+  doRestoreBackup: () => void;
   clearNotice: () => void;
   lastResult: ResultPanel | null;
   clearResult: () => void;
@@ -117,8 +118,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const nowMs = Date.now();
         const hours = Math.max(0, (nowMs - saved.lastSettledAt) / 3600000);
         const capped = Math.min(hours, CONFIG.offlineCapHours);
-        const settled = eng.settle(saved, nowMs);
-        const delta = resourceGains(saved, settled);
+        const migrated = eng.migrateSave(saved);
+        const settled = eng.settle(migrated, nowMs);
+        const delta = resourceGains(migrated, settled);
         setState(settled);
         const res = await persistSave(settled);
         if (res.conflict) {
@@ -384,6 +386,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     a.download = `青云修仙录存档-${state.name}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    try {
+      localStorage.setItem("qingyun_last_export", new Date().toISOString());
+    } catch {}
     setNotice("存档已导出");
   }, [state]);
 
@@ -418,6 +423,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setNotice("已重置");
   }, []);
 
+  const doRestoreBackup = useCallback(async () => {
+    const backup = await loadBackup().catch(() => null);
+    if (!backup) {
+      setNotice("没有可恢复的备份");
+      return;
+    }
+    if (!window.confirm("恢复导入前的存档？当前进度将被替换。")) return;
+    await replaceSave(backup);
+    setState(backup);
+    setEncounter(null);
+    setNotice("已恢复导入前的存档");
+  }, []);
+
   const value: GameContextValue = {
     ready,
     state,
@@ -443,6 +461,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     doExport,
     doImport,
     doReset,
+    doRestoreBackup,
     clearNotice,
     lastResult,
     clearResult,

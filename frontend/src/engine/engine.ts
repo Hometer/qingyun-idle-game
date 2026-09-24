@@ -649,6 +649,16 @@ export function startTribulation(state: SaveState, nowMs: number): Result<SaveSt
 
 // ---- 存档导入导出 ----
 
+export function migrateSave(raw: SaveState): SaveState {
+  const s = structuredClone(raw) as unknown as Record<string, unknown>;
+  if (!Array.isArray(s.milestones)) s.milestones = [];
+  if (!s.firsts || typeof s.firsts !== "object") {
+    s.firsts = { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false };
+  }
+  s.schemaVersion = SCHEMA_VERSION;
+  return s as unknown as SaveState;
+}
+
 export function exportSave(state: SaveState): string {
   return JSON.stringify(state, null, 2);
 }

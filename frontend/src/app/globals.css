@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --c-paper: 244 241 234;
+  --c-card: 255 253 248;
+  --c-ink: 43 38 32;
+  --c-cinnabar: 179 64 42;
+  --c-gold: 183 149 74;
+  --c-line: 226 217 200;
+  --c-muted: 138 122 85;
+}
+
+.dark {
+  --c-paper: 24 22 20;
+  --c-card: 32 30 27;
+  --c-ink: 232 226 214;
+  --c-cinnabar: 211 112 86;
+  --c-gold: 200 165 92;
+  --c-line: 62 57 50;
+  --c-muted: 160 148 120;
+}
+
 html,
 body {
   height: 100%;
@@ -9,6 +29,13 @@ body {
 
 body {
   font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
-  background: #f4f1ea;
-  color: #2b2620;
+  background: rgb(var(--c-paper));
+  color: rgb(var(--c-ink));
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
 }

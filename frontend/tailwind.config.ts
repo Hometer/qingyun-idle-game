@@ -5,13 +5,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        paper: "#f4f1ea",
-        card: "#fffdf8",
-        ink: "#2b2620",
-        cinnabar: "#b3402a",
-        gold: "#b7954a",
-        line: "#e2d9c8",
-        muted: "#8a7a55",
+        paper: "rgb(var(--c-paper) / <alpha-value>)",
+        card: "rgb(var(--c-card) / <alpha-value>)",
+        ink: "rgb(var(--c-ink) / <alpha-value>)",
+        cinnabar: "rgb(var(--c-cinnabar) / <alpha-value>)",
+        gold: "rgb(var(--c-gold) / <alpha-value>)",
+        line: "rgb(var(--c-line) / <alpha-value>)",
+        muted: "rgb(var(--c-muted) / <alpha-value>)",
       },
     },
   },

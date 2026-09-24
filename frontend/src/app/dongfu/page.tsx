@@ -2,7 +2,7 @@
 
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { BUILDINGS } from "@/lib/labels";
+import { BUILDINGS, WORLD_TEXT } from "@/lib/labels";
 import type { BuildingId } from "@/engine/types";
 
 function effectText(id: string, lv: Record<string, number>): string {
@@ -26,6 +26,7 @@ export default function DongfuPage() {
 
   return (
     <Section title="洞府建筑">
+      <p className="mb-2 text-sm text-muted">{WORLD_TEXT.dongfu}</p>
       {(Object.keys(BUILDINGS) as BuildingId[]).map((id) => {
         const b = BUILDINGS[id];
         const lvl = state.buildings[id];

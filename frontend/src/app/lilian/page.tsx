@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, fmt } from "@/lib/labels";
+import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, fmt } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
 import { predictFight } from "@/engine/engine";
 import type { MapId } from "@/engine/types";
@@ -44,6 +44,7 @@ export default function LilianPage() {
     <>
       {(Object.keys(MAPS) as MapId[]).map((mid) => (
         <Section key={mid} title={MAPS[mid].name}>
+          <p className="mb-2 text-sm text-muted">{WORLD_TEXT[mid]}</p>
           {Object.entries(MAPS[mid].nodes).map(([nid, n]) => {
             const ns = state.maps[mid][nid];
             const supped = state.suppression[mid] === nid;
