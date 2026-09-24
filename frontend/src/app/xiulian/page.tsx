@@ -85,7 +85,9 @@ export default function XiulianPage() {
       </Section>
 
       <Section title="闭关">
-        {!state.longTask ? (
+        {!state.firsts.suppressedFirstNodeOnce ? (
+          <p className="text-sm text-muted">首次镇压历练节点后解锁。</p>
+        ) : !state.longTask ? (
           <>
             <p className="text-xs text-muted">额外计时修行，不锁住其他操作；到期后手动领取。</p>
             <div className="mt-2 flex gap-2">

@@ -34,10 +34,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {now >= state.longTask.endAt ? " · 可领取" : ` · 剩 ${Math.max(0, Math.ceil((state.longTask.endAt - now) / 60000))} 分`}
             </div>
             <div className="flex gap-2">
-              {now >= state.longTask.endAt && (
+              {now >= state.longTask.endAt ? (
                 <button onClick={claimLong} className="rounded-lg bg-cinnabar px-3 py-1 text-sm text-white">领取</button>
+              ) : (
+                <button onClick={abortLong} className="rounded-lg border border-line bg-paper px-3 py-1 text-sm">中止</button>
               )}
-              <button onClick={abortLong} className="rounded-lg border border-line bg-paper px-3 py-1 text-sm">中止</button>
             </div>
           </div>
         </div>

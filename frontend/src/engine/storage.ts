@@ -26,8 +26,8 @@ export async function loadSave(): Promise<SaveState | null> {
   });
 }
 
-// 修订号 compare-and-swap：仅当新值 revision 严格大于现存值才写入，防双标签页覆盖。
-export async function persistSave(state: SaveState): Promise<{ ok: boolean; conflict: boolean }> {
+// 乐观并发：仅当现存修订号仍等于操作读取时的基准修订号时才写入，防双标签覆盖。
+export async function persistSave(state: SaveState, baseRevision: number): Promise<{ ok: boolean; conflict: boolean }> {
   const db = await open();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
@@ -35,7 +35,7 @@ export async function persistSave(state: SaveState): Promise<{ ok: boolean; conf
     const getReq = store.get(KEY);
     getReq.onsuccess = () => {
       const cur = getReq.result as SaveState | undefined;
-      if (cur && state.revision <= cur.revision) {
+      if (cur && cur.revision !== baseRevision) {
         resolve({ ok: false, conflict: true });
         return;
       }

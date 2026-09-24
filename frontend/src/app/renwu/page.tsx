@@ -145,6 +145,22 @@ export default function RenwuPage() {
       </Section>
 
       <Section title="修仙录">
+        {state.lastLongTaskResult && (
+          <div className="mb-2 rounded-lg border border-line/60 p-2 text-sm">
+            <div className="text-xs text-muted">最近长期任务</div>
+            <div>
+              {state.lastLongTaskResult.type === "training" ? "持续历练" : "闭关"}
+              {state.lastLongTaskResult.nodeName ? ` · ${state.lastLongTaskResult.nodeName}` : ""}
+              {state.lastLongTaskResult.difficulty ? ` · ${state.lastLongTaskResult.difficulty === "risky" ? "险行" : "稳行"}` : ""}
+              {state.lastLongTaskResult.aborted ? " · 已中止" : ` · ${state.lastLongTaskResult.durationMinutes} 分钟`}
+            </div>
+            {!state.lastLongTaskResult.aborted && (
+              <div className="text-xs text-muted">
+                所得：修为 {state.lastLongTaskResult.reward.cultivation}、灵气 {state.lastLongTaskResult.reward.spirit}、灵石 {state.lastLongTaskResult.reward.spiritStone}、灵草 {state.lastLongTaskResult.reward.herb}、残页 {state.lastLongTaskResult.reward.page}
+              </div>
+            )}
+          </div>
+        )}
         {state.milestones.length === 0 ? (
           <p className="text-sm text-muted">此前记录未收录，从本次进入起记录。</p>
         ) : (

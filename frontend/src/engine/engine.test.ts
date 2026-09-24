@@ -488,6 +488,7 @@ describe("长期任务", () => {
   it("险行倍率与护行阵扣费", () => {
     const s = fresh();
     s.maps.map_qingyun.node_wolf.cleared = true;
+    s.firsts.suppressedFirstNodeOnce = true;
     s.resources.spiritStone = 30;
     const p = predictLongTask(s, "training", "map_qingyun", "node_wolf", "risky", 30, true);
     expect(p.ok).toBe(true);
@@ -501,6 +502,7 @@ describe("长期任务", () => {
   it("到期才可领取，晚回来不增加", () => {
     const s = fresh();
     s.maps.map_qingyun.node_wolf.cleared = true;
+    s.firsts.suppressedFirstNodeOnce = true;
     const r = startLongTask(s, T0, { type: "training", mapId: "map_qingyun", nodeId: "node_wolf", difficulty: "steady", durationMinutes: 30, protection: false });
     const st = r.state as SaveState;
     expect(claimLongTask(st, T0 + 29 * 60 * 1000).ok).toBe(false); // 29 分钟不可领
@@ -518,6 +520,7 @@ describe("长期任务", () => {
 
   it("闭关按锁定产速计算", () => {
     const s = fresh();
+    s.firsts.suppressedFirstNodeOnce = true;
     const p = predictLongTask(s, "seclusion", "map_qingyun", "", "steady", 30, false);
     expect(p.ok).toBe(true);
     expect(p.reward.cultivation).toBeCloseTo(180, 5); // 1/s × 30×60 × 10%
@@ -530,6 +533,7 @@ describe("长期任务", () => {
   it("中止：奖励零、任务清空", () => {
     const s = fresh();
     s.maps.map_qingyun.node_wolf.cleared = true;
+    s.firsts.suppressedFirstNodeOnce = true;
     const r = startLongTask(s, T0, { type: "training", mapId: "map_qingyun", nodeId: "node_wolf", difficulty: "steady", durationMinutes: 30, protection: false });
     const a = abortLongTask(r.state as SaveState, T0 + 1000);
     expect(a.ok).toBe(true);
@@ -537,5 +541,29 @@ describe("长期任务", () => {
     expect(as.longTask).toBe(null);
     expect(as.lastLongTaskResult?.aborted).toBe(true);
     expect(as.resources.cultivation).toBe(0);
+  });
+
+  it("缺快照的坏档导入被拒", () => {
+    const s = fresh();
+    const bad = { ...s, longTask: { type: "training", startAt: T0, endAt: T0 + 1000 } } as unknown as SaveState;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("到期任务不能中止", () => {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.firsts.suppressedFirstNodeOnce = true;
+    const r = startLongTask(s, T0, { type: "training", mapId: "map_qingyun", nodeId: "node_wolf", difficulty: "steady", durationMinutes: 30, protection: false });
+    const a = abortLongTask(r.state as SaveState, T0 + 30 * 60 * 1000);
+    expect(a.ok).toBe(false);
+    expect((a as { reason: string }).reason).toContain("到期");
+  });
+
+  it("未镇压不能安排任务", () => {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    const r = startLongTask(s, T0, { type: "seclusion", durationMinutes: 30, protection: false });
+    expect(r.ok).toBe(false);
+    expect((r as { reason: string }).reason).toContain("镇压");
   });
 });

@@ -248,6 +248,8 @@ export function predictLongTask(
     reward: emptyResources(), protectionCost: cost,
   });
 
+  if (!canArrange(state)) return failPred("需先镇压首个节点方可安排任务");
+
   if (type === "seclusion") {
     const prod = productionBreakdown(state);
     return {
@@ -292,6 +294,7 @@ export interface StartLongTaskParams {
 export function startLongTask(state: SaveState, nowMs: number, params: StartLongTaskParams): Result<SaveState> {
   const s = structuredClone(state);
   if (s.longTask) return fail("已有进行中的任务，请先领取或中止");
+  if (!canArrange(s)) return fail("需先镇压首个节点方可安排任务");
   const duration = params.durationMinutes;
   if (!(LONG_TASK_CFG.durations as readonly number[]).includes(duration)) return fail("无效时长");
   const mapId = params.mapId ?? "map_qingyun";
@@ -358,6 +361,7 @@ export function abortLongTask(state: SaveState, nowMs: number): Result<SaveState
   const s = structuredClone(state);
   const task = s.longTask;
   if (!task) return fail("无进行中的任务");
+  if (nowMs >= task.endAt) return fail("任务已到期，请领取");
   s.lastLongTaskResult = {
     taskId: task.id, type: task.type, nodeName: taskNodeName(task),
     difficulty: task.difficulty, durationMinutes: task.durationMinutes,
@@ -1130,7 +1134,19 @@ function validateLongTask(v: unknown): string | null {
   if (v === undefined || v === null) return null;
   const t = v as Record<string, unknown>;
   if (typeof t.type !== "string" || !["training", "seclusion"].includes(t.type)) return "长期任务类型无效";
-  if (typeof t.startAt !== "number" || typeof t.endAt !== "number" || !Number.isFinite(t.endAt)) return "长期任务时间无效";
+  if (typeof t.startAt !== "number" || typeof t.endAt !== "number" || !Number.isFinite(t.endAt) || (t.startAt as number) > (t.endAt as number)) return "长期任务时间无效";
+  const snap = t.snapshot as Record<string, unknown> | undefined;
+  if (!snap || typeof snap !== "object") return "长期任务快照无效";
+  for (const k of ["playerAttack", "playerDefense", "playerHp", "cultivationPerSec", "spiritPerSec"]) {
+    const x = snap[k];
+    if (typeof x !== "number" || !Number.isFinite(x)) return "长期任务快照无效";
+  }
+  const reward = snap.expectedReward as Record<string, unknown> | undefined;
+  if (!reward || typeof reward !== "object") return "长期任务快照奖励无效";
+  for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+    const x = reward[k];
+    if (typeof x !== "number" || !Number.isFinite(x)) return "长期任务快照奖励无效";
+  }
   return null;
 }
 

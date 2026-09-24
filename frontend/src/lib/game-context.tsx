@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -123,6 +124,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [encounterLoading, setEncounterLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ResultPanel | null>(null);
   const [showDataNotice, setShowDataNotice] = useState(false);
+  const baseRef = useRef(0);
+
+  useEffect(() => {
+    if (state) baseRef.current = state.revision;
+  }, [state]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -143,7 +149,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const settled = eng.settle(migrated, nowMs);
         const delta = resourceGains(migrated, settled);
         setState(settled);
-        const res = await persistSave(settled);
+        const res = await persistSave(settled, saved.revision);
         if (res.conflict) {
           const latest = await loadSave();
           setState(latest ? eng.settle(latest, Date.now()) : null);
@@ -233,7 +239,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // 写入成功才提示；冲突则丢弃本地改动、重读最新档
   const apply = useCallback(async (next: SaveState, msg: string): Promise<boolean> => {
-    const res = await persistSave(next);
+    const res = await persistSave(next, baseRef.current);
     if (res.conflict) {
       const latest = await loadSave();
       setState(latest ? eng.settle(latest, Date.now()) : null);
@@ -261,7 +267,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const next = structuredClone(state);
     next.firsts.viewedTribPreviewOnce = true;
     next.revision += 1;
-    const res = await persistSave(next);
+    const res = await persistSave(next, baseRef.current);
     if (!res.conflict) setState(next);
   }, [state]);
 
@@ -312,7 +318,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     const ok = await apply(r.state, "已领取任务结果");
     if (ok) {
-      setLastResult({ title: "任务完成", lines: [...deltaLines(settled, r.state), "普通离线收益已按原规则结算"] });
+      const taskLines = deltaLines(settled, r.state);
+      const ordinaryLines = deltaLines(state, settled);
+      const lines = [
+        ...(taskLines.length ? [`任务所得：${taskLines.join("、")}`] : []),
+        ...(ordinaryLines.length ? [`普通离线收益：${ordinaryLines.join("、")}`] : ["普通离线收益：无"]),
+      ];
+      setLastResult({ title: "任务完成", lines });
     }
   }, [state, apply]);
 
