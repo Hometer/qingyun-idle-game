@@ -22,11 +22,14 @@ function effectText(id: string, lv: Record<string, number>): string {
 }
 
 export default function DongfuPage() {
-  const { state, upgradeBuilding, buildLibrary } = useGame();
+  const { state, upgradeBuilding, buildLibrary, buildForge } = useGame();
   if (!state) return null;
   const libCost = state.library < 2 ? CONFIG.library.levels[state.library].cost : null;
   const libRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("foundation1");
   const libAfford = !!libCost && libRealmOk && state.resources.spiritStone >= libCost.spiritStone && state.resources.page >= libCost.page;
+  const forgeCost = state.forge < 1 ? CONFIG.forge.cost : null;
+  const forgeRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("foundation1");
+  const forgeAfford = !!forgeCost && forgeRealmOk && state.resources.spiritStone >= forgeCost.spiritStone && state.resources.page >= forgeCost.page;
 
   return (
     <Section title="洞府建筑">
@@ -96,6 +99,33 @@ export default function DongfuPage() {
             {libRealmOk
               ? `升级需 ${libCost.spiritStone} 灵石、${libCost.page} 残页${libAfford ? "" : `（还差 ${Math.max(0, libCost.spiritStone - state.resources.spiritStone)} 灵石、${Math.max(0, libCost.page - state.resources.page)} 残页）`}`
               : "需筑基一层方可建藏经阁"}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-line/60 p-3">
+        <div className="flex items-center justify-between">
+          <div className="font-medium">
+            炼器台 <span className="text-muted">Lv{state.forge}</span>
+          </div>
+          {state.forge < 1 && (
+            <button
+              onClick={buildForge}
+              disabled={!forgeAfford}
+              className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
+            >
+              建造
+            </button>
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-muted">
+          当前：{state.forge === 0 ? "未建" : "已建成（可炼制精钢剑、玄铁甲）"}
+        </p>
+        {forgeCost && (
+          <p className={`text-xs ${forgeRealmOk ? (forgeAfford ? "text-muted" : "text-cinnabar") : "text-cinnabar"}`}>
+            {forgeRealmOk
+              ? `建造需 ${forgeCost.spiritStone} 灵石、${forgeCost.page} 残页${forgeAfford ? "" : `（还差 ${Math.max(0, forgeCost.spiritStone - state.resources.spiritStone)} 灵石、${Math.max(0, forgeCost.page - state.resources.page)} 残页）`}`
+              : "需筑基一层方可建炼器台"}
           </p>
         )}
       </div>

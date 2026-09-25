@@ -18,6 +18,7 @@ export const RESOURCE_LABELS: Record<string, string> = {
   spiritStone: "灵石",
   herb: "灵草",
   page: "残页",
+  iron: "玄铁",
 };
 
 export const BUILDINGS = CONFIG.buildings as unknown as Record<

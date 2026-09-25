@@ -120,6 +120,20 @@ export const CONFIG = {
     },
   } as const,
 
+  forge: {
+    cost: { spiritStone: 1000, page: 15 },
+  } as const,
+
+  iron: {
+    suppressionPerSec: 0.02,
+    realmDrop: { realm_herb: 2, realm_relic: 3, realm_deep: 5 },
+  } as const,
+
+  crafts: {
+    w_steel: { cost: { iron: 8, spiritStone: 800, herb: 0 } },
+    a_steel: { cost: { iron: 12, spiritStone: 1200, herb: 30 } },
+  } as const,
+
   equipment: {
     w_bronze: { name: "青铜剑", slot: "weapon", attack: 5 },
     w_azure: { name: "青锋剑", slot: "weapon", attack: 15 },
@@ -127,6 +141,8 @@ export const CONFIG = {
     a_iron: { name: "玄铁甲", slot: "armor", defense: 10, tribulationReduction: 0.05 },
     c_wood: { name: "木牌", slot: "accessory", hp: 20 },
     c_jade: { name: "玉佩", slot: "accessory", hp: 60, tribulationReduction: 0.05 },
+    w_steel: { name: "精钢剑", slot: "weapon", attack: 20 },
+    a_steel: { name: "玄铁甲", slot: "armor", defense: 15, tribulationReduction: 0.05 },
   } as const,
 
   initialEquipment: "w_bronze" as const,

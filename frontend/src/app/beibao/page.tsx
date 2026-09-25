@@ -3,9 +3,10 @@
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { EQUIPMENT, BUILDINGS } from "@/lib/labels";
+import { CONFIG } from "@/engine/config";
 
 export default function BeibaoPage() {
-  const { state, equip, craftPill, togglePill } = useGame();
+  const { state, equip, craftPill, togglePill, craftEquipment } = useGame();
   if (!state) return null;
 
   const ownedEquip = Object.keys(EQUIPMENT).filter((id) => (state.inventory[id] || 0) > 0);
@@ -41,6 +42,54 @@ export default function BeibaoPage() {
             {state.preparedPill ? "取消预置" : "预置丹药"}
           </button>
         </div>
+      </Section>
+
+      <Section title="炼器">
+        {state.forge < 1 ? (
+          <p className="text-sm text-muted">需先建造炼器台方可炼器</p>
+        ) : (
+          (["w_steel", "a_steel"] as string[]).map((id) => {
+            const cfg = CONFIG.crafts[id as keyof typeof CONFIG.crafts];
+            const eq = CONFIG.equipment[id as keyof typeof CONFIG.equipment] as unknown as { name: string; attack?: number; defense?: number; hp?: number; tribulationReduction?: number };
+            if (!cfg || !eq) return null;
+            const canCraft =
+              state.resources.iron >= cfg.cost.iron &&
+              state.resources.spiritStone >= cfg.cost.spiritStone &&
+              state.resources.herb >= cfg.cost.herb;
+            const attrs = [
+              eq.attack ? `攻+${eq.attack}` : "",
+              eq.defense ? `防+${eq.defense}` : "",
+              eq.hp ? `气血+${eq.hp}` : "",
+              eq.tribulationReduction ? `护劫减伤+${Math.round(eq.tribulationReduction * 100)}%` : "",
+            ].filter(Boolean).join("、");
+            const shortfall = [
+              Math.max(0, cfg.cost.iron - state.resources.iron) > 0 ? `玄铁 ${Math.max(0, cfg.cost.iron - state.resources.iron)}` : "",
+              Math.max(0, cfg.cost.spiritStone - state.resources.spiritStone) > 0 ? `灵石 ${Math.max(0, cfg.cost.spiritStone - state.resources.spiritStone)}` : "",
+              Math.max(0, cfg.cost.herb - state.resources.herb) > 0 ? `灵草 ${Math.max(0, cfg.cost.herb - state.resources.herb)}` : "",
+            ].filter(Boolean).join("、");
+            return (
+              <div key={id} className="border-b border-line/60 py-2 last:border-0">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm">
+                    {eq.name} <span className="text-xs text-muted">{attrs}</span>
+                  </div>
+                  <button
+                    onClick={() => craftEquipment(id)}
+                    disabled={!canCraft}
+                    className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
+                  >
+                    炼制
+                  </button>
+                </div>
+                <p className="mt-0.5 text-xs text-muted">
+                  材料：玄铁 {cfg.cost.iron}、灵石 {cfg.cost.spiritStone}
+                  {cfg.cost.herb ? `、灵草 ${cfg.cost.herb}` : ""}
+                  {!canCraft && shortfall && `（还差 ${shortfall}）`}
+                </p>
+              </div>
+            );
+          })
+        )}
       </Section>
 
       <Section title="装备">

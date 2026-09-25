@@ -58,6 +58,8 @@ interface GameContextValue {
   setAuxiliaryTechnique: (id: TechniqueId) => void;
   upgradeTechnique: () => void;
   buildLibrary: () => void;
+  buildForge: () => void;
+  craftEquipment: (id: string) => void;
   realmPending: SecretRealmId | null;
   realmNarrative: { title: string; body: string; source: string } | null;
   realmNarrativeLoading: boolean;
@@ -546,6 +548,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
     await apply(r.state, "藏经阁升级成功");
   }, [state, apply]);
 
+  const buildForge = useCallback(async () => {
+    if (!state) return;
+    const r = eng.buildForge(state, Date.now());
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    await apply(r.state, "炼器台已建成");
+  }, [state, apply]);
+
+  const craftEquipment = useCallback(
+    async (id: string) => {
+      if (!state) return;
+      const r = eng.craftEquipment(state, Date.now(), id);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      const name = CONFIG.equipment[id as keyof typeof CONFIG.equipment]?.name ?? "装备";
+      await apply(r.state, `炼得${name}`);
+    },
+    [state, apply],
+  );
+
   const startSecretRealm = useCallback(
     async (realmId: SecretRealmId) => {
       if (!state) return;
@@ -895,6 +921,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setAuxiliaryTechnique,
     upgradeTechnique,
     buildLibrary,
+    buildForge,
+    craftEquipment,
     realmPending,
     realmNarrative,
     realmNarrativeLoading,

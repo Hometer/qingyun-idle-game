@@ -16,6 +16,7 @@ export interface Resources {
   spiritStone: number;
   herb: number;
   page: number;
+  iron: number;
 }
 
 export interface Equipment {
@@ -168,6 +169,7 @@ export interface SaveState {
   secretRealmDate: string;
   secretRealmUsed: Record<SecretRealmId, boolean>;
   secretRealmLog: SecretRealmLog[];
+  forge: number; // 炼器台等级 0/1
 }
 
 export type Result<T> =

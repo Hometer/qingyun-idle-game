@@ -11,6 +11,8 @@ import {
   upgradeTechnique,
   setAuxiliaryTechnique,
   buildLibrary,
+  buildForge,
+  craftEquipment,
   predictSecretRealm,
   enterSecretRealm,
   craftPill,
@@ -54,7 +56,7 @@ describe("创建角色", () => {
   it("初始状态正确", () => {
     const s = fresh();
     expect(s.realm).toBe("qi1");
-    expect(s.resources).toEqual({ cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0 });
+    expect(s.resources).toEqual({ cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0 });
     expect(s.maps.map_qingyun.node_wolf.unlocked).toBe(true);
     expect(s.maps.map_qingyun.node_bandit.unlocked).toBe(false);
     expect(s.maps.map_nether.node_shade.unlocked).toBe(false);
@@ -1510,5 +1512,93 @@ describe("v0.9 最终复核修复回归", () => {
     const r = importSave(JSON.stringify(v7));
     expect(r.ok).toBe(true);
     expect((r.state as SaveState).secretRealmUsed).toEqual({ realm_herb: false, realm_relic: false, realm_deep: false });
+  });
+});
+
+describe("v1.0 炼器", () => {
+  it("未筑基不可建炼器台，成本正确", () => {
+    const s = fresh();
+    expect(buildForge(s, T0).ok).toBe(false); // qi1 未筑基
+    s.realm = "foundation1";
+    s.resources.spiritStone = 999;
+    s.resources.page = 15;
+    expect(buildForge(s, T0).ok).toBe(false); // 灵石差 1
+    s.resources.spiritStone = 1000;
+    const r = buildForge(s, T0);
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).forge).toBe(1);
+    expect((r.state as SaveState).resources.spiritStone).toBe(0);
+    expect((r.state as SaveState).resources.page).toBe(0);
+    expect(buildForge(r.state as SaveState, T0).ok).toBe(false); // 已建
+  });
+
+  it("未建炼器台不可炼制，材料不足不可炼制", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.resources.iron = 8;
+    s.resources.spiritStone = 800;
+    expect(craftEquipment(s, T0, "w_steel").ok).toBe(false); // 未建台
+    s.forge = 1;
+    s.resources.iron = 7; // 差 1 玄铁
+    expect(craftEquipment(s, T0, "w_steel").ok).toBe(false);
+  });
+
+  it("炼制成功扣料入包", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.forge = 1;
+    s.resources.iron = 8;
+    s.resources.spiritStone = 800;
+    const r = craftEquipment(s, T0, "w_steel");
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.resources.iron).toBe(0);
+    expect(st.resources.spiritStone).toBe(0);
+    expect(st.inventory.w_steel).toBe(1);
+  });
+
+  it("镇压产玄铁、秘境成功掉玄铁", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.suppression = { map_qingyun: "node_wolf", map_nether: null, map_yunling: null };
+    s.suppressionSince = { map_qingyun: 0, map_nether: 0, map_yunling: 0 };
+    const settled = settle(s, T0 + 1000);
+    expect(settled.resources.iron).toBeCloseTo(0.02, 5); // 0.02/秒 × 1 秒
+    // 秘境成功掉玄铁
+    const s2 = fresh();
+    s2.realm = "foundation1";
+    s2.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s2.technique = "poYue";
+    s2.techniqueLevel.poYue = 3;
+    const r = enterSecretRealm(s2, T0, "realm_herb");
+    expect((r.state as SaveState).resources.iron).toBe(2);
+  });
+});
+
+describe("v1.0 迁移与坏档", () => {
+  it("v8 旧档迁移补 forge 与 iron", () => {
+    const s = fresh();
+    const v8 = structuredClone(s) as unknown as Record<string, unknown>;
+    delete v8.forge;
+    delete (v8.resources as Record<string, unknown>).iron;
+    v8.schemaVersion = 8;
+    const m = migrateSave(v8 as unknown as SaveState);
+    expect(m.forge).toBe(0);
+    expect(m.resources.iron).toBe(0);
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
+  it("v9 缺玄铁拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    delete (bad.resources as Record<string, unknown>).iron;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v9 缺炼器台等级拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    delete bad.forge;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
   });
 });
