@@ -1335,3 +1335,36 @@ describe("v0.9 迁移与校验", () => {
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
   });
 });
+
+describe("v0.9 自查修复回归", () => {
+  it("秘境不消耗破军星象、不计入每日战斗目标", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s.technique = "poYue";
+    s.techniqueLevel.poYue = 3;
+    s.daily.astrology = { id: "war", used: false };
+    s.daily.goals.battle.progress = 0;
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.daily.astrology.used).toBe(false);
+    expect(st.daily.goals.battle.progress).toBe(0);
+  });
+
+  it("秘境战斗不受破军加成影响", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.library = 2;
+    s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s.technique = "qingYun";
+    s.auxiliaryTechnique = "poYue";
+    s.techniqueLevel.poYue = 1; // 辅修 +2 攻击 → 总攻 27，破军加成会翻盘
+    s.daily.astrology = { id: "war", used: false };
+    const predWithWar = predictSecretRealm(s, "realm_herb");
+    s.daily.astrology = { id: "none", used: false };
+    const predNoWar = predictSecretRealm(s, "realm_herb");
+    expect(predWithWar.won).toBe(false); // 无加成应输
+    expect(predWithWar.won).toBe(predNoWar.won);
+  });
+});

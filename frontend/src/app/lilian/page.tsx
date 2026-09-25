@@ -32,7 +32,7 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"]): string {
 }
 
 export default function LilianPage() {
-  const { state, now, fight, suppress, battleLog, startLong, realmPending, realmNarrative, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
+  const { state, view, now, fight, suppress, battleLog, startLong, realmPending, realmNarrative, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
   const [trainNode, setTrainNode] = useState<{ mid: MapId; nid: string } | null>(null);
   const [trainDifficulty, setTrainDifficulty] = useState<"steady" | "risky">("steady");
@@ -134,7 +134,7 @@ export default function LilianPage() {
           const cfg = SECRET_REALMS[rid];
           const pred = predictSecretRealm(state, rid);
           const gateOk = pred.ok;
-          const used = state.secretRealmUsed[rid];
+          const used = (view?.secretRealmUsed ?? state.secretRealmUsed)[rid];
           const rewardParts = [
             cfg.reward.spiritStone ? `灵石 ${cfg.reward.spiritStone}` : "",
             cfg.reward.herb ? `灵草 ${cfg.reward.herb}` : "",

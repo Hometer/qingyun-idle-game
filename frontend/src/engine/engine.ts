@@ -1333,7 +1333,7 @@ export function predictSecretRealm(state: SaveState, realmId: SecretRealmId): { 
     return { ok: false, reason: `需${realmName(cfg.gate as RealmId)}方可进入`, won: false, enemy: { ...cfg.enemy }, player: playerStats(state) };
   }
   const stats = playerStats(state);
-  const battle = runBattle(stats, cfg.enemy, battleDamageMult(state));
+  const battle = runBattle(stats, cfg.enemy);
   return { ok: true, reason: "", won: battle.won, enemy: { ...cfg.enemy }, player: stats };
 }
 
@@ -1344,7 +1344,7 @@ export function enterSecretRealm(state: SaveState, nowMs: number, realmId: Secre
   if (realmIndex(s.realm) < realmIndex(cfg.gate as RealmId)) return fail(`需${realmName(cfg.gate as RealmId)}方可进入`);
   if (s.secretRealmUsed[realmId]) return fail("今日已挑战该秘境");
   const stats = playerStats(s);
-  const battle = runBattle(stats, cfg.enemy, battleDamageMult(s));
+  const battle = runBattle(stats, cfg.enemy);
   const reward = battle.won ? { cultivation: 0, spirit: 0, spiritStone: cfg.reward.spiritStone ?? 0, herb: cfg.reward.herb ?? 0, page: cfg.reward.page ?? 0 } : emptyResources();
   if (battle.won) applyReward(s, reward);
   s.secretRealmUsed[realmId] = true;
