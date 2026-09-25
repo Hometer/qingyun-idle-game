@@ -94,7 +94,7 @@ export default function DongfuPage() {
         {libCost && (
           <p className={`text-xs ${libRealmOk ? (libAfford ? "text-muted" : "text-cinnabar") : "text-cinnabar"}`}>
             {libRealmOk
-              ? `升级需 ${libCost.spiritStone} 灵石、${libCost.page} 残页${libAfford ? "" : "（资源不足）"}`
+              ? `升级需 ${libCost.spiritStone} 灵石、${libCost.page} 残页${libAfford ? "" : `（还差 ${Math.max(0, libCost.spiritStone - state.resources.spiritStone)} 灵石、${Math.max(0, libCost.page - state.resources.page)} 残页）`}`
               : "需筑基一层方可建藏经阁"}
           </p>
         )}

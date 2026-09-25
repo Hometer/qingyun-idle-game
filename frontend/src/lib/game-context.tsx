@@ -16,7 +16,7 @@ import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId,
 import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave, type LoadedSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
-import { RESOURCE_LABELS, REALM_ORDER, fmt, resourceGains } from "@/lib/labels";
+import { RESOURCE_LABELS, REALM_ORDER, fmt, fmtPct, resourceGains } from "@/lib/labels";
 
 export interface EncounterCopy {
   title: string;
@@ -149,7 +149,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (saved) {
         baseRef.current = saved.revision;
         if (saved.schemaVersion < eng.SCHEMA_VERSION) {
-          await backupSave(saved).catch(() => {});
+          let backupOk = true;
+          try {
+            await backupSave(saved);
+          } catch {
+            backupOk = false;
+          }
+          if (!backupOk) {
+            setNotice("存档备份失败，已保留原档；请刷新重试或先导出备份");
+            setReady(true);
+            return;
+          }
         }
         const nowMs = Date.now();
         const hours = Math.max(0, (nowMs - saved.lastSettledAt) / 3600000);
@@ -438,6 +448,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const setTechnique = useCallback(
     async (id: TechniqueId) => {
       if (!state) return;
+      const before = eng.buildSummary(state);
+      const next = structuredClone(state);
+      const oldAux = next.auxiliaryTechnique;
+      if (oldAux === id) {
+        next.technique = id;
+        next.auxiliaryTechnique = state.technique;
+      } else {
+        next.technique = id;
+      }
+      if (next.techniqueLevel[id] < 1) next.techniqueLevel[id] = 1;
+      const after = eng.buildSummary(next);
+      const msg =
+        `确定主修「${CONFIG.techniques[id].name}」？切换前后：\n` +
+        `修为 ${fmt(before.cultivationPerSec)} → ${fmt(after.cultivationPerSec)}/秒\n` +
+        `灵气 ${fmt(before.spiritPerSec)} → ${fmt(after.spiritPerSec)}/秒\n` +
+        `攻击 ${before.attack} → ${after.attack}\n` +
+        `护劫减伤 ${fmtPct(before.reduction)}% → ${fmtPct(after.reduction)}%`;
+      if (!window.confirm(msg)) return;
       const r = eng.setTechnique(state, Date.now(), id);
       if (!r.ok || !r.state) {
         setNotice(r.reason);
@@ -461,6 +489,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const setAuxiliaryTechnique = useCallback(
     async (id: TechniqueId) => {
       if (!state) return;
+      const before = eng.buildSummary(state);
+      const next = structuredClone(state);
+      if (next.technique === id) {
+        if (next.auxiliaryTechnique) {
+          const oldAux = next.auxiliaryTechnique;
+          next.auxiliaryTechnique = id;
+          next.technique = oldAux;
+        }
+      } else {
+        next.auxiliaryTechnique = id;
+      }
+      if (next.techniqueLevel[id] < 1) next.techniqueLevel[id] = 1;
+      const after = eng.buildSummary(next);
+      const msg =
+        `确定辅修「${CONFIG.techniques[id].name}」？切换前后：\n` +
+        `修为 ${fmt(before.cultivationPerSec)} → ${fmt(after.cultivationPerSec)}/秒\n` +
+        `灵气 ${fmt(before.spiritPerSec)} → ${fmt(after.spiritPerSec)}/秒\n` +
+        `攻击 ${before.attack} → ${after.attack}\n` +
+        `护劫减伤 ${fmtPct(before.reduction)}% → ${fmtPct(after.reduction)}%`;
+      if (!window.confirm(msg)) return;
       const r = eng.setAuxiliaryTechnique(state, Date.now(), id);
       if (!r.ok || !r.state) {
         setNotice(r.reason);

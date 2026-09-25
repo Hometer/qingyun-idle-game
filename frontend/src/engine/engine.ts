@@ -55,6 +55,8 @@ const MAP_CFG = CONFIG.maps as unknown as Record<
 >;
 
 const MAP_ORDER: MapId[] = ["map_qingyun", "map_nether", "map_yunling"];
+// map_yunling 在 schema v6 引入；v1~v5 旧档可缺失，v6 及以后缺失即坏档
+const MAP_YUNLING_INTRO_VERSION = 6;
 
 const EQUIP_CFG = CONFIG.equipment as unknown as Record<
   string,
@@ -547,6 +549,25 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
   return { attack, defense, hp };
 }
 
+export interface TechniqueSummary {
+  cultivationPerSec: number;
+  spiritPerSec: number;
+  attack: number;
+  reduction: number;
+}
+
+export function buildSummary(state: SaveState): TechniqueSummary {
+  const prod = productionBreakdown(state);
+  const stats = playerStats(state);
+  const tri = tribulationReductionInfo(state);
+  return {
+    cultivationPerSec: prod.cultivationPerSec,
+    spiritPerSec: prod.spiritPerSec,
+    attack: stats.attack,
+    reduction: tri.reduction,
+  };
+}
+
 function n1(x: number): string {
   if (Number.isInteger(x)) return String(x);
   const r = Math.round(x * 100) / 100;
@@ -749,8 +770,10 @@ export function setTechnique(state: SaveState, nowMs: number, id: TechniqueId): 
   } else {
     s.technique = id;
   }
-  if (s.techniqueLevel[id] < 1) s.techniqueLevel[id] = 1;
+  const newlyLearned = s.techniqueLevel[id] < 1;
+  if (newlyLearned) s.techniqueLevel[id] = 1;
   s.recentLogs.push(`改修${CONFIG.techniques[id].name}。`);
+  if (newlyLearned) pushMilestone(s, "technique", nowMs, `研习${CONFIG.techniques[id].name}`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -760,6 +783,7 @@ export function setAuxiliaryTechnique(state: SaveState, nowMs: number, id: Techn
   if (s.library < 2) return fail("需先建二级藏经阁");
   if (!s.technique) return fail("需先主修功法");
   if (s.auxiliaryTechnique === id) return fail("已是当前辅修");
+  const wasNull = s.auxiliaryTechnique === null;
   if (s.technique === id) {
     if (!s.auxiliaryTechnique) return fail("主辅不能为同一本");
     // 把当前主修设为辅修 → 主辅互换
@@ -771,6 +795,7 @@ export function setAuxiliaryTechnique(state: SaveState, nowMs: number, id: Techn
   }
   if (s.techniqueLevel[id] < 1) s.techniqueLevel[id] = 1;
   s.recentLogs.push(`辅修${CONFIG.techniques[id].name}。`);
+  if (wasNull) pushMilestone(s, "technique", nowMs, `首次采用辅修${CONFIG.techniques[id].name}`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -804,6 +829,7 @@ export function upgradeTechnique(state: SaveState, nowMs: number): Result<SaveSt
   s.resources.page -= cost;
   s.techniqueLevel[t] = lvl + 1;
   s.recentLogs.push(`${CONFIG.techniques[t].name}精进至${lvl + 1}重。`);
+  pushMilestone(s, "technique", nowMs, `${CONFIG.techniques[t].name}精进至${lvl + 1}重`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1416,7 +1442,7 @@ function validateMaps(maps: unknown, suppression: unknown, schemaVersion: number
   for (const mid of Object.keys(MAP_CFG) as MapId[]) {
     const nodes = m[mid];
     const isNewMap = mid === "map_yunling";
-    const allowMissing = isNewMap && schemaVersion < SCHEMA_VERSION; // 旧档缺新地图，迁移补默认
+    const allowMissing = isNewMap && schemaVersion < MAP_YUNLING_INTRO_VERSION; // 旧档缺新地图，迁移补默认
     if (nodes === undefined) {
       if (allowMissing) continue;
       return "地图数据无效";

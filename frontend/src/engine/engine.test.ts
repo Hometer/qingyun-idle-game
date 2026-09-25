@@ -1208,3 +1208,49 @@ describe("v0.8 迁移与校验", () => {
     expect(importSave(JSON.stringify(s)).ok).toBe(false);
   });
 });
+
+describe("v0.8 独立复核修复回归", () => {
+  it("v6 缺 map_yunling 拒绝导入（真实 v6 坏档）", () => {
+    const s = fresh();
+    const v6 = structuredClone(s) as unknown as Record<string, unknown>;
+    v6.schemaVersion = 6;
+    delete (v6.maps as Record<string, unknown>).map_yunling;
+    delete v6.library;
+    delete v6.auxiliaryTechnique;
+    delete (v6.techniqueLevel as Record<string, unknown>).poYue;
+    delete (v6.techniqueLevel as Record<string, unknown>).juYuan;
+    expect(importSave(JSON.stringify(v6)).ok).toBe(false);
+  });
+
+  it("修仙录记录研习/升级/首次辅修", () => {
+    const s = fresh();
+    s.library = 2;
+    s.technique = null;
+    const r1 = setTechnique(s, T0, "qingYun");
+    expect((r1.state as SaveState).milestones.some((m) => m.text.includes("研习青云诀"))).toBe(true);
+    const s2 = r1.state as SaveState;
+    s2.resources.page = 100;
+    const r2 = upgradeTechnique(s2, T0);
+    expect((r2.state as SaveState).milestones.some((m) => m.text.includes("精进至"))).toBe(true);
+    const r3 = setAuxiliaryTechnique(r2.state as SaveState, T0, "xuanGui");
+    expect((r3.state as SaveState).milestones.some((m) => m.text.includes("首次采用辅修"))).toBe(true);
+  });
+
+  it("资源路线与历练路线各有优势（R43）", () => {
+    const base = fresh();
+    base.realm = "foundation3";
+    base.library = 2;
+    base.techniqueLevel = { qingYun: 3, xuanGui: 0, poYue: 3, juYuan: 3 };
+    const res = structuredClone(base);
+    res.technique = "qingYun";
+    res.auxiliaryTechnique = "juYuan";
+    const combat = structuredClone(base);
+    combat.technique = "poYue";
+    combat.auxiliaryTechnique = "qingYun";
+    const resProd = productionBreakdown(res);
+    const combatProd = productionBreakdown(combat);
+    expect(resProd.cultivationPerSec).toBeGreaterThan(combatProd.cultivationPerSec);
+    expect(resProd.spiritPerSec).toBeGreaterThan(combatProd.spiritPerSec);
+    expect(playerStats(combat).attack).toBeGreaterThan(playerStats(res).attack);
+  });
+});

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtTime, fmtDuration } from "@/lib/labels";
+import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtPct, fmtTime, fmtDuration } from "@/lib/labels";
 import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate } from "@/engine/engine";
 import type { TechniqueId, BreakthroughMethod, BreakthroughLayer } from "@/engine/types";
 
@@ -11,7 +11,7 @@ function eff(id: string, lvl: number, aux: boolean): string {
   if (lvl < 1) return "未研习";
   const lv = TECHNIQUES[id].levels[lvl - 1];
   if (id === "qingYun") return `修为产出 ${aux ? lv.auxCultivationMult : lv.cultivationMult}×`;
-  if (id === "xuanGui") return `护劫减伤 ${Math.round((aux ? lv.auxTribulationReduction : lv.tribulationReduction) * 100)}%`;
+  if (id === "xuanGui") return `护劫减伤 ${fmtPct(aux ? lv.auxTribulationReduction : lv.tribulationReduction)}%`;
   if (id === "poYue") return `攻击 ${aux ? lv.auxAttack : lv.attack}`;
   return `灵气产出 ${aux ? lv.auxSpiritMult : lv.spiritMult}×`;
 }
@@ -214,9 +214,9 @@ export default function XiulianPage() {
             <>
               <p className="text-sm">当前气血 {tribPreview.maxHp}</p>
               <p className="mt-1 text-sm">
-                减伤 {Math.round(tribPreview.reduction * 100)}%
+                减伤 {fmtPct(tribPreview.reduction)}%
                 {tribPreview.sources.length > 0
-                  ? `（${tribPreview.sources.map((s) => `${s.name} ${Math.round(s.pct * 100)}%`).join(" + ")}）`
+                  ? `（${tribPreview.sources.map((s) => `${s.name} ${fmtPct(s.pct)}%`).join(" + ")}）`
                   : "（无减伤来源）"}
               </p>
               <div className="mt-2 space-y-0.5 text-sm">
@@ -252,9 +252,9 @@ export default function XiulianPage() {
             <>
               <p className="text-sm">当前气血 {jindanPreview.maxHp}</p>
               <p className="mt-1 text-sm">
-                减伤 {Math.round(jindanPreview.reduction * 100)}%
+                减伤 {fmtPct(jindanPreview.reduction)}%
                 {jindanPreview.sources.length > 0
-                  ? `（${jindanPreview.sources.map((s) => `${s.name} ${Math.round(s.pct * 100)}%`).join(" + ")}）`
+                  ? `（${jindanPreview.sources.map((s) => `${s.name} ${fmtPct(s.pct)}%`).join(" + ")}）`
                   : "（无减伤来源）"}
               </p>
               <p className="mt-1 text-sm">

@@ -53,6 +53,12 @@ export function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+// 百分比显示，保留 0.5 精度（2.5% 显示 2.5，5% 显示 5）
+export function fmtPct(x: number): string {
+  const pct = Math.round(x * 1000) / 10;
+  return Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
+}
+
 export function fmtTime(ms: number): string {
   const d = new Date(ms);
   const p = (n: number) => (n < 10 ? "0" + n : String(n));
