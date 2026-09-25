@@ -1502,50 +1502,60 @@ function validateAuxiliaryTechnique(tech: unknown, aux: unknown, library: unknow
 
 function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaVersion: number): string | null {
   const isCurrent = schemaVersion >= SCHEMA_VERSION;
+  const hasDate = date !== undefined && date !== null;
+  const hasUsed = used !== undefined && used !== null;
+  const hasLog = log !== undefined && log !== null;
+
+  // v8 必须三字段齐全
   if (isCurrent) {
-    if (typeof date !== "string" || !isValidDateStr(date)) return "秘境日期无效";
-    if (!used || typeof used !== "object") return "秘境状态无效";
-    if (log === undefined || log === null || !Array.isArray(log)) return "秘境记录无效";
+    if (!hasDate || typeof date !== "string" || !isValidDateStr(date)) return "秘境日期无效";
+    if (!hasUsed || typeof used !== "object") return "秘境状态无效";
+    if (!hasLog || !Array.isArray(log)) return "秘境记录无效";
   }
-  const u = (used ?? {}) as Record<string, unknown>;
-  for (const id of SECRET_REALM_IDS) {
-    const x = u[id];
-    if (isCurrent) {
-      if (typeof x !== "boolean") return "秘境状态无效";
-    } else if (x !== undefined && typeof x !== "boolean") {
-      return "秘境状态无效";
+
+  // 无论版本，只要字段存在就做结构与一致性校验（防“改称旧版绕过”）
+  if (hasDate && (typeof date !== "string" || !isValidDateStr(date))) return "秘境日期无效";
+  const dateStr = hasDate && typeof date === "string" ? (date as string) : null;
+
+  let u: Record<string, unknown> = {};
+  if (hasUsed) {
+    if (typeof used !== "object") return "秘境状态无效";
+    u = used as Record<string, unknown>;
+    for (const id of SECRET_REALM_IDS) {
+      if (typeof u[id] !== "boolean") return "秘境状态无效";
     }
   }
-  if (log === undefined || log === null) return null;
-  if (!Array.isArray(log)) return "秘境记录无效";
-  // 当日记录与当日次数、日期的一致性校验（仅当前版本）
-  const dateStr = (isCurrent ? (date as string) : null);
+
   const sameDayCount: Record<string, number> = {};
-  for (const l of log as unknown[]) {
-    if (!l || typeof l !== "object") return "秘境记录无效";
-    const r = l as Record<string, unknown>;
-    if (!SECRET_REALM_IDS.includes(r.realm as SecretRealmId)) return "秘境记录无效";
-    if (typeof r.won !== "boolean") return "秘境记录无效";
-    if (typeof r.at !== "number" || !Number.isFinite(r.at)) return "秘境记录无效";
-    const reward = r.reward as Record<string, unknown> | undefined;
-    if (!reward || typeof reward !== "object") return "秘境记录无效";
-    for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
-      if (!isNonNegNum(reward[k])) return "秘境记录无效";
-    }
-    const expected = r.won ? secretRealmReward(r.realm as SecretRealmId) : emptyResources();
-    const expRec = expected as unknown as Record<string, number>;
-    for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
-      if ((reward[k] ?? 0) !== (expRec[k] ?? 0)) return "秘境记录奖励不符";
-    }
-    if (dateStr) {
-      const lDate = todayStr(r.at as number);
-      if (lDate > dateStr) return "秘境记录时间无效"; // 记录晚于日期标记
-      if (lDate === dateStr) {
-        sameDayCount[r.realm as string] = (sameDayCount[r.realm as string] ?? 0) + 1;
+  if (hasLog) {
+    if (!Array.isArray(log)) return "秘境记录无效";
+    for (const l of log as unknown[]) {
+      if (!l || typeof l !== "object") return "秘境记录无效";
+      const r = l as Record<string, unknown>;
+      if (!SECRET_REALM_IDS.includes(r.realm as SecretRealmId)) return "秘境记录无效";
+      if (typeof r.won !== "boolean") return "秘境记录无效";
+      if (typeof r.at !== "number" || !Number.isFinite(r.at)) return "秘境记录无效";
+      const reward = r.reward as Record<string, unknown> | undefined;
+      if (!reward || typeof reward !== "object") return "秘境记录无效";
+      for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+        if (!isNonNegNum(reward[k])) return "秘境记录无效";
+      }
+      const expected = r.won ? secretRealmReward(r.realm as SecretRealmId) : emptyResources();
+      const expRec = expected as unknown as Record<string, number>;
+      for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+        if ((reward[k] ?? 0) !== (expRec[k] ?? 0)) return "秘境记录奖励不符";
+      }
+      if (dateStr) {
+        const lDate = todayStr(r.at as number);
+        if (lDate > dateStr) return "秘境记录时间无效"; // 记录晚于日期标记
+        if (lDate === dateStr) {
+          sameDayCount[r.realm as string] = (sameDayCount[r.realm as string] ?? 0) + 1;
+        }
       }
     }
   }
-  if (dateStr) {
+
+  if (dateStr && hasUsed) {
     for (const id of SECRET_REALM_IDS) {
       const usedVal = u[id];
       const cnt = sameDayCount[id] ?? 0;

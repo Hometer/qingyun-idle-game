@@ -37,7 +37,7 @@ import {
   jindanTrialGateOk,
   previewJindanTrial,
 } from "./engine";
-import type { SaveState, RealmId, MapId, AptitudeId, BreakthroughMethod } from "./types";
+import type { SaveState, RealmId, MapId, AptitudeId, BreakthroughMethod, SecretRealmId } from "./types";
 
 const H = 3600_000;
 const T0 = 1_700_000_000_000;
@@ -1478,5 +1478,37 @@ describe("v0.9 秘境可达性模拟矩阵", () => {
       const pred = predictSecretRealm(s, c.rid);
       expect(pred.won).toBe(false);
     }
+  });
+});
+
+describe("v0.9 最终复核修复回归", () => {
+  function wonHerbSave(): SaveState {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s.technique = "poYue";
+    s.techniqueLevel.poYue = 3;
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    return r.state as SaveState;
+  }
+
+  it("v8 改称 v7 且改次数仍拒绝导入（防降版本绕过）", () => {
+    const st = wonHerbSave();
+    const bad = structuredClone(st) as unknown as Record<string, unknown>;
+    bad.schemaVersion = 7; // 降版本
+    (bad.secretRealmUsed as Record<string, unknown>).realm_herb = false; // 改次数
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("真正 v7 无秘境字段可迁移导入", () => {
+    const s = fresh();
+    const v7 = structuredClone(s) as unknown as Record<string, unknown>;
+    v7.schemaVersion = 7;
+    delete v7.secretRealmDate;
+    delete v7.secretRealmUsed;
+    delete v7.secretRealmLog;
+    const r = importSave(JSON.stringify(v7));
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).secretRealmUsed).toEqual({ realm_herb: false, realm_relic: false, realm_deep: false });
   });
 });
