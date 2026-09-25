@@ -336,7 +336,8 @@ export function startLongTask(state: SaveState, nowMs: number, params: StartLong
 }
 
 function taskNodeName(task: LongTask): string | undefined {
-  return task.nodeId && task.mapId ? MAP_CFG[task.mapId].nodes[task.nodeId].name : undefined;
+  if (!task.mapId || !task.nodeId) return undefined;
+  return MAP_CFG[task.mapId]?.nodes[task.nodeId]?.name;
 }
 
 export function claimLongTask(state: SaveState, nowMs: number): Result<SaveState> {
@@ -1130,23 +1131,84 @@ function validateSuppressionSince(v: unknown): string | null {
   return null;
 }
 
+function isNonNegNum(x: unknown): x is number {
+  return typeof x === "number" && Number.isFinite(x) && x >= 0;
+}
+
 function validateLongTask(v: unknown): string | null {
   if (v === undefined || v === null) return null;
+  if (typeof v !== "object") return "长期任务数据无效";
   const t = v as Record<string, unknown>;
+  if (typeof t.id !== "string" || !t.id.trim()) return "长期任务 ID 无效";
   if (typeof t.type !== "string" || !["training", "seclusion"].includes(t.type)) return "长期任务类型无效";
-  if (typeof t.startAt !== "number" || typeof t.endAt !== "number" || !Number.isFinite(t.endAt) || (t.startAt as number) > (t.endAt as number)) return "长期任务时间无效";
+  if (typeof t.difficulty !== "string" || !["steady", "risky"].includes(t.difficulty)) return "长期任务难度无效";
+  if (typeof t.protectionUsed !== "boolean") return "长期任务护行阵无效";
+  if (
+    typeof t.durationMinutes !== "number" ||
+    !Number.isInteger(t.durationMinutes) ||
+    !(LONG_TASK_CFG.durations as readonly number[]).includes(t.durationMinutes)
+  ) {
+    return "长期任务时长无效";
+  }
+  if (typeof t.ruleVersion !== "number" || t.ruleVersion !== LONG_TASK_CFG.ruleVersion) return "长期任务规则版本无效";
+  if (!isNonNegNum(t.startAt)) return "长期任务开始时间无效";
+  if (!isNonNegNum(t.endAt)) return "长期任务结束时间无效";
+  const expectedEnd = (t.startAt as number) + (t.durationMinutes as number) * 60 * 1000;
+  if ((t.endAt as number) !== expectedEnd) return "长期任务起止时间与时长不符";
+
+  if (t.type === "training") {
+    const mapId = t.mapId as string;
+    const nodeId = t.nodeId as string;
+    if (!MAP_CFG[mapId as MapId]) return "长期任务地图无效";
+    if (!MAP_CFG[mapId as MapId].nodes[nodeId]) return "长期任务节点无效";
+  } else {
+    if (t.mapId !== undefined && t.mapId !== null) return "闭关任务不应含地图";
+    if (t.nodeId !== undefined && t.nodeId !== null) return "闭关任务不应含节点";
+  }
+
   const snap = t.snapshot as Record<string, unknown> | undefined;
   if (!snap || typeof snap !== "object") return "长期任务快照无效";
-  for (const k of ["playerAttack", "playerDefense", "playerHp", "cultivationPerSec", "spiritPerSec"]) {
-    const x = snap[k];
-    if (typeof x !== "number" || !Number.isFinite(x)) return "长期任务快照无效";
+  for (const k of ["playerAttack", "playerDefense", "playerHp"]) {
+    if (typeof snap[k] !== "number" || !Number.isFinite(snap[k]) || (snap[k] as number) <= 0) return "长期任务快照属性无效";
+  }
+  for (const k of ["cultivationPerSec", "spiritPerSec"]) {
+    if (!isNonNegNum(snap[k])) return "长期任务快照产速无效";
+  }
+  if (t.type === "training") {
+    for (const k of ["enemyAttack", "enemyDefense", "enemyHp"]) {
+      if (!isNonNegNum(snap[k])) return "长期任务快照敌方无效";
+    }
   }
   const reward = snap.expectedReward as Record<string, unknown> | undefined;
   if (!reward || typeof reward !== "object") return "长期任务快照奖励无效";
   for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
-    const x = reward[k];
-    if (typeof x !== "number" || !Number.isFinite(x)) return "长期任务快照奖励无效";
+    if (!isNonNegNum(reward[k])) return "长期任务快照奖励无效";
   }
+  return null;
+}
+
+function validateLongTaskResult(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "object") return "任务结果记录无效";
+  const r = v as Record<string, unknown>;
+  if (typeof r.taskId !== "string" || !r.taskId.trim()) return "任务结果记录无效";
+  if (typeof r.type !== "string" || !["training", "seclusion"].includes(r.type)) return "任务结果类型无效";
+  if (r.nodeName !== undefined && r.nodeName !== null && typeof r.nodeName !== "string") return "任务结果节点无效";
+  if (r.difficulty !== undefined && r.difficulty !== null && (typeof r.difficulty !== "string" || !["steady", "risky"].includes(r.difficulty))) return "任务结果难度无效";
+  if (
+    typeof r.durationMinutes !== "number" ||
+    !Number.isInteger(r.durationMinutes) ||
+    !(LONG_TASK_CFG.durations as readonly number[]).includes(r.durationMinutes)
+  ) {
+    return "任务结果时长无效";
+  }
+  const reward = r.reward as Record<string, unknown> | undefined;
+  if (!reward || typeof reward !== "object") return "任务结果奖励无效";
+  for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+    if (!isNonNegNum(reward[k])) return "任务结果奖励无效";
+  }
+  if (typeof r.completedAt !== "number" || !Number.isFinite(r.completedAt)) return "任务结果时间无效";
+  if (typeof r.aborted !== "boolean") return "任务结果状态无效";
   return null;
 }
 
@@ -1178,6 +1240,7 @@ export function importSave(json: string): Result<SaveState> {
     validateDaily(o.daily),
     validateSuppressionSince(o.suppressionSince),
     validateLongTask(o.longTask),
+    validateLongTaskResult(o.lastLongTaskResult),
   ];
   for (const c of checks) if (c) return fail(c);
 

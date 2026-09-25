@@ -13,7 +13,7 @@ import {
 import * as eng from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
 import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId } from "@/engine/types";
-import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave } from "@/engine/storage";
+import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave, type LoadedSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
 import { RESOURCE_LABELS, REALM_ORDER, fmt, resourceGains } from "@/lib/labels";
@@ -88,6 +88,8 @@ interface GameContextValue {
 
 const GameContext = createContext<GameContextValue | null>(null);
 
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+
 const REALM_NAMES: Record<string, string> = {};
 for (const r of CONFIG.realms) REALM_NAMES[r.id] = r.name;
 
@@ -124,11 +126,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [encounterLoading, setEncounterLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ResultPanel | null>(null);
   const [showDataNotice, setShowDataNotice] = useState(false);
+  // baseRef：已持久化到 IndexedDB 的修订号（乐观并发基准）。只在读档/写档成功/重置/导入时更新，
+  // 绝不从内存 state 推导，否则结算产生的内存修订号会被误当作已持久化基准，导致持续冲突。
   const baseRef = useRef(0);
-
-  useEffect(() => {
-    if (state) baseRef.current = state.revision;
-  }, [state]);
+  // genRef：当前存档代次。重置或整体替换会递增代次，使旧标签页无法复活旧档。
+  const genRef = useRef(0);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -137,8 +139,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const saved = await loadSave().catch(() => null);
+      const loaded = await loadSave().catch((): LoadedSave => ({ state: null, generation: 0 }));
+      genRef.current = loaded.generation;
+      const saved = loaded.state;
       if (saved) {
+        baseRef.current = saved.revision;
         if (saved.schemaVersion < eng.SCHEMA_VERSION) {
           await backupSave(saved).catch(() => {});
         }
@@ -149,10 +154,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const settled = eng.settle(migrated, nowMs);
         const delta = resourceGains(migrated, settled);
         setState(settled);
-        const res = await persistSave(settled, saved.revision);
+        const res = await persistSave(settled, saved.revision, genRef.current);
         if (res.conflict) {
-          const latest = await loadSave();
-          setState(latest ? eng.settle(latest, Date.now()) : null);
+          const latest = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
+          genRef.current = latest.generation;
+          baseRef.current = latest.state ? latest.state.revision : 0;
+          setState(latest.state ? eng.settle(latest.state, Date.now()) : null);
+        } else {
+          baseRef.current = settled.revision;
         }
         try {
           if (localStorage.getItem("qingyun_notice_shown") !== "1") setShowDataNotice(true);
@@ -239,13 +248,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // 写入成功才提示；冲突则丢弃本地改动、重读最新档
   const apply = useCallback(async (next: SaveState, msg: string): Promise<boolean> => {
-    const res = await persistSave(next, baseRef.current);
+    const res = await persistSave(next, baseRef.current, genRef.current);
     if (res.conflict) {
-      const latest = await loadSave();
+      const loaded = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
+      genRef.current = loaded.generation;
+      const latest = loaded.state;
+      baseRef.current = latest ? latest.revision : 0;
       setState(latest ? eng.settle(latest, Date.now()) : null);
-      setNotice("检测到另一标签页正在运行，已刷新为最新进度");
+      setNotice(latest ? "检测到另一标签页正在运行，已刷新为最新进度" : "存档已在其他标签页被重置");
       return false;
     }
+    baseRef.current = next.revision;
     setState(next);
     setNotice(msg);
     return true;
@@ -267,8 +280,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const next = structuredClone(state);
     next.firsts.viewedTribPreviewOnce = true;
     next.revision += 1;
-    const res = await persistSave(next, baseRef.current);
-    if (!res.conflict) setState(next);
+    const res = await persistSave(next, baseRef.current, genRef.current);
+    if (!res.conflict) {
+      baseRef.current = next.revision;
+      setState(next);
+    }
   }, [state]);
 
   const claimGoal = useCallback(
@@ -557,11 +573,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const doImport = useCallback(
     async (file: File) => {
-      const text = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.readAsText(file);
-      });
+      if (!file) return;
+      if (file.size > MAX_IMPORT_BYTES) {
+        setNotice("导入失败：文件过大（上限 2MB）");
+        return;
+      }
+      if (!/\.json$/i.test(file.name)) {
+        setNotice("导入失败：请选择 JSON 存档文件");
+        return;
+      }
+      let text: string;
+      try {
+        text = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error("read error"));
+          reader.onabort = () => reject(new Error("aborted"));
+          reader.readAsText(file);
+        });
+      } catch {
+        setNotice("导入失败：文件读取失败，请重试");
+        return;
+      }
       const r = eng.importSave(text);
       if (!r.ok || !r.state) {
         setNotice("导入失败：" + r.reason);
@@ -570,11 +603,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (!window.confirm("导入将替换当前进度，确定导入？")) return;
       try {
         if (state) await backupSave(state);
-        await replaceSave(r.state);
+        const res = await replaceSave(r.state, genRef.current);
+        if (res.conflict) {
+          setNotice("导入失败：存档已在其他标签页被修改，请刷新后重试");
+          return;
+        }
+        genRef.current = res.generation;
       } catch {
         setNotice("备份或写入失败，已保留当前进度");
         return;
       }
+      baseRef.current = r.state.revision;
       setEncounter(null);
       setState(r.state);
       setNotice("存档导入成功（原档已备份）");
@@ -584,7 +623,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const doReset = useCallback(async () => {
     if (!window.confirm("确定重置？当前进度将被覆盖，建议先导出存档。")) return;
-    await clearSave().catch(() => {});
+    const gen = await clearSave().catch(() => genRef.current);
+    genRef.current = gen;
+    baseRef.current = 0;
     setState(null);
     setEncounter(null);
     setBattleLog([]);
@@ -599,7 +640,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (!window.confirm("恢复导入前的存档？当前进度将被替换。")) return;
-    await replaceSave(backup);
+    try {
+      const res = await replaceSave(backup, genRef.current);
+      if (res.conflict) {
+        setNotice("恢复失败：存档已在其他标签页被修改，请刷新后重试");
+        return;
+      }
+      genRef.current = res.generation;
+    } catch {
+      setNotice("写入失败，已保留当前进度");
+      return;
+    }
+    baseRef.current = backup.revision;
     setState(backup);
     setEncounter(null);
     setNotice("已恢复导入前的存档");

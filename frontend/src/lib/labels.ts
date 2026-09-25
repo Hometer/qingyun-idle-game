@@ -53,6 +53,26 @@ export function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+export function fmtTime(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => (n < 10 ? "0" + n : String(n));
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+export function fmtDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h} 小时 ${m} 分` : `${m} 分钟`;
+}
+
+export function fmtRemaining(now: number, endAt: number, durationMinutes: number): string {
+  const min = Math.max(0, Math.min(durationMinutes, Math.ceil((endAt - now) / 60000)));
+  if (min <= 0) return "0 分";
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h > 0 ? `${h} 时 ${m} 分` : `${m} 分`;
+}
+
 export const WORLD_TEXT: Record<string, string> = {
   dongfu: "洞府隐于山腹，四壁青苔如篆。此处聚灵纳气，是你修行起居之所。",
   map_qingyun: "青云山层峦叠翠，灵气自谷底升腾。山中妖兽盘踞，正是历练之所。",

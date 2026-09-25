@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useGame } from "@/lib/game-context";
 import type { CopyMode } from "@/lib/prefs";
+import { fmtTime, fmtDuration, fmtRemaining } from "@/lib/labels";
 import { BottomNav } from "./BottomNav";
 import { ResourceBar } from "./ResourceBar";
 import { EncounterModal } from "./EncounterModal";
@@ -30,8 +31,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="mx-3 mt-2 rounded-lg border border-line bg-card px-4 py-2">
           <div className="flex items-center justify-between">
             <div className="text-sm">
-              {state.longTask.type === "training" ? "持续历练" : "闭关"} · {state.longTask.durationMinutes} 分钟
-              {now >= state.longTask.endAt ? " · 可领取" : ` · 剩 ${Math.max(0, Math.ceil((state.longTask.endAt - now) / 60000))} 分`}
+              {state.longTask.type === "training" ? "持续历练" : "闭关"} · {fmtDuration(state.longTask.durationMinutes)}
+              {now >= state.longTask.endAt ? " · 可领取" : ` · 剩 ${fmtRemaining(now, state.longTask.endAt, state.longTask.durationMinutes)}`}
             </div>
             <div className="flex gap-2">
               {now >= state.longTask.endAt ? (
@@ -40,6 +41,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <button onClick={abortLong} className="rounded-lg border border-line bg-paper px-3 py-1 text-sm">中止</button>
               )}
             </div>
+          </div>
+          <div className="mt-0.5 text-xs text-muted">
+            开始 {fmtTime(state.longTask.startAt)} · 预计 {fmtTime(state.longTask.endAt)} 结束
           </div>
         </div>
       )}

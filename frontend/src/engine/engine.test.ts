@@ -567,3 +567,79 @@ describe("长期任务", () => {
     expect((r as { reason: string }).reason).toContain("镇压");
   });
 });
+
+describe("长期任务坏档导入", () => {
+  function inflightTraining(): SaveState {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.firsts.suppressedFirstNodeOnce = true;
+    const r = startLongTask(s, T0, { type: "training", mapId: "map_qingyun", nodeId: "node_wolf", difficulty: "steady", durationMinutes: 30, protection: false });
+    return r.state as SaveState;
+  }
+
+  it("合法在途 v4 任务可导入", () => {
+    const st = inflightTraining();
+    const r = importSave(exportSave(st));
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).longTask?.id).toBe(st.longTask?.id);
+  });
+
+  it("地图无效的任务拒绝", () => {
+    const st = inflightTraining();
+    const bad = structuredClone(st) as SaveState;
+    (bad.longTask as unknown as Record<string, unknown>).mapId = "map_unknown";
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("节点无效的任务拒绝", () => {
+    const st = inflightTraining();
+    const bad = structuredClone(st) as SaveState;
+    (bad.longTask as unknown as Record<string, unknown>).nodeId = "node_unknown";
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("快照奖励为负拒绝", () => {
+    const st = inflightTraining();
+    const bad = structuredClone(st) as SaveState;
+    (bad.longTask as unknown as { snapshot: { expectedReward: { cultivation: number } } }).snapshot.expectedReward.cultivation = -1000;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("时长与起止时间不符拒绝", () => {
+    const st = inflightTraining();
+    const bad = structuredClone(st) as SaveState;
+    (bad.longTask as unknown as Record<string, unknown>).durationMinutes = 999; // endAt 不变，与 999 分钟不符
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("非法时长 999 拒绝", () => {
+    const st = inflightTraining();
+    const bad = structuredClone(st) as SaveState;
+    const lt = bad.longTask as unknown as Record<string, unknown>;
+    lt.durationMinutes = 999;
+    lt.endAt = (lt.startAt as number) + 999 * 60 * 1000;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("结果奖励为负拒绝", () => {
+    const st = inflightTraining();
+    const bad = structuredClone(st) as unknown as Record<string, unknown>;
+    bad.lastLongTaskResult = {
+      taskId: "x", type: "training", difficulty: "steady", durationMinutes: 30,
+      reward: { cultivation: -5, spirit: 0, spiritStone: 0, herb: 0, page: 0 },
+      completedAt: T0, aborted: false,
+    };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("结果时长非法拒绝", () => {
+    const st = inflightTraining();
+    const bad = structuredClone(st) as unknown as Record<string, unknown>;
+    bad.lastLongTaskResult = {
+      taskId: "x", type: "training", difficulty: "steady", durationMinutes: 45,
+      reward: { cultivation: 1, spirit: 0, spiritStone: 0, herb: 0, page: 0 },
+      completedAt: T0, aborted: false,
+    };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});

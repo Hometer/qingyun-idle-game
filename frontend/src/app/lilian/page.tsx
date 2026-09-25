@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, fmt } from "@/lib/labels";
+import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, fmt, fmtTime, fmtDuration } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
 import { predictFight, predictLongTask } from "@/engine/engine";
 import type { MapId } from "@/engine/types";
@@ -32,7 +32,7 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"]): string {
 }
 
 export default function LilianPage() {
-  const { state, fight, suppress, battleLog, startLong } = useGame();
+  const { state, now, fight, suppress, battleLog, startLong } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
   const [trainNode, setTrainNode] = useState<{ mid: MapId; nid: string } | null>(null);
   const [trainDifficulty, setTrainDifficulty] = useState<"steady" | "risky">("steady");
@@ -108,6 +108,9 @@ export default function LilianPage() {
                   <p>
                     预计所得：修为 {trainPred.reward.cultivation}、残页 {trainPred.reward.page}
                     {trainProtection ? "（护行阵 30 灵石）" : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    预计 {fmtTime(now + trainDuration * 60000)} 结束（{fmtDuration(trainDuration)}）
                   </p>
                 </div>
               )}

@@ -5,15 +5,9 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { playerStats } from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS, DAILY_GOALS, RESOURCE_LABELS } from "@/lib/labels";
+import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS, DAILY_GOALS, RESOURCE_LABELS, fmtTime } from "@/lib/labels";
 import { getTheme, setTheme, getReduceMotion, setReduceMotion, getCopyMode, setCopyMode, type Theme, type CopyMode } from "@/lib/prefs";
 import type { MapId } from "@/engine/types";
-
-function fmtTime(ms: number): string {
-  const d = new Date(ms);
-  const p = (n: number) => (n < 10 ? "0" + n : String(n));
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
 
 function applyTheme(theme: Theme) {
   const dark =
@@ -153,6 +147,9 @@ export default function RenwuPage() {
               {state.lastLongTaskResult.nodeName ? ` · ${state.lastLongTaskResult.nodeName}` : ""}
               {state.lastLongTaskResult.difficulty ? ` · ${state.lastLongTaskResult.difficulty === "risky" ? "险行" : "稳行"}` : ""}
               {state.lastLongTaskResult.aborted ? " · 已中止" : ` · ${state.lastLongTaskResult.durationMinutes} 分钟`}
+            </div>
+            <div className="text-xs text-muted">
+              {state.lastLongTaskResult.aborted ? "中止于" : "完成于"} {fmtTime(state.lastLongTaskResult.completedAt)}
             </div>
             {!state.lastLongTaskResult.aborted && (
               <div className="text-xs text-muted">

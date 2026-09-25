@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt } from "@/lib/labels";
+import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtTime, fmtDuration } from "@/lib/labels";
 import { productionBreakdown, predictLongTask } from "@/engine/engine";
 import type { TechniqueId } from "@/engine/types";
 
@@ -32,7 +32,7 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 }
 
 export default function XiulianPage() {
-  const { state, view, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
+  const { state, view, now, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
   const [seclusionDuration, setSeclusionDuration] = useState(30);
   if (!state || !view) return null;
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
@@ -102,9 +102,14 @@ export default function XiulianPage() {
               ))}
             </div>
             {seclusionPred.ok && (
-              <p className="mt-2 text-sm">
-                预计额外获得：修为 {fmt(seclusionPred.reward.cultivation)}、灵气 {fmt(seclusionPred.reward.spirit)}
-              </p>
+              <>
+                <p className="mt-2 text-sm">
+                  预计额外获得：修为 {fmt(seclusionPred.reward.cultivation)}、灵气 {fmt(seclusionPred.reward.spirit)}
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  预计 {fmtTime(now + seclusionDuration * 60000)} 结束（{fmtDuration(seclusionDuration)}）
+                </p>
+              </>
             )}
             <button onClick={() => startLong({ type: "seclusion", durationMinutes: seclusionDuration, protection: false })} className="mt-2 rounded-lg bg-cinnabar px-4 py-2 text-white">
               开始闭关
