@@ -30,6 +30,11 @@ export const TECHNIQUES = CONFIG.techniques as unknown as Record<
   { name: string; levels: Array<{ pageCost: number; [k: string]: number }> }
 >;
 
+export const SECRET_REALMS = CONFIG.secretRealms as unknown as Record<
+  string,
+  { name: string; gate: string; enemy: { attack: number; defense: number; hp: number }; reward: Partial<Record<"cultivation" | "spirit" | "spiritStone" | "herb" | "page", number>> }
+>;
+
 export const EQUIPMENT = CONFIG.equipment as unknown as Record<
   string,
   { name: string; slot: string; attack?: number; defense?: number; hp?: number }

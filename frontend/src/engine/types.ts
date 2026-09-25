@@ -8,6 +8,7 @@ export type TechniqueId = "qingYun" | "xuanGui" | "poYue" | "juYuan";
 export type EquipSlot = "weapon" | "armor" | "accessory";
 export type ItemId = "tribulationPill";
 export type MapId = "map_qingyun" | "map_nether" | "map_yunling";
+export type SecretRealmId = "realm_herb" | "realm_relic" | "realm_deep";
 
 export interface Resources {
   cultivation: number;
@@ -125,6 +126,13 @@ export interface BreakthroughRecord {
   at: number; // epoch ms
 }
 
+export interface SecretRealmLog {
+  realm: SecretRealmId;
+  won: boolean;
+  reward: Resources;
+  at: number;
+}
+
 export interface SaveState {
   schemaVersion: number;
   id: string;
@@ -157,6 +165,9 @@ export interface SaveState {
   jindanTrial: TribulationLog | null;
   library: number; // 藏经阁等级 0/1/2
   auxiliaryTechnique: TechniqueId | null; // 辅修功法，与主修不能相同
+  secretRealmDate: string;
+  secretRealmUsed: Record<SecretRealmId, boolean>;
+  secretRealmLog: SecretRealmLog[];
 }
 
 export type Result<T> =

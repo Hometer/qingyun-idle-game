@@ -16,13 +16,14 @@ import type {
   Resources,
   Result,
   SaveState,
+  SecretRealmId,
   SpiritRoot,
   TechniqueId,
   TribulationLog,
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -103,6 +104,13 @@ const JINDAN_TRIAL_CFG = CONFIG.jindanTrial as unknown as {
   spiritStoneCost: number;
 };
 
+const SECRET_REALM_CFG = CONFIG.secretRealms as unknown as Record<
+  SecretRealmId,
+  { name: string; gate: string; enemy: { attack: number; defense: number; hp: number }; reward: Partial<Resources> }
+>;
+
+const SECRET_REALM_IDS = Object.keys(SECRET_REALM_CFG) as SecretRealmId[];
+
 const BREAKTHROUGH_LAYERS: BreakthroughLayer[] = ["qi1", "qi2", "qi3", "foundation1", "foundation2"];
 
 const realmOrder: RealmId[] = ["qi1", "qi2", "qi3", "qi4", "foundation1", "foundation2", "foundation3", "jindan1"];
@@ -174,6 +182,15 @@ function emptyDaily(dateStr: string): DailyState {
 function ensureDaily(s: SaveState, nowMs: number): void {
   const today = todayStr(nowMs);
   if (s.daily.date !== today) s.daily = emptyDaily(today);
+  ensureSecretRealm(s, nowMs);
+}
+
+function ensureSecretRealm(s: SaveState, nowMs: number): void {
+  const today = todayStr(nowMs);
+  if (s.secretRealmDate !== today) {
+    s.secretRealmDate = today;
+    s.secretRealmUsed = { realm_herb: false, realm_relic: false, realm_deep: false };
+  }
 }
 
 function applyReward(s: SaveState, reward: Partial<Resources>): void {
@@ -441,6 +458,9 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     jindanTrial: null,
     library: 0,
     auxiliaryTechnique: null,
+    secretRealmDate: todayStr(nowMs),
+    secretRealmUsed: { realm_herb: false, realm_relic: false, realm_deep: false },
+    secretRealmLog: [],
     recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}。`],
     milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}` }],
     firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
@@ -1304,6 +1324,48 @@ export function startJindanTrial(state: SaveState, nowMs: number): Result<SaveSt
   return { state: s, ok: true };
 }
 
+// ---- 秘境（v0.9） ----
+
+export function predictSecretRealm(state: SaveState, realmId: SecretRealmId): { ok: boolean; reason: string; won: boolean; enemy: { attack: number; defense: number; hp: number }; player: { attack: number; defense: number; hp: number } } {
+  const cfg = SECRET_REALM_CFG[realmId];
+  if (!cfg) return { ok: false, reason: "无此秘境", won: false, enemy: { attack: 0, defense: 0, hp: 0 }, player: { attack: 0, defense: 0, hp: 0 } };
+  if (realmIndex(state.realm) < realmIndex(cfg.gate as RealmId)) {
+    return { ok: false, reason: `需${realmName(cfg.gate as RealmId)}方可进入`, won: false, enemy: { ...cfg.enemy }, player: playerStats(state) };
+  }
+  const stats = playerStats(state);
+  const battle = runBattle(stats, cfg.enemy, battleDamageMult(state));
+  return { ok: true, reason: "", won: battle.won, enemy: { ...cfg.enemy }, player: stats };
+}
+
+export function enterSecretRealm(state: SaveState, nowMs: number, realmId: SecretRealmId): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const cfg = SECRET_REALM_CFG[realmId];
+  if (!cfg) return fail("无此秘境");
+  if (realmIndex(s.realm) < realmIndex(cfg.gate as RealmId)) return fail(`需${realmName(cfg.gate as RealmId)}方可进入`);
+  if (s.secretRealmUsed[realmId]) return fail("今日已挑战该秘境");
+  const stats = playerStats(s);
+  const battle = runBattle(stats, cfg.enemy, battleDamageMult(s));
+  const reward = battle.won ? { cultivation: 0, spirit: 0, spiritStone: cfg.reward.spiritStone ?? 0, herb: cfg.reward.herb ?? 0, page: cfg.reward.page ?? 0 } : emptyResources();
+  if (battle.won) applyReward(s, reward);
+  s.secretRealmUsed[realmId] = true;
+  s.secretRealmLog.push({ realm: realmId, won: battle.won, reward: { ...reward }, at: nowMs });
+  const rewardTxt = battle.won ? `得 ${fmtReward(reward)}` : "未获奖励";
+  s.recentLogs.push(`秘境「${cfg.name}」${battle.won ? "探索成功" : "探索失败"}，${rewardTxt}。`);
+  pushMilestone(s, "realm", nowMs, `秘境「${cfg.name}」${battle.won ? "探索成功" : "探索失败"}，${rewardTxt}`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+function fmtReward(r: Resources): string {
+  const parts: string[] = [];
+  if (r.cultivation) parts.push(`修为 ${r.cultivation}`);
+  if (r.spirit) parts.push(`灵气 ${r.spirit}`);
+  if (r.spiritStone) parts.push(`灵石 ${r.spiritStone}`);
+  if (r.herb) parts.push(`灵草 ${r.herb}`);
+  if (r.page) parts.push(`残页 ${r.page}`);
+  return parts.join("、") || "无";
+}
+
 // ---- 存档导入导出 ----
 
 export function migrateSave(raw: SaveState): SaveState {
@@ -1350,6 +1412,9 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.jindanTrial === undefined) s.jindanTrial = null;
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
+  if (s.secretRealmDate === undefined) s.secretRealmDate = todayStr(Date.now());
+  if (!s.secretRealmUsed || typeof s.secretRealmUsed !== "object") s.secretRealmUsed = { realm_herb: false, realm_relic: false, realm_deep: false };
+  if (!Array.isArray(s.secretRealmLog)) s.secretRealmLog = [];
   if (s.aptitude === undefined) s.aptitude = "balanced";
   if (!s.techniqueLevel || typeof s.techniqueLevel !== "object") {
     s.techniqueLevel = { qingYun: 0, xuanGui: 0, poYue: 0, juYuan: 0 };
@@ -1420,6 +1485,29 @@ function validateAuxiliaryTechnique(tech: unknown, aux: unknown, library: unknow
   if (aux === tech) return "主辅不能为同一本";
   if (tech === null || tech === undefined) return "无主修却有辅修";
   if (((library as number) ?? 0) < 2) return "辅修需二级藏经阁";
+  return null;
+}
+
+function validateSecretRealm(used: unknown, log: unknown): string | null {
+  const u = (used ?? {}) as Record<string, unknown>;
+  for (const id of SECRET_REALM_IDS) {
+    const x = u[id];
+    if (x !== undefined && typeof x !== "boolean") return "秘境状态无效";
+  }
+  if (log === undefined || log === null) return null;
+  if (!Array.isArray(log)) return "秘境记录无效";
+  for (const l of log as unknown[]) {
+    if (!l || typeof l !== "object") return "秘境记录无效";
+    const r = l as Record<string, unknown>;
+    if (!SECRET_REALM_IDS.includes(r.realm as SecretRealmId)) return "秘境记录无效";
+    if (typeof r.won !== "boolean") return "秘境记录无效";
+    if (typeof r.at !== "number" || !Number.isFinite(r.at)) return "秘境记录无效";
+    const reward = r.reward as Record<string, unknown> | undefined;
+    if (!reward || typeof reward !== "object") return "秘境记录无效";
+    for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+      if (!isNonNegNum(reward[k])) return "秘境记录无效";
+    }
+  }
   return null;
 }
 
@@ -1670,6 +1758,7 @@ export function importSave(json: string): Result<SaveState> {
     validateTechnique(o.technique, o.techniqueLevel, o.library),
     validateLibrary(o.library),
     validateAuxiliaryTechnique(o.technique, o.auxiliaryTechnique, o.library),
+    validateSecretRealm(o.secretRealmUsed, o.secretRealmLog),
     validateEquipmentAndInventory(o.equipment, o.inventory),
     validateMaps(o.maps, o.suppression, ver),
     validateEncounter(o.encounter),
@@ -1707,6 +1796,9 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.jindanTrial = (o.jindanTrial as TribulationLog | null) ?? null;
   base.library = typeof o.library === "number" ? (o.library as number) : 0;
   base.auxiliaryTechnique = (o.auxiliaryTechnique as TechniqueId | null) ?? null;
+  base.secretRealmDate = typeof o.secretRealmDate === "string" ? (o.secretRealmDate as string) : todayStr(Date.now());
+  base.secretRealmUsed = { realm_herb: false, realm_relic: false, realm_deep: false, ...((o.secretRealmUsed as Partial<SaveState["secretRealmUsed"]>) || {}) };
+  base.secretRealmLog = Array.isArray(o.secretRealmLog) ? (o.secretRealmLog as SaveState["secretRealmLog"]) : [];
   base.recentLogs = Array.isArray(o.recentLogs) ? (o.recentLogs as string[]).slice(-20) : base.recentLogs;
   base.milestones = Array.isArray(o.milestones) ? (o.milestones as Milestone[]) : [];
   base.firsts = { ...base.firsts, ...((o.firsts as Partial<SaveState["firsts"]>) || {}) };

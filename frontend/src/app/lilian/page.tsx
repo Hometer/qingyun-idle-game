@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, fmt, fmtTime, fmtDuration } from "@/lib/labels";
+import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, SECRET_REALMS, fmt, fmtTime, fmtDuration } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
-import { predictFight, predictLongTask } from "@/engine/engine";
-import type { MapId } from "@/engine/types";
+import { predictFight, predictLongTask, predictSecretRealm } from "@/engine/engine";
+import type { MapId, SecretRealmId } from "@/engine/types";
 
 type NodeCfg = {
   name: string;
@@ -32,7 +32,7 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"]): string {
 }
 
 export default function LilianPage() {
-  const { state, now, fight, suppress, battleLog, startLong } = useGame();
+  const { state, now, fight, suppress, battleLog, startLong, realmPending, realmNarrative, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
   const [trainNode, setTrainNode] = useState<{ mid: MapId; nid: string } | null>(null);
   const [trainDifficulty, setTrainDifficulty] = useState<"steady" | "risky">("steady");
@@ -128,6 +128,42 @@ export default function LilianPage() {
         </Section>
       )}
 
+      <Section title="秘境">
+        <p className="mb-2 text-xs text-muted">主动进入的确定性探索，胜得奖励、败无奖励；每秘境每日一次。</p>
+        {(Object.keys(SECRET_REALMS) as SecretRealmId[]).map((rid) => {
+          const cfg = SECRET_REALMS[rid];
+          const pred = predictSecretRealm(state, rid);
+          const gateOk = pred.ok;
+          const used = state.secretRealmUsed[rid];
+          const rewardParts = [
+            cfg.reward.spiritStone ? `灵石 ${cfg.reward.spiritStone}` : "",
+            cfg.reward.herb ? `灵草 ${cfg.reward.herb}` : "",
+            cfg.reward.page ? `残页 ${cfg.reward.page}` : "",
+          ].filter(Boolean).join("、");
+          return (
+            <div key={rid} className="border-b border-line/60 py-2 last:border-0">
+              <div className="flex items-center justify-between">
+                <div className="text-sm">
+                  {cfg.name}
+                  <span className="ml-1 text-xs text-muted">需{REALM_NAMES[cfg.gate]} · 敌 攻{cfg.enemy.attack}/防{cfg.enemy.defense}/气血{cfg.enemy.hp}</span>
+                </div>
+                <button
+                  onClick={() => startSecretRealm(rid)}
+                  disabled={!gateOk || used}
+                  className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
+                >
+                  {used ? "已探索" : gateOk ? "进入秘境" : "未解锁"}
+                </button>
+              </div>
+              <p className="mt-0.5 text-xs text-muted">
+                奖励：{rewardParts || "无"}
+                {gateOk && ` · 预估${pred.won ? "可胜" : "难胜"}`}
+              </p>
+            </div>
+          );
+        })}
+      </Section>
+
       {(Object.keys(MAPS) as MapId[]).map((mid) => (
         <Section key={mid} title={MAPS[mid].name}>
           <p className="mb-2 text-sm text-muted">{WORLD_TEXT[mid]}</p>
@@ -218,6 +254,26 @@ export default function LilianPage() {
               </button>
               <button onClick={() => setSelected(null)} className="rounded-lg border border-line bg-paper px-4 py-2">
                 关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {realmPending && (
+        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center">
+          <div className="w-full max-w-[520px] rounded-t-2xl border border-line bg-card p-5 sm:rounded-2xl">
+            <h2 className="text-lg font-semibold">{realmNarrative?.title ?? SECRET_REALMS[realmPending].name}</h2>
+            <p className="mt-1 text-xs text-muted">{realmNarrative?.source}</p>
+            <p className="mt-2 text-sm leading-relaxed">
+              {realmNarrative?.body ?? "你凝神提剑，准备一探。"}
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button onClick={confirmSecretRealm} className="flex-1 rounded-lg bg-cinnabar px-4 py-2 text-white">
+                开始探索
+              </button>
+              <button onClick={cancelSecretRealm} className="rounded-lg border border-line bg-paper px-4 py-2">
+                取消
               </button>
             </div>
           </div>

@@ -102,6 +102,24 @@ export const CONFIG = {
     ],
   } as const,
 
+  secretRealms: {
+    realm_herb: {
+      name: "灵药谷", gate: "foundation1",
+      enemy: { attack: 25, defense: 16, hp: 200 },
+      reward: { herb: 30, spiritStone: 100 },
+    },
+    realm_relic: {
+      name: "古修遗迹", gate: "foundation2",
+      enemy: { attack: 28, defense: 18, hp: 240 },
+      reward: { page: 8, spiritStone: 200 },
+    },
+    realm_deep: {
+      name: "幽窟险境", gate: "foundation3",
+      enemy: { attack: 32, defense: 21, hp: 300 },
+      reward: { spiritStone: 500, herb: 50 },
+    },
+  } as const,
+
   equipment: {
     w_bronze: { name: "青铜剑", slot: "weapon", attack: 5 },
     w_azure: { name: "青锋剑", slot: "weapon", attack: 15 },

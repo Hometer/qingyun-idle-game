@@ -11,6 +11,8 @@ import {
   upgradeTechnique,
   setAuxiliaryTechnique,
   buildLibrary,
+  predictSecretRealm,
+  enterSecretRealm,
   craftPill,
   equipItem,
   togglePreparePill,
@@ -1252,5 +1254,84 @@ describe("v0.8 独立复核修复回归", () => {
     expect(resProd.cultivationPerSec).toBeGreaterThan(combatProd.cultivationPerSec);
     expect(resProd.spiritPerSec).toBeGreaterThan(combatProd.spiritPerSec);
     expect(playerStats(combat).attack).toBeGreaterThan(playerStats(res).attack);
+  });
+});
+
+describe("v0.9 秘境", () => {
+  function strongFoundation(): SaveState {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s.technique = "poYue";
+    s.techniqueLevel.poYue = 3;
+    return s;
+  }
+
+  it("未达境界不可进入", () => {
+    const s = fresh(); // qi1
+    expect(enterSecretRealm(s, T0, "realm_herb").ok).toBe(false);
+  });
+
+  it("每日限次：同日第二次进入被拒", () => {
+    const s = strongFoundation();
+    const r1 = enterSecretRealm(s, T0, "realm_herb");
+    expect(r1.ok).toBe(true);
+    expect((r1.state as SaveState).secretRealmUsed.realm_herb).toBe(true);
+    expect(enterSecretRealm(r1.state as SaveState, T0, "realm_herb").ok).toBe(false);
+  });
+
+  it("跨日重置后可再次进入", () => {
+    const s = strongFoundation();
+    const r1 = enterSecretRealm(s, T0, "realm_herb");
+    expect(r1.ok).toBe(true);
+    const nextDay = (r1.state as SaveState);
+    nextDay.secretRealmDate = "2000-01-01"; // 旧日期
+    const r2 = enterSecretRealm(nextDay, T0 + 86400000, "realm_herb");
+    expect(r2.ok).toBe(true);
+  });
+
+  it("胜利发放对应奖励并记录", () => {
+    const s = strongFoundation();
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.resources.herb).toBe(30);
+    expect(st.resources.spiritStone).toBe(100);
+    expect(st.secretRealmLog.length).toBe(1);
+    expect(st.secretRealmLog[0].won).toBe(true);
+    expect(st.milestones.some((m) => m.text.includes("灵药谷"))).toBe(true);
+  });
+
+  it("战败无奖励", () => {
+    const s = fresh();
+    s.realm = "foundation1"; // 无装备无功法 → 必败
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.resources.herb).toBe(0);
+    expect(st.resources.spiritStone).toBe(0);
+    expect(st.secretRealmLog[0].won).toBe(false);
+  });
+});
+
+describe("v0.9 迁移与校验", () => {
+  it("v7 旧档迁移补秘境字段", () => {
+    const s = fresh();
+    const v7 = structuredClone(s) as unknown as Record<string, unknown>;
+    delete v7.secretRealmDate;
+    delete v7.secretRealmUsed;
+    delete v7.secretRealmLog;
+    v7.schemaVersion = 7;
+    const m = migrateSave(v7 as unknown as SaveState);
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(m.secretRealmUsed).toEqual({ realm_herb: false, realm_relic: false, realm_deep: false });
+    expect(m.secretRealmLog).toEqual([]);
+  });
+
+  it("坏档：秘境状态非布尔拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    (bad.secretRealmUsed as Record<string, unknown>).realm_herb = 1;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
   });
 });

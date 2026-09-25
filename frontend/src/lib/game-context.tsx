@@ -12,7 +12,7 @@ import {
 } from "react";
 import * as eng from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId, BreakthroughMethod } from "@/engine/types";
+import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId, BreakthroughMethod, SecretRealmId } from "@/engine/types";
 import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave, type LoadedSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
@@ -58,6 +58,11 @@ interface GameContextValue {
   setAuxiliaryTechnique: (id: TechniqueId) => void;
   upgradeTechnique: () => void;
   buildLibrary: () => void;
+  realmPending: SecretRealmId | null;
+  realmNarrative: { title: string; body: string; source: string } | null;
+  startSecretRealm: (realmId: SecretRealmId) => void;
+  confirmSecretRealm: () => void;
+  cancelSecretRealm: () => void;
   equip: (id: string) => void;
   craftPill: () => void;
   togglePill: () => void;
@@ -130,6 +135,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [encounterLoading, setEncounterLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ResultPanel | null>(null);
   const [showDataNotice, setShowDataNotice] = useState(false);
+  const [realmPending, setRealmPending] = useState<SecretRealmId | null>(null);
+  const [realmNarrative, setRealmNarrative] = useState<{ title: string; body: string; source: string } | null>(null);
   // baseRef：已持久化到 IndexedDB 的修订号（乐观并发基准）。只在读档/写档成功/重置/导入时更新，
   // 绝不从内存 state 推导，否则结算产生的内存修订号会被误当作已持久化基准，导致持续冲突。
   const baseRef = useRef(0);
@@ -529,6 +536,63 @@ export function GameProvider({ children }: { children: ReactNode }) {
     await apply(r.state, "藏经阁升级成功");
   }, [state, apply]);
 
+  const startSecretRealm = useCallback(
+    async (realmId: SecretRealmId) => {
+      if (!state) return;
+      const pred = eng.predictSecretRealm(state, realmId);
+      if (!pred.ok) {
+        setNotice(pred.reason);
+        return;
+      }
+      if (state.secretRealmUsed[realmId]) {
+        setNotice("今日已挑战该秘境");
+        return;
+      }
+      const cfg = CONFIG.secretRealms[realmId];
+      setRealmPending(realmId);
+      setRealmNarrative(null);
+      const body = {
+        event_id: `event_${realmId}`,
+        character: { name: state.name, realm: REALM_NAMES[state.realm] ?? state.realm, spirit_root: state.spiritRoot },
+        map_id: "map_yunling",
+        options: [{ option_id: "enter", label: "进入秘境", meaning: `进入${cfg.name}一探` }],
+        recent_logs: state.recentLogs.slice(-2),
+      };
+      const resp: EncounterResponse | null = getCopyMode() === "template" ? null : await generateEncounter(body);
+      if (resp) {
+        setRealmNarrative({ title: resp.title, body: resp.body, source: resp.source === "model" ? "AI 文案" : "模板文案" });
+      } else {
+        setRealmNarrative({ title: cfg.name, body: `你来到${cfg.name}前，凝神提剑，准备一探。`, source: "模板文案" });
+      }
+    },
+    [state],
+  );
+
+  const confirmSecretRealm = useCallback(async () => {
+    if (!state || !realmPending) return;
+    const before = state;
+    const r = eng.enterSecretRealm(state, Date.now(), realmPending);
+    setRealmPending(null);
+    setRealmNarrative(null);
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    const last = r.state.secretRealmLog[r.state.secretRealmLog.length - 1];
+    const ok = await apply(r.state, last.won ? "秘境探索成功" : "秘境探索失败");
+    if (ok) {
+      setLastResult({
+        title: `秘境「${CONFIG.secretRealms[last.realm].name}」${last.won ? "探索成功" : "探索失败"}`,
+        lines: deltaLines(before, r.state),
+      });
+    }
+  }, [state, realmPending, apply]);
+
+  const cancelSecretRealm = useCallback(() => {
+    setRealmPending(null);
+    setRealmNarrative(null);
+  }, []);
+
   const equip = useCallback(
     async (id: string) => {
       if (!state) return;
@@ -801,6 +865,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setAuxiliaryTechnique,
     upgradeTechnique,
     buildLibrary,
+    realmPending,
+    realmNarrative,
+    startSecretRealm,
+    confirmSecretRealm,
+    cancelSecretRealm,
     equip,
     craftPill,
     togglePill,
