@@ -1057,3 +1057,24 @@ describe("v0.7 复核修复回归·补全", () => {
     expect(p2.shortfall.spirit).toBe(1);
   });
 });
+
+describe("v0.7 修复后复核回归", () => {
+  it("挂机结算跨过门槛后，结丹预览 canAfford 翻转", () => {
+    const s = fresh();
+    s.realm = "foundation3";
+    s.maps.map_yunling.node_guardian.cleared = true;
+    s.maps.map_yunling.node_guardian.unlocked = true;
+    s.resources.cultivation = 11995; // 差 5 修为
+    s.resources.spirit = 1600;
+    s.resources.spiritStone = 3000;
+    s.lastSettledAt = T0;
+    // 未结算：仍差 5，不可挑战
+    const before = previewJindanTrial(s);
+    expect(before.canAfford).toBe(false);
+    expect(before.shortfall.cultivation).toBe(5);
+    // 结算 6 秒后：修为 12001，可挑战
+    const after = previewJindanTrial(settle(s, T0 + 6000));
+    expect(after.canAfford).toBe(true);
+    expect(after.shortfall.cultivation).toBe(0);
+  });
+});

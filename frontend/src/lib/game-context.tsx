@@ -238,8 +238,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   );
 
   const jindanPreview = useMemo(
-    () => (state && state.realm === "foundation3" ? eng.previewJindanTrial(state) : null),
-    [state],
+    () => (view && view.realm === "foundation3" ? eng.previewJindanTrial(view) : null),
+    [view],
   );
 
   const targets = useMemo<Target[]>(() => {
@@ -584,8 +584,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const startJindanTrial = useCallback(async () => {
     if (!state) return;
     const p = eng.previewJindanTrial(state);
-    const costTxt = p.ok ? `消耗修为 ${p.cost.cultivation}、灵气 ${p.cost.spirit}、灵石 ${p.cost.spiritStone}` : "";
-    const failWarn = p.ok && !p.success ? "；本次预计失败，仍会消耗上述资源与预置丹药" : "";
+    const costTxt = p.ok
+      ? `消耗修为 ${p.cost.cultivation}、灵气 ${p.cost.spirit}、灵石 ${p.cost.spiritStone}${p.pillPrepared ? "、护劫丹 1 枚" : ""}`
+      : "";
+    const failWarn = p.ok && !p.success ? "；本次预计失败，仍会消耗上述资源" : "";
     if (!window.confirm(`确定结丹试炼？${costTxt}，失败境界不退${failWarn}。`)) return;
     const nowMs = Date.now();
     const settled = eng.settle(state, nowMs);
