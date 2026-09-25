@@ -1447,3 +1447,36 @@ describe("v0.9 再次独立复核修复回归", () => {
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
   });
 });
+
+describe("v0.9 秘境可达性模拟矩阵", () => {
+  const equip = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+  const cases: Array<{ rid: SecretRealmId; realm: RealmId; name: string }> = [
+    { rid: "realm_herb", realm: "foundation1", name: "灵药谷" },
+    { rid: "realm_relic", realm: "foundation2", name: "古修遗迹" },
+    { rid: "realm_deep", realm: "foundation3", name: "幽窟险境" },
+  ];
+
+  it("三秘境在破岳诀Lv3+最佳装备下均可胜", () => {
+    for (const c of cases) {
+      const s = fresh();
+      s.realm = c.realm;
+      s.equipment = equip;
+      s.technique = "poYue";
+      s.techniqueLevel.poYue = 3;
+      const pred = predictSecretRealm(s, c.rid);
+      expect(pred.ok).toBe(true);
+      expect(pred.won).toBe(true);
+    }
+  });
+
+  it("无功法时三秘境均难胜（体现功法取向价值）", () => {
+    for (const c of cases) {
+      const s = fresh();
+      s.realm = c.realm;
+      s.equipment = equip;
+      s.technique = null;
+      const pred = predictSecretRealm(s, c.rid);
+      expect(pred.won).toBe(false);
+    }
+  });
+});
