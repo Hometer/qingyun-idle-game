@@ -100,12 +100,12 @@ const GameContext = createContext<GameContextValue | null>(null);
 
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
-function realmNarrativeCacheKey(realmId: SecretRealmId): string {
+function realmNarrativeCacheKey(realmId: SecretRealmId, saveId: string): string {
   const d = new Date();
   const m = d.getMonth() + 1;
   const day = d.getDate();
   const today = `${d.getFullYear()}-${m < 10 ? "0" + m : m}-${day < 10 ? "0" + day : day}`;
-  return `qingyun_realm_narrative_${realmId}_${today}`;
+  return `qingyun_realm_narrative_${saveId}_${realmId}_${today}`;
 }
 
 const REALM_NAMES: Record<string, string> = {};
@@ -564,9 +564,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setRealmPending(realmId);
       setRealmNarrativeLoading(true);
       setRealmNarrative(null);
-      // 缓存复用（同一秘境当日已取过叙事则不重复调用模型）
+      // 缓存复用（同一存档同一秘境当日已取过叙事则不重复调用模型）
       try {
-        const cached = localStorage.getItem(realmNarrativeCacheKey(realmId));
+        const cached = localStorage.getItem(realmNarrativeCacheKey(realmId, state.id));
         if (cached) {
           setRealmNarrative(JSON.parse(cached));
           setRealmNarrativeLoading(false);
@@ -587,7 +587,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setRealmNarrative(narrative);
       setRealmNarrativeLoading(false);
       try {
-        localStorage.setItem(realmNarrativeCacheKey(realmId), JSON.stringify(narrative));
+        localStorage.setItem(realmNarrativeCacheKey(realmId, state.id), JSON.stringify(narrative));
       } catch {}
     },
     [state, view, realmPending],

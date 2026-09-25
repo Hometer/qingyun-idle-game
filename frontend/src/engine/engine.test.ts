@@ -1414,3 +1414,36 @@ describe("v0.9 独立复核修复回归", () => {
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
   });
 });
+
+describe("v0.9 再次独立复核修复回归", () => {
+  function wonHerbSave(): SaveState {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s.technique = "poYue";
+    s.techniqueLevel.poYue = 3;
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    return r.state as SaveState;
+  }
+
+  it("v8 已有当日记录但 used=false 拒绝导入", () => {
+    const st = wonHerbSave();
+    const bad = structuredClone(st) as unknown as Record<string, unknown>;
+    (bad.secretRealmUsed as Record<string, unknown>).realm_herb = false;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v8 日期改成旧日期但记录在今天拒绝导入", () => {
+    const st = wonHerbSave();
+    const bad = structuredClone(st) as unknown as Record<string, unknown>;
+    bad.secretRealmDate = "2000-01-01";
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v8 非法日历日期拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    bad.secretRealmDate = "2026-99-99";
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});

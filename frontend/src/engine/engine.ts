@@ -129,6 +129,13 @@ function todayStr(nowMs: number): string {
   return `${d.getFullYear()}-${m < 10 ? "0" + m : m}-${day < 10 ? "0" + day : day}`;
 }
 
+function isValidDateStr(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
 function randomId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -1496,7 +1503,7 @@ function validateAuxiliaryTechnique(tech: unknown, aux: unknown, library: unknow
 function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaVersion: number): string | null {
   const isCurrent = schemaVersion >= SCHEMA_VERSION;
   if (isCurrent) {
-    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "秘境日期无效";
+    if (typeof date !== "string" || !isValidDateStr(date)) return "秘境日期无效";
     if (!used || typeof used !== "object") return "秘境状态无效";
     if (log === undefined || log === null || !Array.isArray(log)) return "秘境记录无效";
   }
@@ -1511,6 +1518,9 @@ function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaV
   }
   if (log === undefined || log === null) return null;
   if (!Array.isArray(log)) return "秘境记录无效";
+  // 当日记录与当日次数、日期的一致性校验（仅当前版本）
+  const dateStr = (isCurrent ? (date as string) : null);
+  const sameDayCount: Record<string, number> = {};
   for (const l of log as unknown[]) {
     if (!l || typeof l !== "object") return "秘境记录无效";
     const r = l as Record<string, unknown>;
@@ -1526,6 +1536,21 @@ function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaV
     const expRec = expected as unknown as Record<string, number>;
     for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
       if ((reward[k] ?? 0) !== (expRec[k] ?? 0)) return "秘境记录奖励不符";
+    }
+    if (dateStr) {
+      const lDate = todayStr(r.at as number);
+      if (lDate > dateStr) return "秘境记录时间无效"; // 记录晚于日期标记
+      if (lDate === dateStr) {
+        sameDayCount[r.realm as string] = (sameDayCount[r.realm as string] ?? 0) + 1;
+      }
+    }
+  }
+  if (dateStr) {
+    for (const id of SECRET_REALM_IDS) {
+      const usedVal = u[id];
+      const cnt = sameDayCount[id] ?? 0;
+      if (usedVal === true && cnt !== 1) return "秘境次数与记录矛盾";
+      if (usedVal === false && cnt !== 0) return "秘境次数与记录矛盾";
     }
   }
   return null;
