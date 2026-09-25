@@ -1019,3 +1019,41 @@ describe("v0.7 复核修复回归", () => {
     expect(p.shortfall.spiritStone).toBe(1);
   });
 });
+
+describe("v0.7 复核修复回归·补全", () => {
+  it("v6 缺整张新地图 map_yunling 拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    delete (bad.maps as Record<string, unknown>).map_yunling;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v6 缺中/末节点拒绝导入", () => {
+    const s = fresh();
+    const badMid = structuredClone(s) as unknown as Record<string, unknown>;
+    delete ((badMid.maps as Record<string, unknown>).map_yunling as Record<string, unknown>).node_golem;
+    expect(importSave(JSON.stringify(badMid)).ok).toBe(false);
+    const badEnd = structuredClone(s) as unknown as Record<string, unknown>;
+    delete ((badEnd.maps as Record<string, unknown>).map_yunling as Record<string, unknown>).node_guardian;
+    expect(importSave(JSON.stringify(badEnd)).ok).toBe(false);
+  });
+
+  it("修为/灵气差 1 时结丹预览显示对应差额", () => {
+    function mk(cult: number, spirit: number, stone: number): SaveState {
+      const s = fresh();
+      s.realm = "foundation3";
+      s.maps.map_yunling.node_guardian.cleared = true;
+      s.maps.map_yunling.node_guardian.unlocked = true;
+      s.resources.cultivation = cult;
+      s.resources.spirit = spirit;
+      s.resources.spiritStone = stone;
+      return s;
+    }
+    const p1 = previewJindanTrial(mk(11999, 1600, 3000));
+    expect(p1.canAfford).toBe(false);
+    expect(p1.shortfall.cultivation).toBe(1);
+    const p2 = previewJindanTrial(mk(12000, 1599, 3000));
+    expect(p2.canAfford).toBe(false);
+    expect(p2.shortfall.spirit).toBe(1);
+  });
+});
