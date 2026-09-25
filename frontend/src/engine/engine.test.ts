@@ -4,6 +4,8 @@ import {
   createGame,
   settle,
   breakthrough,
+  breakthroughCosts,
+  breakthroughSuccessRate,
   upgradeBuilding,
   setTechnique,
   upgradeTechnique,
@@ -28,13 +30,13 @@ import {
   productionBreakdown,
   predictFight,
 } from "./engine";
-import type { SaveState, RealmId, MapId } from "./types";
+import type { SaveState, RealmId, MapId, AptitudeId, BreakthroughMethod } from "./types";
 
 const H = 3600_000;
 const T0 = 1_700_000_000_000;
 
 function fresh(nowMs = T0): SaveState {
-  const s = createGame("林青", "金", nowMs);
+  const s = createGame("林青", "金", "balanced", nowMs);
   s.daily.weather = { id: "none", used: false };
   s.daily.astrology = { id: "none", used: false };
   s.daily.goals = { battle: { progress: 0, claimed: false }, suppress: { progress: 0, claimed: false } };
@@ -88,11 +90,11 @@ describe("时间结算", () => {
 });
 
 describe("小进阶", () => {
-  it("达标扣除门槛并进阶", () => {
+  it("稳妥进阶按 1.15 倍成本扣费并进阶", () => {
     let s = fresh();
-    s.resources.cultivation = 120;
-    s.resources.spirit = 20;
-    const r = breakthrough(s, T0);
+    s.resources.cultivation = 138;
+    s.resources.spirit = 23;
+    const r = breakthrough(s, T0, "steady");
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
     expect(st.realm).toBe("qi2");
@@ -372,7 +374,7 @@ describe("v1 存档迁移", () => {
     const r = importSave(JSON.stringify(v1));
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
-    expect(st.schemaVersion).toBe(4);
+    expect(st.schemaVersion).toBe(SCHEMA_VERSION);
     expect(st.milestones).toEqual([]);
     expect(st.firsts).toEqual({ settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false });
   });
@@ -384,7 +386,7 @@ describe("v1 存档迁移", () => {
     delete (v1 as unknown as Record<string, unknown>).firsts;
     const migrated = migrateSave(v1);
     expect(migrated.firsts.suppressedFirstNodeOnce).toBe(true);
-    expect(migrated.schemaVersion).toBe(4);
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
   });
 });
 
@@ -640,6 +642,169 @@ describe("长期任务坏档导入", () => {
       reward: { cultivation: 1, spirit: 0, spiritStone: 0, herb: 0, page: 0 },
       completedAt: T0, aborted: false,
     };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});
+
+describe("修行资质", () => {
+  it("均衡资质产速与基线一致", () => {
+    const s = fresh();
+    s.aptitude = "balanced";
+    const after = settle(s, T0 + 1000);
+    expect(after.resources.cultivation).toBeCloseTo(1.0, 5);
+    expect(after.resources.spirit).toBeCloseTo(0.25, 5);
+  });
+
+  it("凝神资质修为×1.05、灵气×0.95", () => {
+    const s = fresh();
+    s.aptitude = "focus";
+    const after = settle(s, T0 + 1000);
+    expect(after.resources.cultivation).toBeCloseTo(1.05, 5);
+    expect(after.resources.spirit).toBeCloseTo(0.2375, 5);
+  });
+
+  it("聚灵资质修为×0.95、灵气×1.05", () => {
+    const s = fresh();
+    s.aptitude = "spirit";
+    const after = settle(s, T0 + 1000);
+    expect(after.resources.cultivation).toBeCloseTo(0.95, 5);
+    expect(after.resources.spirit).toBeCloseTo(0.2625, 5);
+  });
+
+  it("生产明细包含资质项", () => {
+    const s = fresh();
+    s.aptitude = "focus";
+    const prod = productionBreakdown(s);
+    expect(prod.lines.some((l) => l.includes("资质·凝神"))).toBe(true);
+  });
+});
+
+describe("概率小进阶", () => {
+  it("冲关初次成功：扣完整成本并进阶，保底归零", () => {
+    const s = fresh();
+    s.resources.cultivation = 120;
+    s.resources.spirit = 20;
+    const r = breakthrough(s, T0, "risky", () => 0.5);
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.realm).toBe("qi2");
+    expect(st.resources.cultivation).toBe(0);
+    expect(st.resources.spirit).toBe(0);
+    expect(st.breakthroughFails.qi1).toBe(0);
+    expect(st.breakthroughRecords.length).toBe(1);
+    expect(st.breakthroughRecords[0].success).toBe(true);
+  });
+
+  it("冲关初次失败：境界不动、只扣 20%、保底+1", () => {
+    const s = fresh();
+    s.resources.cultivation = 120;
+    s.resources.spirit = 20;
+    const r = breakthrough(s, T0, "risky", () => 0.85);
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.realm).toBe("qi1");
+    expect(st.breakthroughFails.qi1).toBe(1);
+    expect(st.resources.cultivation).toBe(120 - 24);
+    expect(st.resources.spirit).toBe(20 - 4);
+    expect(st.breakthroughRecords[0].success).toBe(false);
+  });
+
+  it("冲关两次失败后第三次保底成功", () => {
+    let s = fresh();
+    s.resources.cultivation = 360;
+    s.resources.spirit = 60;
+    // 初次 80%：rng 0.85 失败
+    let r = breakthrough(s, T0, "risky", () => 0.85);
+    let st = r.state as SaveState;
+    expect(st.realm).toBe("qi1");
+    expect(st.breakthroughFails.qi1).toBe(1);
+    // 二次 90%：rng 0.95 失败
+    r = breakthrough(st, T0, "risky", () => 0.95);
+    st = r.state as SaveState;
+    expect(st.breakthroughFails.qi1).toBe(2);
+    // 三次 100%：rng 0.95 < 1.0 成功
+    r = breakthrough(st, T0, "risky", () => 0.95);
+    st = r.state as SaveState;
+    expect(st.realm).toBe("qi2");
+    expect(st.breakthroughFails.qi1).toBe(0);
+  });
+
+  it("稳妥进阶必成且成本 ×1.15 向上取整", () => {
+    const s = fresh();
+    s.resources.cultivation = 138;
+    s.resources.spirit = 23;
+    const r = breakthrough(s, T0, "steady", () => 0);
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.realm).toBe("qi2");
+    expect(st.resources.cultivation).toBe(0);
+    expect(st.resources.spirit).toBe(0);
+    expect(st.breakthroughRecords[0].probability).toBe(1);
+  });
+
+  it("保底计数跨层不继承", () => {
+    const s = fresh();
+    s.resources.cultivation = 240;
+    s.resources.spirit = 40;
+    // qi1 冲关失败一次
+    const r1 = breakthrough(s, T0, "risky", () => 0.85);
+    const st1 = r1.state as SaveState;
+    expect(st1.breakthroughFails.qi1).toBe(1);
+    // qi1 稳妥成功进阶到 qi2，保底归零
+    st1.resources.cultivation += 200;
+    st1.resources.spirit += 40;
+    const r2 = breakthrough(st1, T0, "steady");
+    const st2 = r2.state as SaveState;
+    expect(st2.realm).toBe("qi2");
+    expect(st2.breakthroughFails.qi1).toBe(0);
+    // qi2 新层保底从 0 开始
+    expect(st2.breakthroughFails.qi2).toBe(0);
+  });
+
+  it("资源不足时零扣费且不判定", () => {
+    const s = fresh();
+    s.resources.cultivation = 100;
+    s.resources.spirit = 20;
+    const r = breakthrough(s, T0, "risky", () => 0);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain("不足");
+    expect(s.resources.cultivation).toBe(100);
+  });
+});
+
+describe("v0.6 迁移与导入校验", () => {
+  it("v4 旧档迁移补均衡资质与空保底", () => {
+    const s = fresh();
+    const v4 = structuredClone(s) as unknown as Record<string, unknown>;
+    delete v4.aptitude;
+    delete v4.breakthroughFails;
+    delete v4.breakthroughRecords;
+    v4.schemaVersion = 4;
+    const m = migrateSave(v4 as unknown as SaveState);
+    expect(m.aptitude).toBe("balanced");
+    expect(m.breakthroughFails).toEqual({ qi1: 0, qi2: 0, qi3: 0 });
+    expect(m.breakthroughRecords).toEqual([]);
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
+  it("无效资质拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    bad.aptitude = "legendary";
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("越界保底计数拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    bad.breakthroughFails = { qi1: 3, qi2: 0, qi3: 0 };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("坏进阶记录拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    bad.breakthroughRecords = [{ layer: "qi1", method: "risky", success: false, probability: 2, cost: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0 }, at: T0 }];
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
   });
 });

@@ -12,7 +12,7 @@ import {
 } from "react";
 import * as eng from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId } from "@/engine/types";
+import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId, BreakthroughMethod } from "@/engine/types";
 import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave, type LoadedSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
@@ -49,9 +49,9 @@ interface GameContextValue {
   encounter: EncounterCopy | null;
   encounterLoading: boolean;
   tribPreview: eng.TribulationPreview | null;
-  create: (name: string, root: SpiritRoot) => void;
+  create: (name: string, root: SpiritRoot, aptitude: AptitudeId) => void;
   settleNow: () => void;
-  doBreakthrough: () => void;
+  doBreakthrough: (method: BreakthroughMethod) => void;
   upgradeBuilding: (id: BuildingId) => void;
   setTechnique: (id: TechniqueId) => void;
   upgradeTechnique: () => void;
@@ -358,8 +358,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state, apply]);
 
   const create = useCallback(
-    async (name: string, root: SpiritRoot) => {
-      const s = eng.createGame(name, root, Date.now());
+    async (name: string, root: SpiritRoot, aptitude: AptitudeId) => {
+      const s = eng.createGame(name, root, aptitude, Date.now());
       try {
         localStorage.setItem("qingyun_notice_shown", "1");
       } catch {}
@@ -382,18 +382,36 @@ export function GameProvider({ children }: { children: ReactNode }) {
     await apply(withDaily, parts ? `本次领取：${parts}` : "暂无新收益");
   }, [state, apply]);
 
-  const doBreakthrough = useCallback(async () => {
-    if (!state) return;
-    const nowMs = Date.now();
-    const settled = eng.settle(state, nowMs);
-    const r = eng.breakthrough(settled, nowMs);
-    if (!r.ok || !r.state) {
-      setNotice(r.reason);
-      return;
-    }
-    const ok = await apply(r.state, "突破成功");
-    if (ok) setLastResult({ title: `晋入 ${REALM_NAMES[r.state.realm]}`, lines: deltaLines(settled, r.state) });
-  }, [state, apply]);
+  const doBreakthrough = useCallback(
+    async (method: BreakthroughMethod) => {
+      if (!state) return;
+      const nowMs = Date.now();
+      const settled = eng.settle(state, nowMs);
+      const costs = eng.breakthroughCosts(settled, method);
+      const rate = eng.breakthroughSuccessRate(settled);
+      const msg =
+        method === "steady"
+          ? `确定稳妥进阶？消耗修为 ${costs.success.cultivation}、灵气 ${costs.success.spirit}，必定成功。`
+          : `确定冲关进阶？成功率 ${Math.round(rate * 100)}%，失败仅扣修为 ${costs.failure.cultivation}、灵气 ${costs.failure.spirit}，且不降境界。`;
+      if (!window.confirm(msg)) return;
+      const r = eng.breakthrough(settled, nowMs, method);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      const success = r.state.realm !== settled.realm;
+      const ok = await apply(r.state, success ? "突破成功" : "冲关失败，可再尝试或改选稳妥");
+      if (ok) {
+        if (success) {
+          setLastResult({ title: `晋入 ${REALM_NAMES[r.state.realm]}`, lines: deltaLines(settled, r.state) });
+        } else {
+          const nextRate = eng.breakthroughSuccessRate(r.state);
+          setLastResult({ title: "冲关失败", lines: [...deltaLines(settled, r.state), `下次成功率 ${Math.round(nextRate * 100)}%`] });
+        }
+      }
+    },
+    [state, apply],
+  );
 
   const upgradeBuilding = useCallback(
     async (id: BuildingId) => {

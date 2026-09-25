@@ -1,5 +1,9 @@
 import { CONFIG } from "./config";
 import type {
+  AptitudeId,
+  BreakthroughLayer,
+  BreakthroughMethod,
+  BreakthroughRecord,
   BuildingId,
   DailyState,
   LongTask,
@@ -18,7 +22,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -77,6 +81,20 @@ const LONG_TASK_CFG = CONFIG.longTask as unknown as {
   ruleVersion: number;
 };
 
+const APTITUDE_CFG = CONFIG.aptitudes as unknown as Record<
+  AptitudeId,
+  { name: string; cultivationMult: number; spiritMult: number }
+>;
+
+const BREAKTHROUGH_CFG = CONFIG.breakthrough as unknown as {
+  riskyBaseRate: number;
+  riskyFailBoost: number;
+  steadyCostMult: number;
+  riskyFailCostMult: number;
+};
+
+const BREAKTHROUGH_LAYERS: BreakthroughLayer[] = ["qi1", "qi2", "qi3"];
+
 const realmOrder: RealmId[] = ["qi1", "qi2", "qi3", "qi4", "foundation1"];
 
 function realmIndex(realm: RealmId): number {
@@ -100,6 +118,10 @@ function randomId(): string {
 
 function validSpiritRoot(x: unknown): SpiritRoot {
   return (CONFIG.spiritRoots as readonly string[]).includes(x as string) ? (x as SpiritRoot) : "金";
+}
+
+function validAptitude(x: unknown): AptitudeId {
+  return (Object.keys(APTITUDE_CFG) as string[]).includes(x as string) ? (x as AptitudeId) : "balanced";
 }
 
 function fail<T>(reason: string): Result<T> {
@@ -376,7 +398,7 @@ export function abortLongTask(state: SaveState, nowMs: number): Result<SaveState
 
 // ---- 新建 / 重置 ----
 
-export function createGame(name: string, spiritRoot: SpiritRoot, nowMs = Date.now()): SaveState {
+export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: AptitudeId = "balanced", nowMs = Date.now()): SaveState {
   const maps = {} as SaveState["maps"];
   for (const [mid, m] of Object.entries(CONFIG.maps)) {
     const nodes: Record<string, { unlocked: boolean; cleared: boolean }> = {};
@@ -387,11 +409,13 @@ export function createGame(name: string, spiritRoot: SpiritRoot, nowMs = Date.no
   }
   // 仅第一张图的第一个节点初始解锁
   maps[MAP_ORDER[0]][Object.keys(MAP_CFG[MAP_ORDER[0]].nodes)[0]].unlocked = true;
+  const apt = validAptitude(aptitude);
   const state: SaveState = {
     schemaVersion: SCHEMA_VERSION,
     id: randomId(),
     name,
     spiritRoot: validSpiritRoot(spiritRoot),
+    aptitude: apt,
     resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0 },
     realm: "qi1",
     buildings: { cultivationRoom: 0, spiritArray: 0, spiritField: 0, alchemyFurnace: 0 },
@@ -404,13 +428,15 @@ export function createGame(name: string, spiritRoot: SpiritRoot, nowMs = Date.no
     suppression: { map_qingyun: null, map_nether: null },
     encounter: { pending: null, triggeredToday: 0, lastTriggerDate: todayStr(nowMs), guideDone: false },
     tribulationLog: null,
-    recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}。`],
-    milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}` }],
+    recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}。`],
+    milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}` }],
     firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
     daily: emptyDaily(todayStr(nowMs)),
     suppressionSince: { map_qingyun: 0, map_nether: 0 },
     longTask: null,
     lastLongTaskResult: null,
+    breakthroughFails: { qi1: 0, qi2: 0, qi3: 0 },
+    breakthroughRecords: [],
     lastSettledAt: nowMs,
     revision: 0,
   };
@@ -436,6 +462,13 @@ function techniqueCultivationMult(s: SaveState): number {
     return CONFIG.techniques.qingYun.levels[s.techniqueLevel.qingYun - 1].cultivationMult;
   }
   return 1;
+}
+
+function aptitudeCultivationMult(s: SaveState): number {
+  return APTITUDE_CFG[s.aptitude]?.cultivationMult ?? 1;
+}
+function aptitudeSpiritMult(s: SaveState): number {
+  return APTITUDE_CFG[s.aptitude]?.spiritMult ?? 1;
 }
 function suppressionRate(s: SaveState): number {
   let rate = 0;
@@ -479,18 +512,22 @@ export interface ProductionBreakdown {
 export function productionBreakdown(state: SaveState): ProductionBreakdown {
   const cultBuilding = buildingCultivationMult(state);
   const cultTech = techniqueCultivationMult(state);
+  const cultApt = aptitudeCultivationMult(state);
   const spiritBuilding = buildingSpiritMult(state);
+  const spiritApt = aptitudeSpiritMult(state);
+  const aptName = APTITUDE_CFG[state.aptitude]?.name ?? "均衡";
   const herb = spiritFieldRate(state);
   const stone = suppressionRate(state);
-  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech;
-  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding;
+  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt;
+  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritApt;
   const w = CONFIG.weathers[state.daily.weather.id as keyof typeof CONFIG.weathers];
   const a = CONFIG.astrologies[state.daily.astrology.id as keyof typeof CONFIG.astrologies];
   const lines: string[] = [
     `天气·${w.name}：${w.desc}${state.daily.weather.used ? "（已用）" : ""}`,
     `星象·${a.name}：${a.desc}${state.daily.astrology.used ? "（已用）" : ""}`,
-    `修为 ${n1(cultivationPerSec)}/秒（基础 ${n1(CONFIG.baseCultivationPerSecond)}${cultBuilding > 1 ? ` × 修炼室 ${n1(cultBuilding)}` : ""}${cultTech > 1 ? ` × 功法 ${n1(cultTech)}` : ""}）`,
-    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}）`,
+    `资质·${aptName}：修为 ×${n1(cultApt)}、灵气 ×${n1(spiritApt)}`,
+    `修为 ${n1(cultivationPerSec)}/秒（基础 ${n1(CONFIG.baseCultivationPerSecond)} × 资质 ${n1(cultApt)}${cultBuilding > 1 ? ` × 修炼室 ${n1(cultBuilding)}` : ""}${cultTech > 1 ? ` × 功法 ${n1(cultTech)}` : ""}）`,
+    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)} × 资质 ${n1(spiritApt)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}）`,
     herb > 0 ? `灵草 ${n1(herb)}/秒（灵田）` : "灵草 0/秒（未建灵田）",
     stone > 0 ? `灵石 ${n1(stone)}/秒（镇压产出）` : "灵石 0/秒（未镇压节点）",
   ];
@@ -509,8 +546,8 @@ export function settle(state: SaveState, nowMs: number): SaveState {
   const deltaMs = Math.max(0, to - from);
   const deltaSec = deltaMs / 1000;
 
-  const cultMult = buildingCultivationMult(s) * techniqueCultivationMult(s);
-  const spiritMult = buildingSpiritMult(s);
+  const cultMult = buildingCultivationMult(s) * techniqueCultivationMult(s) * aptitudeCultivationMult(s);
+  const spiritMult = buildingSpiritMult(s) * aptitudeSpiritMult(s);
   const herbRate = spiritFieldRate(s);
 
   let spiritStoneGain = 0;
@@ -550,21 +587,80 @@ export function settle(state: SaveState, nowMs: number): SaveState {
 
 // ---- 小进阶 ----
 
-export function breakthrough(state: SaveState, nowMs: number): Result<SaveState> {
+export function breakthroughCosts(state: SaveState, method: BreakthroughMethod): { success: Resources; failure: Resources } {
+  const layer = state.realm as BreakthroughLayer;
+  const next = REALMS[realmIndex(layer) + 1];
+  const full = { cultivation: next ? next.cultivationCost : 0, spirit: next ? next.spiritCost : 0 };
+  const zero = emptyResources();
+  if (method === "steady") {
+    return {
+      success: {
+        ...zero,
+        cultivation: Math.ceil(full.cultivation * BREAKTHROUGH_CFG.steadyCostMult),
+        spirit: Math.ceil(full.spirit * BREAKTHROUGH_CFG.steadyCostMult),
+      },
+      failure: { ...zero },
+    };
+  }
+  return {
+    success: { ...zero, cultivation: full.cultivation, spirit: full.spirit },
+    failure: {
+      ...zero,
+      cultivation: Math.ceil(full.cultivation * BREAKTHROUGH_CFG.riskyFailCostMult),
+      spirit: Math.ceil(full.spirit * BREAKTHROUGH_CFG.riskyFailCostMult),
+    },
+  };
+}
+
+export function breakthroughSuccessRate(state: SaveState): number {
+  const layer = state.realm as BreakthroughLayer;
+  if (!BREAKTHROUGH_LAYERS.includes(layer)) return 1;
+  return Math.min(1, BREAKTHROUGH_CFG.riskyBaseRate + BREAKTHROUGH_CFG.riskyFailBoost * (state.breakthroughFails?.[layer] ?? 0));
+}
+
+export function breakthrough(state: SaveState, nowMs: number, method: BreakthroughMethod = "steady", rng: () => number = Math.random): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.realm === "foundation1") return fail("已至本版最高境界");
-  const idx = realmIndex(s.realm);
   if (s.realm === "qi4") return fail("炼气圆满需渡劫方可筑基，请先查看劫势");
-  const next = REALMS[idx + 1];
+  const layer = s.realm as BreakthroughLayer;
+  if (!BREAKTHROUGH_LAYERS.includes(layer)) return fail("当前境界不可小进阶");
+  const next = REALMS[realmIndex(layer) + 1];
   if (!next) return fail("已至本版最高境界");
-  if (s.resources.cultivation < next.cultivationCost || s.resources.spirit < next.spiritCost) {
+
+  const costs = breakthroughCosts(s, method);
+  if (s.resources.cultivation < costs.success.cultivation || s.resources.spirit < costs.success.spirit) {
     return fail("修为或灵气不足");
   }
-  s.resources.cultivation -= next.cultivationCost;
-  s.resources.spirit -= next.spiritCost;
-  s.realm = next.id as RealmId;
-  s.recentLogs.push(`闭关突破，晋入${next.name}。`);
-  pushMilestone(s, "breakthrough", nowMs, `晋入${next.name}`);
+  const deduct = (r: Resources) => {
+    s.resources.cultivation -= r.cultivation;
+    s.resources.spirit -= r.spirit;
+  };
+
+  if (method === "risky") {
+    const rate = breakthroughSuccessRate(s);
+    if (rng() < rate) {
+      deduct(costs.success);
+      s.realm = next.id as RealmId;
+      s.breakthroughFails[layer] = 0;
+      s.breakthroughRecords.push({ layer, method, success: true, probability: rate, cost: { ...costs.success }, at: nowMs });
+      s.recentLogs.push(`冲关成功，晋入${next.name}。`);
+      pushMilestone(s, "breakthrough", nowMs, `冲关成功，晋入${next.name}（成功率 ${Math.round(rate * 100)}%）`);
+    } else {
+      deduct(costs.failure);
+      s.breakthroughFails[layer] = Math.min(2, (s.breakthroughFails[layer] ?? 0) + 1);
+      const nextRate = breakthroughSuccessRate(s);
+      s.breakthroughRecords.push({ layer, method, success: false, probability: rate, cost: { ...costs.failure }, at: nowMs });
+      s.recentLogs.push(`冲关失败，下次成功率 ${Math.round(nextRate * 100)}%。`);
+      pushMilestone(s, "breakthrough", nowMs, `冲关晋入${next.name}失败（当次成功率 ${Math.round(rate * 100)}%，扣修为 ${costs.failure.cultivation}/灵气 ${costs.failure.spirit}，下次成功率 ${Math.round(nextRate * 100)}%）`);
+    }
+  } else {
+    deduct(costs.success);
+    s.realm = next.id as RealmId;
+    s.breakthroughFails[layer] = 0;
+    s.breakthroughRecords.push({ layer, method, success: true, probability: 1, cost: { ...costs.success }, at: nowMs });
+    s.recentLogs.push(`稳妥进阶，晋入${next.name}。`);
+    pushMilestone(s, "breakthrough", nowMs, `稳妥进阶，晋入${next.name}`);
+  }
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1012,6 +1108,9 @@ export function migrateSave(raw: SaveState): SaveState {
   }
   if (s.longTask === undefined) s.longTask = null;
   if (s.lastLongTaskResult === undefined) s.lastLongTaskResult = null;
+  if (s.aptitude === undefined) s.aptitude = "balanced";
+  if (!s.breakthroughFails || typeof s.breakthroughFails !== "object") s.breakthroughFails = { qi1: 0, qi2: 0, qi3: 0 };
+  if (!Array.isArray(s.breakthroughRecords)) s.breakthroughRecords = [];
   s.schemaVersion = SCHEMA_VERSION;
   return s as unknown as SaveState;
 }
@@ -1212,6 +1311,43 @@ function validateLongTaskResult(v: unknown): string | null {
   return null;
 }
 
+function validateAptitude(v: unknown): string | null {
+  if (v === undefined || v === null) return null; // 旧档缺失，迁移补均衡
+  if (!(Object.keys(APTITUDE_CFG) as string[]).includes(v as string)) return "资质无效";
+  return null;
+}
+
+function validateBreakthroughFails(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "object") return "进阶保底数据无效";
+  const o = v as Record<string, unknown>;
+  for (const k of BREAKTHROUGH_LAYERS) {
+    const x = o[k];
+    if (x !== undefined && (!Number.isInteger(x) || (x as number) < 0 || (x as number) > 2)) return "进阶保底数据无效";
+  }
+  return null;
+}
+
+function validateBreakthroughRecords(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v)) return "进阶记录无效";
+  for (const r of v as unknown[]) {
+    if (!r || typeof r !== "object") return "进阶记录无效";
+    const rec = r as Record<string, unknown>;
+    if (!BREAKTHROUGH_LAYERS.includes(rec.layer as BreakthroughLayer)) return "进阶记录层级无效";
+    if (rec.method !== "steady" && rec.method !== "risky") return "进阶记录方式无效";
+    if (typeof rec.success !== "boolean") return "进阶记录结果无效";
+    if (typeof rec.probability !== "number" || !Number.isFinite(rec.probability) || (rec.probability as number) < 0 || (rec.probability as number) > 1) return "进阶记录概率无效";
+    const cost = rec.cost as Record<string, unknown> | undefined;
+    if (!cost || typeof cost !== "object") return "进阶记录成本无效";
+    for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+      if (!isNonNegNum(cost[k])) return "进阶记录成本无效";
+    }
+    if (typeof rec.at !== "number" || !Number.isFinite(rec.at)) return "进阶记录时间无效";
+  }
+  return null;
+}
+
 export function importSave(json: string): Result<SaveState> {
   let d: unknown;
   try {
@@ -1241,6 +1377,9 @@ export function importSave(json: string): Result<SaveState> {
     validateSuppressionSince(o.suppressionSince),
     validateLongTask(o.longTask),
     validateLongTaskResult(o.lastLongTaskResult),
+    validateAptitude(o.aptitude),
+    validateBreakthroughFails(o.breakthroughFails),
+    validateBreakthroughRecords(o.breakthroughRecords),
   ];
   for (const c of checks) if (c) return fail(c);
 
@@ -1249,7 +1388,7 @@ export function importSave(json: string): Result<SaveState> {
 }
 
 function normalizeSave(o: Record<string, unknown>): SaveState {
-  const base = createGame(o.name as string, validSpiritRoot(o.spiritRoot), o.lastSettledAt as number);
+  const base = createGame(o.name as string, validSpiritRoot(o.spiritRoot), validAptitude(o.aptitude), o.lastSettledAt as number);
   base.id = (o.id as string) || base.id;
   base.resources = { ...base.resources, ...(o.resources as Resources) };
   base.realm = o.realm as RealmId;
@@ -1272,6 +1411,9 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.suppressionSince = { map_qingyun: 0, map_nether: 0, ...((o.suppressionSince as Partial<SaveState["suppressionSince"]>) || {}) };
   base.longTask = (o.longTask as LongTask | null) ?? null;
   base.lastLongTaskResult = (o.lastLongTaskResult as LongTaskResult | null) ?? null;
+  base.aptitude = validAptitude(o.aptitude);
+  base.breakthroughFails = { qi1: 0, qi2: 0, qi3: 0, ...((o.breakthroughFails as Partial<SaveState["breakthroughFails"]>) || {}) };
+  base.breakthroughRecords = Array.isArray(o.breakthroughRecords) ? (o.breakthroughRecords as BreakthroughRecord[]) : [];
   base.lastSettledAt = o.lastSettledAt as number;
   base.revision = ((o.revision as number) || 0) + 1;
   return base;

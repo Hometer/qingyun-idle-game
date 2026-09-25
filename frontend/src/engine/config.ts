@@ -211,4 +211,17 @@ export const CONFIG = {
     seclusionRateFactor: 0.1,
     ruleVersion: 1,
   },
+
+  aptitudes: {
+    balanced: { name: "均衡", cultivationMult: 1.0, spiritMult: 1.0 },
+    focus: { name: "凝神", cultivationMult: 1.05, spiritMult: 0.95 },
+    spirit: { name: "聚灵", cultivationMult: 0.95, spiritMult: 1.05 },
+  },
+
+  breakthrough: {
+    riskyBaseRate: 0.8, // 冲关初次成功率
+    riskyFailBoost: 0.1, // 每次失败 +10%
+    steadyCostMult: 1.15, // 稳妥成本倍率
+    riskyFailCostMult: 0.2, // 冲关失败成本倍率
+  },
 } as const;

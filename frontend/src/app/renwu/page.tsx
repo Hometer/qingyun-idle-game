@@ -97,6 +97,9 @@ export default function RenwuPage() {
         <p className="text-sm">
           {state.name}（灵根：{state.spiritRoot}）· {REALM_NAMES[state.realm]}
         </p>
+        <p className="mt-0.5 text-sm text-muted">
+          修行资质：{CONFIG.aptitudes[state.aptitude].name}（修为 ×{CONFIG.aptitudes[state.aptitude].cultivationMult}、灵气 ×{CONFIG.aptitudes[state.aptitude].spiritMult}）
+        </p>
         <p className="mt-1 text-sm text-muted">
           基础 攻{base.attack} 防{base.defense} 气血{base.hp}
         </p>

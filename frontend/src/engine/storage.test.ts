@@ -8,7 +8,7 @@ import type { SaveState } from "./types";
 const T0 = 1_700_000_000_000;
 
 function fresh(nowMs = T0): SaveState {
-  return createGame("林青", "金", nowMs);
+  return createGame("林青", "金", "balanced", nowMs);
 }
 
 // 每个用例使用全新的 IndexedDB 实例，避免跨用例状态污染。

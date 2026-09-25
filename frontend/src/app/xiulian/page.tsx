@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtTime, fmtDuration } from "@/lib/labels";
-import { productionBreakdown, predictLongTask } from "@/engine/engine";
-import type { TechniqueId } from "@/engine/types";
+import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate } from "@/engine/engine";
+import type { TechniqueId, BreakthroughMethod } from "@/engine/types";
 
 function eff(id: string, lvl: number): string {
   if (lvl < 1) return "未修";
@@ -42,6 +42,12 @@ export default function XiulianPage() {
   const prod = productionBreakdown(state);
   const seclusionPred = useMemo(() => predictLongTask(state, "seclusion", "map_qingyun", "", "steady", seclusionDuration, false), [state, seclusionDuration]);
   const enough = !isMax && !!next && view.resources.cultivation >= next.cultivationCost && view.resources.spirit >= next.spiritCost;
+  const steadyCosts = useMemo(() => (state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" ? breakthroughCosts(state, "steady") : null), [state]);
+  const riskyCosts = useMemo(() => (state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" ? breakthroughCosts(state, "risky") : null), [state]);
+  const riskyRate = useMemo(() => (state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" ? breakthroughSuccessRate(state) : 1), [state]);
+  const riskyFails = state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" ? (state.breakthroughFails?.[state.realm] ?? 0) : 0;
+  const steadyEnough = !!steadyCosts && view.resources.cultivation >= steadyCosts.success.cultivation && view.resources.spirit >= steadyCosts.success.spirit;
+  const riskyEnough = !!riskyCosts && view.resources.cultivation >= riskyCosts.success.cultivation && view.resources.spirit >= riskyCosts.success.spirit;
 
   useEffect(() => {
     if (isQi4 && tribPreview?.ok) markTribPreviewViewed();
@@ -69,9 +75,20 @@ export default function XiulianPage() {
                 还差 {fmt(Math.max(0, next.cultivationCost - view.resources.cultivation))} 修为、{fmt(Math.max(0, next.spiritCost - view.resources.spirit))} 灵气
               </p>
             )}
-            <button onClick={doBreakthrough} disabled={!enough} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white disabled:opacity-40">
-              小进阶
-            </button>
+            <div className="mt-3 space-y-2">
+              <button onClick={() => doBreakthrough("steady")} disabled={!steadyEnough} className="w-full rounded-lg bg-cinnabar px-4 py-2 text-white disabled:opacity-40">
+                稳妥进阶
+                {steadyCosts && <span className="ml-1 text-xs opacity-80">消耗修为 {fmt(steadyCosts.success.cultivation)}、灵气 {fmt(steadyCosts.success.spirit)} · 必定成功</span>}
+              </button>
+              <button onClick={() => doBreakthrough("risky")} disabled={!riskyEnough} className="w-full rounded-lg border border-cinnabar/60 bg-[#f6e3de] px-4 py-2 text-cinnabar disabled:opacity-40">
+                冲关进阶
+                {riskyCosts && (
+                  <span className="ml-1 text-xs opacity-80">
+                    成功率 {Math.round(riskyRate * 100)}%（已失败 {riskyFails}/2）· 失败仅扣修为 {fmt(riskyCosts.failure.cultivation)}、灵气 {fmt(riskyCosts.failure.spirit)}
+                  </span>
+                )}
+              </button>
+            </div>
           </>
         )}
       </Section>

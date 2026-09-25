@@ -1,5 +1,8 @@
 export type RealmId = "qi1" | "qi2" | "qi3" | "qi4" | "foundation1";
 export type SpiritRoot = "金" | "木" | "水" | "火" | "土";
+export type AptitudeId = "balanced" | "focus" | "spirit"; // 均衡 / 凝神 / 聚灵
+export type BreakthroughLayer = "qi1" | "qi2" | "qi3";
+export type BreakthroughMethod = "steady" | "risky"; // 稳妥 / 冲关
 export type BuildingId = "cultivationRoom" | "spiritArray" | "spiritField" | "alchemyFurnace";
 export type TechniqueId = "qingYun" | "xuanGui";
 export type EquipSlot = "weapon" | "armor" | "accessory";
@@ -113,6 +116,15 @@ export interface LongTaskResult {
   aborted: boolean;
 }
 
+export interface BreakthroughRecord {
+  layer: BreakthroughLayer;
+  method: BreakthroughMethod;
+  success: boolean;
+  probability: number; // 当次成功率 0.8 / 0.9 / 1.0
+  cost: Resources; // 实际扣除
+  at: number; // epoch ms
+}
+
 export interface SaveState {
   schemaVersion: number;
   id: string;
@@ -139,6 +151,9 @@ export interface SaveState {
   lastLongTaskResult: LongTaskResult | null;
   lastSettledAt: number; // epoch ms
   revision: number;
+  aptitude: AptitudeId;
+  breakthroughFails: Record<BreakthroughLayer, number>; // 每层保底计数 0~2
+  breakthroughRecords: BreakthroughRecord[];
 }
 
 export type Result<T> =

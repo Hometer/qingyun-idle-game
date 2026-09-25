@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { CONFIG } from "@/engine/config";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
-import type { SpiritRoot } from "@/engine/types";
+import type { SpiritRoot, AptitudeId } from "@/engine/types";
 
 const NAME_A = ["青", "白", "玄", "云", "霜", "剑", "道", "尘", "月", "松", "清", "流"];
 const NAME_B = ["尘", "云", "风", "霜", "月", "山", "川", "雪", "竹", "鹤", "松", "泉"];
 const NAME_C = ["子", "真人", "散人", "道人", "居士", "上人", "客"];
+const APTITUDE_ORDER: AptitudeId[] = ["balanced", "focus", "spirit"];
 
 function pick(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -23,6 +24,8 @@ export function CreateCharacter() {
   const [name, setName] = useState("林青");
   const [root, setRoot] = useState<SpiritRoot>("金");
   const [copyMode, setCopyModeState] = useState<CopyMode>(getCopyMode());
+  const [recommended] = useState<AptitudeId>(() => APTITUDE_ORDER[Math.floor(Math.random() * APTITUDE_ORDER.length)]);
+  const [aptitude, setAptitude] = useState<AptitudeId>(recommended);
 
   const toggleCopy = (m: CopyMode) => {
     setCopyModeState(m);
@@ -90,8 +93,29 @@ export function CreateCharacter() {
             </div>
           </div>
 
+          <div>
+            <span className="text-sm text-muted">修行资质（可自行选择，创建后固定）</span>
+            <div className="mt-1 flex flex-col gap-2">
+              {APTITUDE_ORDER.map((a) => {
+                const cfg = CONFIG.aptitudes[a];
+                return (
+                  <button
+                    key={a}
+                    onClick={() => setAptitude(a)}
+                    className={`rounded-lg border px-3 py-2 text-left text-sm ${aptitude === a ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+                  >
+                    <span className="font-medium">{cfg.name}</span>
+                    <span className="ml-2 text-xs text-muted">修为 ×{cfg.cultivationMult}、灵气 ×{cfg.spiritMult}</span>
+                    {recommended === a && <span className="ml-2 text-xs text-cinnabar">推荐</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-muted">凝神修炼更快但灵气稍慢，聚灵反之，均衡二者持平；五行灵根不影响资质。</p>
+          </div>
+
           <button
-            onClick={() => create(name.trim() || "无名修士", root)}
+            onClick={() => create(name.trim() || "无名修士", root, aptitude)}
             className="w-full rounded-lg bg-cinnabar py-2.5 text-white"
           >
             踏入仙途
