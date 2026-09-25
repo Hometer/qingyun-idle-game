@@ -55,7 +55,9 @@ interface GameContextValue {
   doBreakthrough: (method: BreakthroughMethod) => void;
   upgradeBuilding: (id: BuildingId) => void;
   setTechnique: (id: TechniqueId) => void;
+  setAuxiliaryTechnique: (id: TechniqueId) => void;
   upgradeTechnique: () => void;
+  buildLibrary: () => void;
   equip: (id: string) => void;
   craftPill: () => void;
   togglePill: () => void;
@@ -456,6 +458,29 @@ export function GameProvider({ children }: { children: ReactNode }) {
     await apply(r.state, "功法精进");
   }, [state, apply]);
 
+  const setAuxiliaryTechnique = useCallback(
+    async (id: TechniqueId) => {
+      if (!state) return;
+      const r = eng.setAuxiliaryTechnique(state, Date.now(), id);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "辅修已调整");
+    },
+    [state, apply],
+  );
+
+  const buildLibrary = useCallback(async () => {
+    if (!state) return;
+    const r = eng.buildLibrary(state, Date.now());
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    await apply(r.state, "藏经阁升级成功");
+  }, [state, apply]);
+
   const equip = useCallback(
     async (id: string) => {
       if (!state) return;
@@ -725,7 +750,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     doBreakthrough,
     upgradeBuilding,
     setTechnique,
+    setAuxiliaryTechnique,
     upgradeTechnique,
+    buildLibrary,
     equip,
     craftPill,
     togglePill,

@@ -7,11 +7,13 @@ import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtTime, fmtDuration } from "
 import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate } from "@/engine/engine";
 import type { TechniqueId, BreakthroughMethod, BreakthroughLayer } from "@/engine/types";
 
-function eff(id: string, lvl: number): string {
-  if (lvl < 1) return "未修";
+function eff(id: string, lvl: number, aux: boolean): string {
+  if (lvl < 1) return "未研习";
   const lv = TECHNIQUES[id].levels[lvl - 1];
-  if (id === "qingYun") return `修为产出 ${lv.cultivationMult}×`;
-  return `护劫减伤 ${Math.round((lv.tribulationReduction ?? 0) * 100)}%`;
+  if (id === "qingYun") return `修为产出 ${aux ? lv.auxCultivationMult : lv.cultivationMult}×`;
+  if (id === "xuanGui") return `护劫减伤 ${Math.round((aux ? lv.auxTribulationReduction : lv.tribulationReduction) * 100)}%`;
+  if (id === "poYue") return `攻击 ${aux ? lv.auxAttack : lv.attack}`;
+  return `灵气产出 ${aux ? lv.auxSpiritMult : lv.spiritMult}×`;
 }
 
 function Bar({ label, value, max }: { label: string; value: number; max: number }) {
@@ -32,7 +34,7 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 }
 
 export default function XiulianPage() {
-  const { state, view, now, doBreakthrough, startTrib, tribPreview, jindanPreview, startJindanTrial, setTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
+  const { state, view, now, doBreakthrough, startTrib, tribPreview, jindanPreview, startJindanTrial, setTechnique, setAuxiliaryTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
   const [seclusionDuration, setSeclusionDuration] = useState(30);
   if (!state || !view) return null;
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
@@ -142,33 +144,58 @@ export default function XiulianPage() {
       </Section>
 
       <Section title="功法">
-        {state.technique ? (
-          <p className="text-sm">
-            主修：{TECHNIQUES[state.technique].name} Lv{state.techniqueLevel[state.technique]}
-          </p>
-        ) : (
-          <p className="text-sm text-muted">尚未主修功法</p>
-        )}
+        <p className="text-sm">
+          {state.technique ? (
+            <>
+              主修：{TECHNIQUES[state.technique].name} Lv{state.techniqueLevel[state.technique]}
+              {state.auxiliaryTechnique ? ` · 辅修：${TECHNIQUES[state.auxiliaryTechnique].name} Lv${state.techniqueLevel[state.auxiliaryTechnique]}` : ""}
+            </>
+          ) : (
+            "尚未主修功法"
+          )}
+        </p>
         <div className="mt-2 space-y-2">
-          {(["qingYun", "xuanGui"] as TechniqueId[]).map((id) => {
+          {(["qingYun", "xuanGui", "poYue", "juYuan"] as TechniqueId[]).map((id) => {
             const t = TECHNIQUES[id];
             const lvl = state.techniqueLevel[id];
             const nextLvl = lvl < 3 ? t.levels[lvl] : null;
+            const isNew = id === "poYue" || id === "juYuan";
+            const locked = isNew && state.library < 1;
+            const isPrimary = state.technique === id;
+            const isAux = state.auxiliaryTechnique === id;
+            const canAux = state.library >= 2 && !!state.technique && !isAux;
             return (
               <div key={id} className="rounded-lg border border-line/60 p-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">{t.name}</span>
-                  {state.technique !== id ? (
-                    <button onClick={() => setTechnique(id)} className="rounded-lg border border-line bg-paper px-3 py-1 text-sm">
-                      主修
-                    </button>
-                  ) : (
-                    <span className="text-xs text-cinnabar">主修中</span>
-                  )}
+                  <span className="font-medium">
+                    {t.name}
+                    {lvl > 0 && <span className="ml-1 text-xs text-muted">Lv{lvl}</span>}
+                    {isPrimary && <span className="ml-1 text-xs text-cinnabar">主修中</span>}
+                    {isAux && <span className="ml-1 text-xs text-cinnabar">辅修中</span>}
+                  </span>
+                  <div className="flex gap-1">
+                    {!locked && !isPrimary && (
+                      <button onClick={() => setTechnique(id)} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs">
+                        主修
+                      </button>
+                    )}
+                    {!locked && canAux && (
+                      <button onClick={() => setAuxiliaryTechnique(id)} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs">
+                        辅修
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className="mt-1 text-xs text-muted">
-                  {eff(id, lvl)}
-                  {nextLvl ? ` → 下级 ${eff(id, lvl + 1)}（需残页 ${nextLvl.pageCost}）` : " · 已满级"}
+                  {locked ? (
+                    "需一级藏经阁解锁"
+                  ) : (
+                    <>
+                      主修 {eff(id, lvl, false)}
+                      {state.library >= 2 && `；辅修 ${eff(id, lvl, true)}`}
+                      {lvl > 0 && (nextLvl ? `；下级需残页 ${nextLvl.pageCost}` : "；已满级")}
+                    </>
+                  )}
                 </p>
               </div>
             );

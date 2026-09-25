@@ -2,7 +2,8 @@
 
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { BUILDINGS, WORLD_TEXT } from "@/lib/labels";
+import { BUILDINGS, WORLD_TEXT, REALM_ORDER } from "@/lib/labels";
+import { CONFIG } from "@/engine/config";
 import type { BuildingId } from "@/engine/types";
 
 function effectText(id: string, lv: Record<string, number>): string {
@@ -21,8 +22,11 @@ function effectText(id: string, lv: Record<string, number>): string {
 }
 
 export default function DongfuPage() {
-  const { state, upgradeBuilding } = useGame();
+  const { state, upgradeBuilding, buildLibrary } = useGame();
   if (!state) return null;
+  const libCost = state.library < 2 ? CONFIG.library.levels[state.library].cost : null;
+  const libRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("foundation1");
+  const libAfford = !!libCost && libRealmOk && state.resources.spiritStone >= libCost.spiritStone && state.resources.page >= libCost.page;
 
   return (
     <Section title="洞府建筑">
@@ -62,6 +66,39 @@ export default function DongfuPage() {
           </div>
         );
       })}
+
+      <div className="mt-4 rounded-lg border border-line/60 p-3">
+        <div className="flex items-center justify-between">
+          <div className="font-medium">
+            藏经阁 <span className="text-muted">Lv{state.library}</span>
+          </div>
+          {state.library < 2 && (
+            <button
+              onClick={buildLibrary}
+              disabled={!libAfford}
+              className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
+            >
+              升级
+            </button>
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-muted">
+          当前：{state.library === 0 ? "未建" : state.library === 1 ? "一级（已解锁破岳诀、聚元诀）" : "二级（已开放辅修位）· 已满级"}
+          {state.library < 2 && (
+            <>
+              {" → 下级："}
+              {state.library === 0 ? "解锁破岳诀、聚元诀" : "开放辅修位"}
+            </>
+          )}
+        </p>
+        {libCost && (
+          <p className={`text-xs ${libRealmOk ? (libAfford ? "text-muted" : "text-cinnabar") : "text-cinnabar"}`}>
+            {libRealmOk
+              ? `升级需 ${libCost.spiritStone} 灵石、${libCost.page} 残页${libAfford ? "" : "（资源不足）"}`
+              : "需筑基一层方可建藏经阁"}
+          </p>
+        )}
+      </div>
     </Section>
   );
 }

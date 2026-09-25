@@ -104,6 +104,11 @@ export default function RenwuPage() {
           基础 攻{base.attack} 防{base.defense} 气血{base.hp}
         </p>
         {eqContrib.length > 0 && <p className="mt-0.5 text-sm text-muted">装备：{eqContrib.join("；")}</p>}
+        {(state.technique === "poYue" || state.auxiliaryTechnique === "poYue") && state.techniqueLevel.poYue >= 1 && (
+          <p className="mt-0.5 text-sm text-muted">
+            破岳诀：攻+{state.technique === "poYue" ? CONFIG.techniques.poYue.levels[state.techniqueLevel.poYue - 1].attack : CONFIG.techniques.poYue.levels[state.techniqueLevel.poYue - 1].auxAttack}
+          </p>
+        )}
         <p className="mt-1 text-sm font-medium">
           合计 攻 {stats.attack} ／ 防 {stats.defense} ／ 气血 {stats.hp}
         </p>
