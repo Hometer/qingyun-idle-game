@@ -5,9 +5,9 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { playerStats } from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS, DAILY_GOALS, RESOURCE_LABELS, fmtTime } from "@/lib/labels";
+import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, MAPS, DAILY_GOALS, RESOURCE_LABELS, SECRET_REALMS, fmtTime } from "@/lib/labels";
 import { getTheme, setTheme, getReduceMotion, setReduceMotion, getCopyMode, setCopyMode, type Theme, type CopyMode } from "@/lib/prefs";
-import type { MapId } from "@/engine/types";
+import type { MapId, SecretRealmId } from "@/engine/types";
 
 function applyTheme(theme: Theme) {
   const dark =
@@ -226,6 +226,21 @@ export default function RenwuPage() {
               {Object.keys(BUILDINGS).length - built.length > 0 && (
                 <div className="text-muted">另有 {Object.keys(BUILDINGS).length - built.length} 座尚未建造</div>
               )}
+            </div>
+            <div>
+              <div className="text-xs text-muted">秘境</div>
+              {(Object.keys(SECRET_REALMS) as SecretRealmId[]).map((rid) => {
+                const firstExplored = state.secretRealmLog.some((l) => l.realm === rid);
+                const firstWon = state.secretRealmLog.some((l) => l.realm === rid && l.won);
+                return (
+                  <div key={rid}>
+                    {SECRET_REALMS[rid].name}
+                    <span className="text-xs text-muted">
+                      （首次探索：{firstExplored ? "已" : "未"} · 首次成功：{firstWon ? "已" : "未"}）
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

@@ -60,6 +60,7 @@ interface GameContextValue {
   buildLibrary: () => void;
   realmPending: SecretRealmId | null;
   realmNarrative: { title: string; body: string; source: string } | null;
+  realmNarrativeLoading: boolean;
   startSecretRealm: (realmId: SecretRealmId) => void;
   confirmSecretRealm: () => void;
   cancelSecretRealm: () => void;
@@ -99,6 +100,14 @@ const GameContext = createContext<GameContextValue | null>(null);
 
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
+function realmNarrativeCacheKey(realmId: SecretRealmId): string {
+  const d = new Date();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const today = `${d.getFullYear()}-${m < 10 ? "0" + m : m}-${day < 10 ? "0" + day : day}`;
+  return `qingyun_realm_narrative_${realmId}_${today}`;
+}
+
 const REALM_NAMES: Record<string, string> = {};
 for (const r of CONFIG.realms) REALM_NAMES[r.id] = r.name;
 
@@ -137,6 +146,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [showDataNotice, setShowDataNotice] = useState(false);
   const [realmPending, setRealmPending] = useState<SecretRealmId | null>(null);
   const [realmNarrative, setRealmNarrative] = useState<{ title: string; body: string; source: string } | null>(null);
+  const [realmNarrativeLoading, setRealmNarrativeLoading] = useState(false);
   // baseRef：已持久化到 IndexedDB 的修订号（乐观并发基准）。只在读档/写档成功/重置/导入时更新，
   // 绝不从内存 state 推导，否则结算产生的内存修订号会被误当作已持久化基准，导致持续冲突。
   const baseRef = useRef(0);
@@ -539,18 +549,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const startSecretRealm = useCallback(
     async (realmId: SecretRealmId) => {
       if (!state) return;
-      const pred = eng.predictSecretRealm(state, realmId);
+      if (realmPending === realmId) return; // 已在拉取/展示同一秘境
+      const settled = view ?? eng.settle(state, Date.now());
+      const pred = eng.predictSecretRealm(settled, realmId);
       if (!pred.ok) {
         setNotice(pred.reason);
         return;
       }
-      if (state.secretRealmUsed[realmId]) {
+      if (settled.secretRealmUsed[realmId]) {
         setNotice("今日已挑战该秘境");
         return;
       }
       const cfg = CONFIG.secretRealms[realmId];
       setRealmPending(realmId);
+      setRealmNarrativeLoading(true);
       setRealmNarrative(null);
+      // 缓存复用（同一秘境当日已取过叙事则不重复调用模型）
+      try {
+        const cached = localStorage.getItem(realmNarrativeCacheKey(realmId));
+        if (cached) {
+          setRealmNarrative(JSON.parse(cached));
+          setRealmNarrativeLoading(false);
+          return;
+        }
+      } catch {}
       const body = {
         event_id: `event_${realmId}`,
         character: { name: state.name, realm: REALM_NAMES[state.realm] ?? state.realm, spirit_root: state.spiritRoot },
@@ -559,21 +581,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
         recent_logs: state.recentLogs.slice(-2),
       };
       const resp: EncounterResponse | null = getCopyMode() === "template" ? null : await generateEncounter(body);
-      if (resp) {
-        setRealmNarrative({ title: resp.title, body: resp.body, source: resp.source === "model" ? "AI 文案" : "模板文案" });
-      } else {
-        setRealmNarrative({ title: cfg.name, body: `你来到${cfg.name}前，凝神提剑，准备一探。`, source: "模板文案" });
-      }
+      const narrative = resp
+        ? { title: resp.title, body: resp.body, source: resp.source === "model" ? "AI 文案" : "模板文案" }
+        : { title: cfg.name, body: `你来到${cfg.name}前，凝神提剑，准备一探。`, source: "模板文案" };
+      setRealmNarrative(narrative);
+      setRealmNarrativeLoading(false);
+      try {
+        localStorage.setItem(realmNarrativeCacheKey(realmId), JSON.stringify(narrative));
+      } catch {}
     },
-    [state],
+    [state, view, realmPending],
   );
 
   const confirmSecretRealm = useCallback(async () => {
     if (!state || !realmPending) return;
-    const before = state;
     const r = eng.enterSecretRealm(state, Date.now(), realmPending);
     setRealmPending(null);
     setRealmNarrative(null);
+    setRealmNarrativeLoading(false);
     if (!r.ok || !r.state) {
       setNotice(r.reason);
       return;
@@ -581,9 +606,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const last = r.state.secretRealmLog[r.state.secretRealmLog.length - 1];
     const ok = await apply(r.state, last.won ? "秘境探索成功" : "秘境探索失败");
     if (ok) {
+      const reward = last.reward as unknown as Record<string, number>;
+      const rewardLines = ["cultivation", "spirit", "spiritStone", "herb", "page"]
+        .filter((k) => reward[k] > 0)
+        .map((k) => `${RESOURCE_LABELS[k]} +${fmt(reward[k])}`);
       setLastResult({
         title: `秘境「${CONFIG.secretRealms[last.realm].name}」${last.won ? "探索成功" : "探索失败"}`,
-        lines: deltaLines(before, r.state),
+        lines: last.won ? rewardLines : ["未获秘境奖励"],
       });
     }
   }, [state, realmPending, apply]);
@@ -591,6 +620,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const cancelSecretRealm = useCallback(() => {
     setRealmPending(null);
     setRealmNarrative(null);
+    setRealmNarrativeLoading(false);
   }, []);
 
   const equip = useCallback(
@@ -867,6 +897,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     buildLibrary,
     realmPending,
     realmNarrative,
+    realmNarrativeLoading,
     startSecretRealm,
     confirmSecretRealm,
     cancelSecretRealm,

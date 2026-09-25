@@ -1326,6 +1326,11 @@ export function startJindanTrial(state: SaveState, nowMs: number): Result<SaveSt
 
 // ---- 秘境（v0.9） ----
 
+function secretRealmReward(realmId: SecretRealmId): Resources {
+  const cfg = SECRET_REALM_CFG[realmId];
+  return { cultivation: 0, spirit: 0, spiritStone: cfg.reward.spiritStone ?? 0, herb: cfg.reward.herb ?? 0, page: cfg.reward.page ?? 0 };
+}
+
 export function predictSecretRealm(state: SaveState, realmId: SecretRealmId): { ok: boolean; reason: string; won: boolean; enemy: { attack: number; defense: number; hp: number }; player: { attack: number; defense: number; hp: number } } {
   const cfg = SECRET_REALM_CFG[realmId];
   if (!cfg) return { ok: false, reason: "无此秘境", won: false, enemy: { attack: 0, defense: 0, hp: 0 }, player: { attack: 0, defense: 0, hp: 0 } };
@@ -1345,7 +1350,7 @@ export function enterSecretRealm(state: SaveState, nowMs: number, realmId: Secre
   if (s.secretRealmUsed[realmId]) return fail("今日已挑战该秘境");
   const stats = playerStats(s);
   const battle = runBattle(stats, cfg.enemy);
-  const reward = battle.won ? { cultivation: 0, spirit: 0, spiritStone: cfg.reward.spiritStone ?? 0, herb: cfg.reward.herb ?? 0, page: cfg.reward.page ?? 0 } : emptyResources();
+  const reward = battle.won ? secretRealmReward(realmId) : emptyResources();
   if (battle.won) applyReward(s, reward);
   s.secretRealmUsed[realmId] = true;
   s.secretRealmLog.push({ realm: realmId, won: battle.won, reward: { ...reward }, at: nowMs });
@@ -1488,11 +1493,21 @@ function validateAuxiliaryTechnique(tech: unknown, aux: unknown, library: unknow
   return null;
 }
 
-function validateSecretRealm(used: unknown, log: unknown): string | null {
+function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaVersion: number): string | null {
+  const isCurrent = schemaVersion >= SCHEMA_VERSION;
+  if (isCurrent) {
+    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "秘境日期无效";
+    if (!used || typeof used !== "object") return "秘境状态无效";
+    if (log === undefined || log === null || !Array.isArray(log)) return "秘境记录无效";
+  }
   const u = (used ?? {}) as Record<string, unknown>;
   for (const id of SECRET_REALM_IDS) {
     const x = u[id];
-    if (x !== undefined && typeof x !== "boolean") return "秘境状态无效";
+    if (isCurrent) {
+      if (typeof x !== "boolean") return "秘境状态无效";
+    } else if (x !== undefined && typeof x !== "boolean") {
+      return "秘境状态无效";
+    }
   }
   if (log === undefined || log === null) return null;
   if (!Array.isArray(log)) return "秘境记录无效";
@@ -1506,6 +1521,11 @@ function validateSecretRealm(used: unknown, log: unknown): string | null {
     if (!reward || typeof reward !== "object") return "秘境记录无效";
     for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
       if (!isNonNegNum(reward[k])) return "秘境记录无效";
+    }
+    const expected = r.won ? secretRealmReward(r.realm as SecretRealmId) : emptyResources();
+    const expRec = expected as unknown as Record<string, number>;
+    for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+      if ((reward[k] ?? 0) !== (expRec[k] ?? 0)) return "秘境记录奖励不符";
     }
   }
   return null;
@@ -1758,7 +1778,7 @@ export function importSave(json: string): Result<SaveState> {
     validateTechnique(o.technique, o.techniqueLevel, o.library),
     validateLibrary(o.library),
     validateAuxiliaryTechnique(o.technique, o.auxiliaryTechnique, o.library),
-    validateSecretRealm(o.secretRealmUsed, o.secretRealmLog),
+    validateSecretRealm(o.secretRealmUsed, o.secretRealmLog, o.secretRealmDate, ver),
     validateEquipmentAndInventory(o.equipment, o.inventory),
     validateMaps(o.maps, o.suppression, ver),
     validateEncounter(o.encounter),

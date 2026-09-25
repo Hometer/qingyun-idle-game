@@ -1368,3 +1368,49 @@ describe("v0.9 自查修复回归", () => {
     expect(predWithWar.won).toBe(predNoWar.won);
   });
 });
+
+describe("v0.9 独立复核修复回归", () => {
+  it("v8 缺秘境次数拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    delete bad.secretRealmUsed;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v8 缺秘境日期拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    delete bad.secretRealmDate;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v8 非法秘境日期拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    bad.secretRealmDate = "invalid-date";
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v8 胜利奖励被改拒绝导入", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s.technique = "poYue";
+    s.techniqueLevel.poYue = 3;
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    const st = r.state as SaveState;
+    const bad = structuredClone(st) as unknown as Record<string, unknown>;
+    (bad.secretRealmLog as unknown as Array<Record<string, unknown>>)[0].reward = { cultivation: 0, spirit: 0, spiritStone: 100, herb: 999999, page: 0 };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v8 失败记录奖励非零拒绝导入", () => {
+    const s = fresh();
+    s.realm = "foundation1"; // 无装备 → 必败
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    const st = r.state as SaveState;
+    const bad = structuredClone(st) as unknown as Record<string, unknown>;
+    (bad.secretRealmLog as unknown as Array<Record<string, unknown>>)[0].reward = { cultivation: 0, spirit: 0, spiritStone: 100, herb: 0, page: 0 };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});

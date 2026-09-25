@@ -32,7 +32,7 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"]): string {
 }
 
 export default function LilianPage() {
-  const { state, view, now, fight, suppress, battleLog, startLong, realmPending, realmNarrative, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
+  const { state, view, now, fight, suppress, battleLog, startLong, realmPending, realmNarrative, realmNarrativeLoading, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
   const [trainNode, setTrainNode] = useState<{ mid: MapId; nid: string } | null>(null);
   const [trainDifficulty, setTrainDifficulty] = useState<"steady" | "risky">("steady");
@@ -132,7 +132,7 @@ export default function LilianPage() {
         <p className="mb-2 text-xs text-muted">主动进入的确定性探索，胜得奖励、败无奖励；每秘境每日一次。</p>
         {(Object.keys(SECRET_REALMS) as SecretRealmId[]).map((rid) => {
           const cfg = SECRET_REALMS[rid];
-          const pred = predictSecretRealm(state, rid);
+          const pred = predictSecretRealm(view ?? state, rid);
           const gateOk = pred.ok;
           const used = (view?.secretRealmUsed ?? state.secretRealmUsed)[rid];
           const rewardParts = [
@@ -145,7 +145,7 @@ export default function LilianPage() {
               <div className="flex items-center justify-between">
                 <div className="text-sm">
                   {cfg.name}
-                  <span className="ml-1 text-xs text-muted">需{REALM_NAMES[cfg.gate]} · 敌 攻{cfg.enemy.attack}/防{cfg.enemy.defense}/气血{cfg.enemy.hp}</span>
+                  <span className="ml-1 text-xs text-muted">需{REALM_NAMES[cfg.gate]} · 今日 {used ? "1/1" : "0/1"}</span>
                 </div>
                 <button
                   onClick={() => startSecretRealm(rid)}
@@ -155,6 +155,10 @@ export default function LilianPage() {
                   {used ? "已探索" : gateOk ? "进入秘境" : "未解锁"}
                 </button>
               </div>
+              <p className="mt-0.5 text-xs text-muted">
+                敌方 攻{cfg.enemy.attack}/防{cfg.enemy.defense}/气血{cfg.enemy.hp}
+                {gateOk && ` · 我方 攻${pred.player.attack}/防${pred.player.defense}/气血${pred.player.hp}`}
+              </p>
               <p className="mt-0.5 text-xs text-muted">
                 奖励：{rewardParts || "无"}
                 {gateOk && ` · 预估${pred.won ? "可胜" : "难胜"}`}
@@ -264,12 +268,12 @@ export default function LilianPage() {
         <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center">
           <div className="w-full max-w-[520px] rounded-t-2xl border border-line bg-card p-5 sm:rounded-2xl">
             <h2 className="text-lg font-semibold">{realmNarrative?.title ?? SECRET_REALMS[realmPending].name}</h2>
-            <p className="mt-1 text-xs text-muted">{realmNarrative?.source}</p>
+            <p className="mt-1 text-xs text-muted">{realmNarrativeLoading ? "叙事加载中…" : realmNarrative?.source}</p>
             <p className="mt-2 text-sm leading-relaxed">
-              {realmNarrative?.body ?? "你凝神提剑，准备一探。"}
+              {realmNarrativeLoading ? "正在推演此地风貌…" : realmNarrative?.body ?? "你凝神提剑，准备一探。"}
             </p>
             <div className="mt-4 flex gap-2">
-              <button onClick={confirmSecretRealm} className="flex-1 rounded-lg bg-cinnabar px-4 py-2 text-white">
+              <button onClick={confirmSecretRealm} disabled={realmNarrativeLoading} className="flex-1 rounded-lg bg-cinnabar px-4 py-2 text-white disabled:opacity-40">
                 开始探索
               </button>
               <button onClick={cancelSecretRealm} className="rounded-lg border border-line bg-paper px-4 py-2">
