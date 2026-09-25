@@ -64,19 +64,42 @@ export const CONFIG = {
     qingYun: {
       name: "青云诀",
       levels: [
-        { pageCost: 0, cultivationMult: 1.3 },
-        { pageCost: 5, cultivationMult: 1.6 },
-        { pageCost: 15, cultivationMult: 2.0 },
+        { pageCost: 0, cultivationMult: 1.3, auxCultivationMult: 1.15 },
+        { pageCost: 5, cultivationMult: 1.6, auxCultivationMult: 1.3 },
+        { pageCost: 15, cultivationMult: 2.0, auxCultivationMult: 1.5 },
       ],
     },
     xuanGui: {
       name: "玄龟诀",
       levels: [
-        { pageCost: 0, tribulationReduction: 0.05 },
-        { pageCost: 5, tribulationReduction: 0.1 },
-        { pageCost: 15, tribulationReduction: 0.15 },
+        { pageCost: 0, tribulationReduction: 0.05, auxTribulationReduction: 0.025 },
+        { pageCost: 5, tribulationReduction: 0.1, auxTribulationReduction: 0.05 },
+        { pageCost: 15, tribulationReduction: 0.15, auxTribulationReduction: 0.075 },
       ],
     },
+    poYue: {
+      name: "破岳诀",
+      levels: [
+        { pageCost: 0, attack: 4, auxAttack: 2 },
+        { pageCost: 5, attack: 8, auxAttack: 4 },
+        { pageCost: 15, attack: 12, auxAttack: 6 },
+      ],
+    },
+    juYuan: {
+      name: "聚元诀",
+      levels: [
+        { pageCost: 0, spiritMult: 1.15, auxSpiritMult: 1.075 },
+        { pageCost: 5, spiritMult: 1.3, auxSpiritMult: 1.15 },
+        { pageCost: 15, spiritMult: 1.5, auxSpiritMult: 1.25 },
+      ],
+    },
+  } as const,
+
+  library: {
+    levels: [
+      { cost: { spiritStone: 800, page: 10 } },
+      { cost: { spiritStone: 1600, page: 20 } },
+    ],
   } as const,
 
   equipment: {

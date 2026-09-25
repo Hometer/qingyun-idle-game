@@ -4,7 +4,7 @@ export type AptitudeId = "balanced" | "focus" | "spirit"; // 均衡 / 凝神 / �
 export type BreakthroughLayer = "qi1" | "qi2" | "qi3" | "foundation1" | "foundation2";
 export type BreakthroughMethod = "steady" | "risky"; // 稳妥 / 冲关
 export type BuildingId = "cultivationRoom" | "spiritArray" | "spiritField" | "alchemyFurnace";
-export type TechniqueId = "qingYun" | "xuanGui";
+export type TechniqueId = "qingYun" | "xuanGui" | "poYue" | "juYuan";
 export type EquipSlot = "weapon" | "armor" | "accessory";
 export type ItemId = "tribulationPill";
 export type MapId = "map_qingyun" | "map_nether" | "map_yunling";
@@ -155,6 +155,8 @@ export interface SaveState {
   breakthroughFails: Record<BreakthroughLayer, number>; // 每层保底计数 0~2
   breakthroughRecords: BreakthroughRecord[];
   jindanTrial: TribulationLog | null;
+  library: number; // 藏经阁等级 0/1/2
+  auxiliaryTechnique: TechniqueId | null; // 辅修功法，与主修不能相同
 }
 
 export type Result<T> =

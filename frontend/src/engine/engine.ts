@@ -22,7 +22,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -428,7 +428,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     realm: "qi1",
     buildings: { cultivationRoom: 0, spiritArray: 0, spiritField: 0, alchemyFurnace: 0 },
     technique: null,
-    techniqueLevel: { qingYun: 0, xuanGui: 0 },
+    techniqueLevel: { qingYun: 0, xuanGui: 0, poYue: 0, juYuan: 0 },
     equipment: { weapon: CONFIG.initialEquipment, armor: null, accessory: null },
     inventory: { [CONFIG.initialEquipment]: 1, tribulationPill: 0 },
     preparedPill: false,
@@ -437,6 +437,8 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     encounter: { pending: null, triggeredToday: 0, lastTriggerDate: todayStr(nowMs), guideDone: false },
     tribulationLog: null,
     jindanTrial: null,
+    library: 0,
+    auxiliaryTechnique: null,
     recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}。`],
     milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}` }],
     firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
@@ -467,10 +469,39 @@ function spiritFieldRate(s: SaveState): number {
   return lvl >= 1 ? CONFIG.buildings.spiritField.levels[lvl - 1].herbPerSec : 0;
 }
 function techniqueCultivationMult(s: SaveState): number {
-  if (s.technique === "qingYun" && s.techniqueLevel.qingYun >= 1) {
-    return CONFIG.techniques.qingYun.levels[s.techniqueLevel.qingYun - 1].cultivationMult;
-  }
+  const lvl = s.techniqueLevel.qingYun;
+  if (lvl < 1) return 1;
+  const lv = CONFIG.techniques.qingYun.levels[lvl - 1];
+  if (s.technique === "qingYun") return lv.cultivationMult;
+  if (s.auxiliaryTechnique === "qingYun") return lv.auxCultivationMult;
   return 1;
+}
+
+function techniqueSpiritMult(s: SaveState): number {
+  const lvl = s.techniqueLevel.juYuan;
+  if (lvl < 1) return 1;
+  const lv = CONFIG.techniques.juYuan.levels[lvl - 1];
+  if (s.technique === "juYuan") return lv.spiritMult;
+  if (s.auxiliaryTechnique === "juYuan") return lv.auxSpiritMult;
+  return 1;
+}
+
+function techniqueAttackBonus(s: SaveState): number {
+  const lvl = s.techniqueLevel.poYue;
+  if (lvl < 1) return 0;
+  const lv = CONFIG.techniques.poYue.levels[lvl - 1];
+  if (s.technique === "poYue") return lv.attack;
+  if (s.auxiliaryTechnique === "poYue") return lv.auxAttack;
+  return 0;
+}
+
+function xuanGuiReduction(s: SaveState): number {
+  const lvl = s.techniqueLevel.xuanGui;
+  if (lvl < 1) return 0;
+  const lv = CONFIG.techniques.xuanGui.levels[lvl - 1];
+  if (s.technique === "xuanGui") return lv.tribulationReduction;
+  if (s.auxiliaryTechnique === "xuanGui") return lv.auxTribulationReduction;
+  return 0;
 }
 
 function aptitudeCultivationMult(s: SaveState): number {
@@ -512,6 +543,7 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
   attack += bonus.attack;
   defense += bonus.defense;
   hp += bonus.hp;
+  attack += techniqueAttackBonus(s);
   return { attack, defense, hp };
 }
 
@@ -534,12 +566,13 @@ export function productionBreakdown(state: SaveState): ProductionBreakdown {
   const cultTech = techniqueCultivationMult(state);
   const cultApt = aptitudeCultivationMult(state);
   const spiritBuilding = buildingSpiritMult(state);
+  const spiritTech = techniqueSpiritMult(state);
   const spiritApt = aptitudeSpiritMult(state);
   const aptName = APTITUDE_CFG[state.aptitude]?.name ?? "均衡";
   const herb = spiritFieldRate(state);
   const stone = suppressionRate(state);
   const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt;
-  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritApt;
+  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt;
   const w = CONFIG.weathers[state.daily.weather.id as keyof typeof CONFIG.weathers];
   const a = CONFIG.astrologies[state.daily.astrology.id as keyof typeof CONFIG.astrologies];
   const lines: string[] = [
@@ -547,7 +580,7 @@ export function productionBreakdown(state: SaveState): ProductionBreakdown {
     `星象·${a.name}：${a.desc}${state.daily.astrology.used ? "（已用）" : ""}`,
     `资质·${aptName}：修为 ×${n1(cultApt)}、灵气 ×${n1(spiritApt)}`,
     `修为 ${n1(cultivationPerSec)}/秒（基础 ${n1(CONFIG.baseCultivationPerSecond)} × 资质 ${n1(cultApt)}${cultBuilding > 1 ? ` × 修炼室 ${n1(cultBuilding)}` : ""}${cultTech > 1 ? ` × 功法 ${n1(cultTech)}` : ""}）`,
-    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)} × 资质 ${n1(spiritApt)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}）`,
+    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)} × 资质 ${n1(spiritApt)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}${spiritTech > 1 ? ` × 功法 ${n1(spiritTech)}` : ""}）`,
     herb > 0 ? `灵草 ${n1(herb)}/秒（灵田）` : "灵草 0/秒（未建灵田）",
     stone > 0 ? `灵石 ${n1(stone)}/秒（镇压产出）` : "灵石 0/秒（未镇压节点）",
   ];
@@ -567,7 +600,7 @@ export function settle(state: SaveState, nowMs: number): SaveState {
   const deltaSec = deltaMs / 1000;
 
   const cultMult = buildingCultivationMult(s) * techniqueCultivationMult(s) * aptitudeCultivationMult(s);
-  const spiritMult = buildingSpiritMult(s) * aptitudeSpiritMult(s);
+  const spiritMult = buildingSpiritMult(s) * techniqueSpiritMult(s) * aptitudeSpiritMult(s);
   const herbRate = spiritFieldRate(s);
 
   let spiritStoneGain = 0;
@@ -706,9 +739,55 @@ export function upgradeBuilding(state: SaveState, nowMs: number, id: BuildingId)
 export function setTechnique(state: SaveState, nowMs: number, id: TechniqueId): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.technique === id) return fail("已是当前主修");
-  s.technique = id;
+  if ((id === "poYue" || id === "juYuan") && s.library < 1) return fail("需先建一级藏经阁");
+  const oldPrimary = s.technique;
+  const oldAux = s.auxiliaryTechnique;
+  if (oldAux === id) {
+    // 把当前辅修改为主修 → 主辅互换
+    s.technique = id;
+    s.auxiliaryTechnique = oldPrimary;
+  } else {
+    s.technique = id;
+  }
   if (s.techniqueLevel[id] < 1) s.techniqueLevel[id] = 1;
   s.recentLogs.push(`改修${CONFIG.techniques[id].name}。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function setAuxiliaryTechnique(state: SaveState, nowMs: number, id: TechniqueId): Result<SaveState> {
+  const s = settle(state, nowMs);
+  if (s.library < 2) return fail("需先建二级藏经阁");
+  if (!s.technique) return fail("需先主修功法");
+  if (s.auxiliaryTechnique === id) return fail("已是当前辅修");
+  if (s.technique === id) {
+    if (!s.auxiliaryTechnique) return fail("主辅不能为同一本");
+    // 把当前主修设为辅修 → 主辅互换
+    const oldAux = s.auxiliaryTechnique;
+    s.auxiliaryTechnique = id;
+    s.technique = oldAux;
+  } else {
+    s.auxiliaryTechnique = id;
+  }
+  if (s.techniqueLevel[id] < 1) s.techniqueLevel[id] = 1;
+  s.recentLogs.push(`辅修${CONFIG.techniques[id].name}。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function buildLibrary(state: SaveState, nowMs: number): Result<SaveState> {
+  const s = settle(state, nowMs);
+  if (s.library >= 2) return fail("藏经阁已满级");
+  if (realmIndex(s.realm) < realmIndex("foundation1")) return fail("需筑基一层方可建藏经阁");
+  const cfg = CONFIG.library.levels[s.library];
+  if (s.resources.spiritStone < cfg.cost.spiritStone || s.resources.page < cfg.cost.page) {
+    return fail(`藏经阁升级需灵石${cfg.cost.spiritStone}、残页${cfg.cost.page}`);
+  }
+  s.resources.spiritStone -= cfg.cost.spiritStone;
+  s.resources.page -= cfg.cost.page;
+  s.library += 1;
+  s.recentLogs.push(`藏经阁升至${s.library}级。`);
+  pushMilestone(s, "library", nowMs, `藏经阁升至${s.library}级`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -717,6 +796,7 @@ export function upgradeTechnique(state: SaveState, nowMs: number): Result<SaveSt
   const s = settle(state, nowMs);
   const t = s.technique;
   if (!t) return fail("未装备功法");
+  if ((t === "poYue" || t === "juYuan") && s.library < 1) return fail("需先建一级藏经阁");
   const lvl = s.techniqueLevel[t];
   if (lvl >= 3) return fail("功法已满级");
   const cost = CONFIG.techniques[t].levels[lvl].pageCost;
@@ -1005,11 +1085,9 @@ export interface ReductionSource {
 
 export function tribulationReductionInfo(state: SaveState): { reduction: number; sources: ReductionSource[] } {
   const sources: ReductionSource[] = [];
-  if (state.technique === "xuanGui" && state.techniqueLevel.xuanGui >= 1) {
-    sources.push({
-      name: CONFIG.techniques.xuanGui.name,
-      pct: CONFIG.techniques.xuanGui.levels[state.techniqueLevel.xuanGui - 1].tribulationReduction,
-    });
+  const xg = xuanGuiReduction(state);
+  if (xg > 0) {
+    sources.push({ name: CONFIG.techniques.xuanGui.name, pct: xg });
   }
   for (const slot of ["weapon", "armor", "accessory"] as const) {
     const eqId = state.equipment[slot];
@@ -1244,7 +1322,16 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.longTask === undefined) s.longTask = null;
   if (s.lastLongTaskResult === undefined) s.lastLongTaskResult = null;
   if (s.jindanTrial === undefined) s.jindanTrial = null;
+  if (s.library === undefined) s.library = 0;
+  if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.aptitude === undefined) s.aptitude = "balanced";
+  if (!s.techniqueLevel || typeof s.techniqueLevel !== "object") {
+    s.techniqueLevel = { qingYun: 0, xuanGui: 0, poYue: 0, juYuan: 0 };
+  } else {
+    for (const k of ["poYue", "juYuan"]) {
+      if ((s.techniqueLevel as Record<string, unknown>)[k] === undefined) (s.techniqueLevel as Record<string, unknown>)[k] = 0;
+    }
+  }
   if (!s.breakthroughFails || typeof s.breakthroughFails !== "object") {
     s.breakthroughFails = { qi1: 0, qi2: 0, qi3: 0, foundation1: 0, foundation2: 0 };
   } else {
@@ -1284,13 +1371,29 @@ function validateBuildings(v: unknown): string | null {
   return null;
 }
 
-function validateTechnique(tech: unknown, levels: unknown): string | null {
+function validateTechnique(tech: unknown, levels: unknown, library: unknown): string | null {
   if (tech !== null && tech !== undefined && !Object.keys(CONFIG.techniques).includes(tech as string)) return "功法无效";
+  if ((tech === "poYue" || tech === "juYuan") && ((library as number) ?? 0) < 1) return "功法未解锁";
   const o = (levels ?? {}) as Record<string, unknown>;
   for (const id of Object.keys(CONFIG.techniques)) {
     const x = o[id];
     if (x !== undefined && (!Number.isInteger(x) || (x as number) < 0 || (x as number) > 3)) return "功法等级无效";
   }
+  return null;
+}
+
+function validateLibrary(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > 2) return "藏经阁等级无效";
+  return null;
+}
+
+function validateAuxiliaryTechnique(tech: unknown, aux: unknown, library: unknown): string | null {
+  if (aux === undefined || aux === null) return null;
+  if (!Object.keys(CONFIG.techniques).includes(aux as string)) return "辅修功法无效";
+  if (aux === tech) return "主辅不能为同一本";
+  if (tech === null || tech === undefined) return "无主修却有辅修";
+  if (((library as number) ?? 0) < 2) return "辅修需二级藏经阁";
   return null;
 }
 
@@ -1538,7 +1641,9 @@ export function importSave(json: string): Result<SaveState> {
   const checks: Array<string | null> = [
     validateResources(o.resources),
     validateBuildings(o.buildings),
-    validateTechnique(o.technique, o.techniqueLevel),
+    validateTechnique(o.technique, o.techniqueLevel, o.library),
+    validateLibrary(o.library),
+    validateAuxiliaryTechnique(o.technique, o.auxiliaryTechnique, o.library),
     validateEquipmentAndInventory(o.equipment, o.inventory),
     validateMaps(o.maps, o.suppression, ver),
     validateEncounter(o.encounter),
@@ -1574,6 +1679,8 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };
   base.tribulationLog = (o.tribulationLog as TribulationLog | null) ?? null;
   base.jindanTrial = (o.jindanTrial as TribulationLog | null) ?? null;
+  base.library = typeof o.library === "number" ? (o.library as number) : 0;
+  base.auxiliaryTechnique = (o.auxiliaryTechnique as TechniqueId | null) ?? null;
   base.recentLogs = Array.isArray(o.recentLogs) ? (o.recentLogs as string[]).slice(-20) : base.recentLogs;
   base.milestones = Array.isArray(o.milestones) ? (o.milestones as Milestone[]) : [];
   base.firsts = { ...base.firsts, ...((o.firsts as Partial<SaveState["firsts"]>) || {}) };

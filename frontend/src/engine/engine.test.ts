@@ -9,6 +9,8 @@ import {
   upgradeBuilding,
   setTechnique,
   upgradeTechnique,
+  setAuxiliaryTechnique,
+  buildLibrary,
   craftPill,
   equipItem,
   togglePreparePill,
@@ -1076,5 +1078,133 @@ describe("v0.7 修复后复核回归", () => {
     const after = previewJindanTrial(settle(s, T0 + 6000));
     expect(after.canAfford).toBe(true);
     expect(after.shortfall.cultivation).toBe(0);
+  });
+});
+
+describe("v0.8 藏经阁与主辅功法", () => {
+  function geared(s: SaveState): SaveState {
+    s.realm = "foundation1";
+    s.resources.spiritStone = 10000;
+    s.resources.page = 100;
+    return s;
+  }
+
+  it("藏经阁：未筑基不可建，成本正确，满级拒绝", () => {
+    const s = fresh();
+    expect(buildLibrary(s, T0).ok).toBe(false); // qi1 未筑基
+    geared(s);
+    s.resources.spiritStone = 799; // 差 1 灵石
+    expect(buildLibrary(s, T0).ok).toBe(false);
+    s.resources.spiritStone = 800;
+    s.resources.page = 10;
+    const r = buildLibrary(s, T0);
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).library).toBe(1);
+    expect((r.state as SaveState).resources.spiritStone).toBe(0);
+    expect((r.state as SaveState).resources.page).toBe(0);
+    // 补二级资源再升
+    const s2 = r.state as SaveState;
+    s2.resources.spiritStone = 1600;
+    s2.resources.page = 20;
+    const r2 = buildLibrary(s2, T0);
+    expect(r2.ok).toBe(true);
+    expect((r2.state as SaveState).library).toBe(2);
+    expect(buildLibrary(r2.state as SaveState, T0).ok).toBe(false); // 满级
+  });
+
+  it("新功法需一级藏经阁才可主修", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    expect(setTechnique(s, T0, "poYue").ok).toBe(false);
+    s.library = 1;
+    const r = setTechnique(s, T0, "poYue");
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).techniqueLevel.poYue).toBe(1);
+  });
+
+  it("破岳诀主/辅攻击加成不同", () => {
+    const s = fresh();
+    s.library = 2;
+    s.techniqueLevel.poYue = 3;
+    s.technique = "poYue";
+    const mainAtk = playerStats(s).attack; // 主修 lv3 +12 → 基础 15 + 12 = 27
+    s.technique = "qingYun";
+    s.auxiliaryTechnique = "poYue";
+    const auxAtk = playerStats(s).attack; // 辅修 lv3 +6 → 21
+    expect(mainAtk).toBe(27);
+    expect(auxAtk).toBe(21);
+  });
+
+  it("聚元诀主/辅灵气产速", () => {
+    const s = fresh();
+    s.technique = "juYuan";
+    s.techniqueLevel.juYuan = 3;
+    const mainSpirit = settle(s, T0 + 1000).resources.spirit;
+    s.technique = "qingYun";
+    s.auxiliaryTechnique = "juYuan";
+    const auxSpirit = settle(s, T0 + 1000).resources.spirit;
+    expect(mainSpirit).toBeCloseTo(0.25 * 1.5, 5); // 主修 ×1.5
+    expect(auxSpirit).toBeCloseTo(0.25 * 1.25, 5); // 辅修 ×1.25
+  });
+
+  it("主辅不能同一本，且主辅互换", () => {
+    const s = fresh();
+    s.library = 2;
+    s.technique = "qingYun";
+    s.techniqueLevel.qingYun = 2;
+    s.techniqueLevel.xuanGui = 3;
+    // 设置辅修为玄龟诀
+    const r1 = setAuxiliaryTechnique(s, T0, "xuanGui");
+    expect(r1.ok).toBe(true);
+    expect((r1.state as SaveState).auxiliaryTechnique).toBe("xuanGui");
+    // 把当前辅修设为主修 → 互换
+    const r2 = setTechnique(r1.state as SaveState, T0, "xuanGui");
+    expect(r2.ok).toBe(true);
+    expect((r2.state as SaveState).technique).toBe("xuanGui");
+    expect((r2.state as SaveState).auxiliaryTechnique).toBe("qingYun");
+    // 反向：把当前主修设为辅修 → 互换回来
+    const r3 = setAuxiliaryTechnique(r2.state as SaveState, T0, "xuanGui");
+    expect(r3.ok).toBe(true);
+    expect((r3.state as SaveState).technique).toBe("qingYun");
+    expect((r3.state as SaveState).auxiliaryTechnique).toBe("xuanGui");
+  });
+
+  it("无主修不能设辅修", () => {
+    const s = fresh();
+    s.library = 2;
+    s.technique = null;
+    expect(setAuxiliaryTechnique(s, T0, "qingYun").ok).toBe(false);
+  });
+});
+
+describe("v0.8 迁移与校验", () => {
+  it("v6 旧档迁移补藏经阁与辅修字段", () => {
+    const s = fresh();
+    const v6 = structuredClone(s) as unknown as Record<string, unknown>;
+    delete v6.library;
+    delete v6.auxiliaryTechnique;
+    delete (v6.techniqueLevel as Record<string, unknown>).poYue;
+    delete (v6.techniqueLevel as Record<string, unknown>).juYuan;
+    v6.schemaVersion = 6;
+    const m = migrateSave(v6 as unknown as SaveState);
+    expect(m.library).toBe(0);
+    expect(m.auxiliaryTechnique).toBe(null);
+    expect(m.techniqueLevel.poYue).toBe(0);
+    expect(m.techniqueLevel.juYuan).toBe(0);
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
+  it("坏档：主辅同书拒绝导入", () => {
+    const s = fresh();
+    s.library = 2;
+    s.technique = "qingYun";
+    s.auxiliaryTechnique = "qingYun";
+    expect(importSave(JSON.stringify(s)).ok).toBe(false);
+  });
+
+  it("坏档：藏经阁等级越界拒绝导入", () => {
+    const s = fresh();
+    s.library = 3;
+    expect(importSave(JSON.stringify(s)).ok).toBe(false);
   });
 });
