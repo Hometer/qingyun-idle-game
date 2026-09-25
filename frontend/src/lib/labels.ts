@@ -77,6 +77,7 @@ export const WORLD_TEXT: Record<string, string> = {
   dongfu: "洞府隐于山腹，四壁青苔如篆。此处聚灵纳气，是你修行起居之所。",
   map_qingyun: "青云山层峦叠翠，灵气自谷底升腾。山中妖兽盘踞，正是历练之所。",
   map_nether: "幽冥谷阴气沉沉，雾锁深壑。传闻谷底藏有前人遗蜕，凶险与机缘并藏。",
+  map_yunling: "云岭古道盘山而上，雾瘴缭绕。古时修士结丹必经之地，至今仍留石傀护道、山魈拦路。",
 };
 
 export const REALM_ORDER: string[] = REALM_LIST.map((r) => r.id);

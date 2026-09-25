@@ -1,13 +1,13 @@
-export type RealmId = "qi1" | "qi2" | "qi3" | "qi4" | "foundation1";
+export type RealmId = "qi1" | "qi2" | "qi3" | "qi4" | "foundation1" | "foundation2" | "foundation3" | "jindan1";
 export type SpiritRoot = "金" | "木" | "水" | "火" | "土";
 export type AptitudeId = "balanced" | "focus" | "spirit"; // 均衡 / 凝神 / 聚灵
-export type BreakthroughLayer = "qi1" | "qi2" | "qi3";
+export type BreakthroughLayer = "qi1" | "qi2" | "qi3" | "foundation1" | "foundation2";
 export type BreakthroughMethod = "steady" | "risky"; // 稳妥 / 冲关
 export type BuildingId = "cultivationRoom" | "spiritArray" | "spiritField" | "alchemyFurnace";
 export type TechniqueId = "qingYun" | "xuanGui";
 export type EquipSlot = "weapon" | "armor" | "accessory";
 export type ItemId = "tribulationPill";
-export type MapId = "map_qingyun" | "map_nether";
+export type MapId = "map_qingyun" | "map_nether" | "map_yunling";
 
 export interface Resources {
   cultivation: number;
@@ -154,6 +154,7 @@ export interface SaveState {
   aptitude: AptitudeId;
   breakthroughFails: Record<BreakthroughLayer, number>; // 每层保底计数 0~2
   breakthroughRecords: BreakthroughRecord[];
+  jindanTrial: TribulationLog | null;
 }
 
 export type Result<T> =

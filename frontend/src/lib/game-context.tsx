@@ -49,6 +49,7 @@ interface GameContextValue {
   encounter: EncounterCopy | null;
   encounterLoading: boolean;
   tribPreview: eng.TribulationPreview | null;
+  jindanPreview: eng.JindanTrialPreview | null;
   create: (name: string, root: SpiritRoot, aptitude: AptitudeId) => void;
   settleNow: () => void;
   doBreakthrough: (method: BreakthroughMethod) => void;
@@ -62,6 +63,7 @@ interface GameContextValue {
   suppress: (mapId: MapId, nodeId: string) => void;
   choose: (optionId: string) => void;
   startTrib: () => void;
+  startJindanTrial: () => void;
   doExport: () => void;
   doImport: (file: File) => void;
   doReset: () => void;
@@ -232,6 +234,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const tribPreview = useMemo(
     () => (state && state.realm === "qi4" ? eng.previewTribulation(state) : null),
+    [state],
+  );
+
+  const jindanPreview = useMemo(
+    () => (state && state.realm === "foundation3" ? eng.previewJindanTrial(state) : null),
     [state],
   );
 
@@ -574,6 +581,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [state, apply]);
 
+  const startJindanTrial = useCallback(async () => {
+    if (!state) return;
+    const p = eng.previewJindanTrial(state);
+    const costTxt = p.ok ? `消耗修为 ${p.cost.cultivation}、灵气 ${p.cost.spirit}、灵石 ${p.cost.spiritStone}` : "";
+    if (!window.confirm(`确定结丹试炼？${costTxt}，失败境界不退。`)) return;
+    const nowMs = Date.now();
+    const settled = eng.settle(state, nowMs);
+    const r = eng.startJindanTrial(settled, nowMs);
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    const ok = await apply(
+      r.state,
+      r.state.realm === "jindan1" ? "结丹成功，晋入金丹一层" : "结丹试炼失败，可准备后重试",
+    );
+    if (ok) {
+      setLastResult({
+        title: r.state.realm === "jindan1" ? "结丹成功" : "结丹失败",
+        lines: [...deltaLines(settled, r.state), ...(r.state.jindanTrial?.log ?? [])],
+      });
+    }
+  }, [state, apply]);
+
   const doExport = useCallback(() => {
     if (!state) return;
     const blob = new Blob([eng.exportSave(state)], { type: "application/json" });
@@ -685,6 +716,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     encounter,
     encounterLoading,
     tribPreview,
+    jindanPreview,
     create,
     settleNow,
     doBreakthrough,
@@ -698,6 +730,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     suppress,
     choose,
     startTrib,
+    startJindanTrial,
     doExport,
     doImport,
     doReset,

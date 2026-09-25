@@ -29,6 +29,9 @@ import {
   playerStats,
   productionBreakdown,
   predictFight,
+  startJindanTrial,
+  jindanTrialGateOk,
+  previewJindanTrial,
 } from "./engine";
 import type { SaveState, RealmId, MapId, AptitudeId, BreakthroughMethod } from "./types";
 
@@ -782,7 +785,7 @@ describe("v0.6 迁移与导入校验", () => {
     v4.schemaVersion = 4;
     const m = migrateSave(v4 as unknown as SaveState);
     expect(m.aptitude).toBe("balanced");
-    expect(m.breakthroughFails).toEqual({ qi1: 0, qi2: 0, qi3: 0 });
+    expect(m.breakthroughFails).toEqual({ qi1: 0, qi2: 0, qi3: 0, foundation1: 0, foundation2: 0 });
     expect(m.breakthroughRecords).toEqual([]);
     expect(m.schemaVersion).toBe(SCHEMA_VERSION);
   });
@@ -806,5 +809,148 @@ describe("v0.6 迁移与导入校验", () => {
     const bad = structuredClone(s) as unknown as Record<string, unknown>;
     bad.breakthroughRecords = [{ layer: "qi1", method: "risky", success: false, probability: 2, cost: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0 }, at: T0 }];
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});
+
+describe("v0.7 境界与筑基主线", () => {
+  it("筑基境界增加战斗属性（相对筑基一层累计）", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    const f1 = playerStats(s);
+    s.realm = "foundation2";
+    const f2 = playerStats(s);
+    expect(f2.attack).toBe(f1.attack + 3);
+    expect(f2.defense).toBe(f1.defense + 2);
+    expect(f2.hp).toBe(f1.hp + 20);
+    s.realm = "foundation3";
+    const f3 = playerStats(s);
+    expect(f3.attack).toBe(f1.attack + 6);
+    expect(f3.hp).toBe(f1.hp + 40);
+    s.realm = "jindan1";
+    const j = playerStats(s);
+    expect(j.attack).toBe(f1.attack + 10);
+    expect(j.defense).toBe(f1.defense + 7);
+    expect(j.hp).toBe(f1.hp + 60);
+  });
+
+  it("筑基一层稳妥进阶到筑基二层（成本 ×1.15）", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.resources.cultivation = 3450;
+    s.resources.spirit = 460;
+    const r = breakthrough(s, T0, "steady");
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.realm).toBe("foundation2");
+    expect(st.resources.cultivation).toBe(0);
+    expect(st.resources.spirit).toBe(0);
+  });
+
+  it("筑基二层冲关失败只扣 20% 且保底跨层不继承", () => {
+    const s = fresh();
+    s.realm = "foundation2";
+    s.resources.cultivation = 6000;
+    s.resources.spirit = 800;
+    const r = breakthrough(s, T0, "risky", () => 0.9);
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.realm).toBe("foundation2");
+    expect(st.breakthroughFails.foundation2).toBe(1);
+    expect(st.resources.cultivation).toBe(6000 - 1200); // 20% of 6000
+    expect(st.resources.spirit).toBe(800 - 160); // 20% of 800
+  });
+
+  it("渡劫成功后解锁云岭古道首节点", () => {
+    const s = fresh();
+    s.realm = "qi4";
+    s.resources.cultivation = 1500;
+    s.resources.spirit = 200;
+    s.technique = "xuanGui";
+    s.techniqueLevel.xuanGui = 3;
+    s.equipment.armor = "a_iron";
+    s.equipment.accessory = "c_jade";
+    s.preparedPill = true;
+    s.inventory.tribulationPill = 1;
+    const r = startTribulation(s, T0);
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.realm).toBe("foundation1");
+    const first = Object.keys(st.maps.map_yunling)[0];
+    expect(st.maps.map_yunling[first].unlocked).toBe(true);
+  });
+});
+
+describe("v0.7 结丹试炼", () => {
+  function readyJindan(): SaveState {
+    const s = fresh();
+    s.realm = "foundation3";
+    s.maps.map_yunling.node_guardian.cleared = true;
+    s.maps.map_yunling.node_guardian.unlocked = true;
+    s.technique = "xuanGui";
+    s.techniqueLevel.xuanGui = 3;
+    s.equipment.armor = "a_iron";
+    s.equipment.accessory = "c_jade";
+    s.preparedPill = true;
+    s.inventory.tribulationPill = 1;
+    s.resources.cultivation = 12000;
+    s.resources.spirit = 1600;
+    s.resources.spiritStone = 3000;
+    return s;
+  }
+
+  it("未首通护丹灵时不可结丹", () => {
+    const s = readyJindan();
+    s.maps.map_yunling.node_guardian.cleared = false;
+    expect(jindanTrialGateOk(s).ok).toBe(false);
+    expect(startJindanTrial(s, T0).ok).toBe(false);
+  });
+
+  it("结丹试炼预览与实战一致，成功晋入金丹并只扣费一次", () => {
+    const s = readyJindan();
+    const p = previewJindanTrial(s);
+    expect(p.ok).toBe(true);
+    expect(p.success).toBe(true);
+    const r = startJindanTrial(s, T0);
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.realm).toBe("jindan1");
+    expect(st.jindanTrial?.success).toBe(true);
+    expect(st.resources.cultivation).toBe(0);
+    expect(st.resources.spirit).toBe(0);
+    expect(st.resources.spiritStone).toBe(0);
+  });
+
+  it("结丹试炼失败不降境界", () => {
+    const s = readyJindan();
+    // 去掉护劫丹与减伤装备，使失败
+    s.preparedPill = false;
+    s.equipment.armor = null;
+    s.equipment.accessory = null;
+    s.technique = null;
+    s.techniqueLevel.xuanGui = 0;
+    const r = startJindanTrial(s, T0);
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.realm).toBe("foundation3");
+    expect(st.jindanTrial?.success).toBe(false);
+  });
+});
+
+describe("v0.7 迁移", () => {
+  it("v5 旧档迁移补云岭古道与结丹试炼字段", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    const v5 = structuredClone(s) as unknown as Record<string, unknown>;
+    delete v5.jindanTrial;
+    delete (v5.maps as Record<string, unknown>).map_yunling;
+    delete (v5.suppression as Record<string, unknown>).map_yunling;
+    delete (v5.suppressionSince as Record<string, unknown>).map_yunling;
+    v5.schemaVersion = 5;
+    const m = migrateSave(v5 as unknown as SaveState);
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(m.jindanTrial).toBe(null);
+    expect(m.maps.map_yunling).toBeDefined();
+    const first = Object.keys(m.maps.map_yunling)[0];
+    expect(m.maps.map_yunling[first].unlocked).toBe(true); // 筑基一层旧档直接解锁首节点
   });
 });

@@ -5,7 +5,7 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtTime, fmtDuration } from "@/lib/labels";
 import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate } from "@/engine/engine";
-import type { TechniqueId, BreakthroughMethod } from "@/engine/types";
+import type { TechniqueId, BreakthroughMethod, BreakthroughLayer } from "@/engine/types";
 
 function eff(id: string, lvl: number): string {
   if (lvl < 1) return "未修";
@@ -32,20 +32,22 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 }
 
 export default function XiulianPage() {
-  const { state, view, now, doBreakthrough, startTrib, tribPreview, setTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
+  const { state, view, now, doBreakthrough, startTrib, tribPreview, jindanPreview, startJindanTrial, setTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
   const [seclusionDuration, setSeclusionDuration] = useState(30);
   if (!state || !view) return null;
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
   const next = REALM_LIST[idx + 1];
   const isQi4 = state.realm === "qi4";
-  const isMax = state.realm === "foundation1";
+  const isFoundation3 = state.realm === "foundation3";
+  const isMax = state.realm === "jindan1";
+  const isBreakthroughLayer = state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" || state.realm === "foundation1" || state.realm === "foundation2";
   const prod = productionBreakdown(state);
   const seclusionPred = useMemo(() => predictLongTask(state, "seclusion", "map_qingyun", "", "steady", seclusionDuration, false), [state, seclusionDuration]);
   const enough = !isMax && !!next && view.resources.cultivation >= next.cultivationCost && view.resources.spirit >= next.spiritCost;
-  const steadyCosts = useMemo(() => (state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" ? breakthroughCosts(state, "steady") : null), [state]);
-  const riskyCosts = useMemo(() => (state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" ? breakthroughCosts(state, "risky") : null), [state]);
-  const riskyRate = useMemo(() => (state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" ? breakthroughSuccessRate(state) : 1), [state]);
-  const riskyFails = state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" ? (state.breakthroughFails?.[state.realm] ?? 0) : 0;
+  const steadyCosts = useMemo(() => (isBreakthroughLayer ? breakthroughCosts(state, "steady") : null), [state, isBreakthroughLayer]);
+  const riskyCosts = useMemo(() => (isBreakthroughLayer ? breakthroughCosts(state, "risky") : null), [state, isBreakthroughLayer]);
+  const riskyRate = useMemo(() => (isBreakthroughLayer ? breakthroughSuccessRate(state) : 1), [state, isBreakthroughLayer]);
+  const riskyFails = isBreakthroughLayer ? (state.breakthroughFails?.[state.realm as BreakthroughLayer] ?? 0) : 0;
   const steadyEnough = !!steadyCosts && view.resources.cultivation >= steadyCosts.success.cultivation && view.resources.spirit >= steadyCosts.success.spirit;
   const riskyEnough = !!riskyCosts && view.resources.cultivation >= riskyCosts.success.cultivation && view.resources.spirit >= riskyCosts.success.spirit;
 
@@ -63,12 +65,14 @@ export default function XiulianPage() {
             <Bar label="灵气" value={view.resources.spirit} max={next.spiritCost} />
             {isQi4 ? (
               <p className="mt-1 text-xs text-muted">圆满之境，需渡天劫方可筑基。</p>
+            ) : isFoundation3 ? (
+              <p className="mt-1 text-xs text-muted">筑基圆满，需首通云岭古道·护丹灵并结丹试炼方可金丹。</p>
             ) : (
               <p className="mt-1 text-xs text-muted">下一境 {next.name}：需修为 {fmt(next.cultivationCost)}、灵气 {fmt(next.spiritCost)}</p>
             )}
           </>
         )}
-        {!isMax && !isQi4 && (
+        {!isMax && !isQi4 && !isFoundation3 && (
           <>
             {!enough && next && (
               <p className="mt-1 text-xs text-cinnabar">
@@ -215,6 +219,47 @@ export default function XiulianPage() {
         </Section>
       )}
 
+      {isFoundation3 && jindanPreview && (
+        <Section title="结丹试炼">
+          {jindanPreview.ok ? (
+            <>
+              <p className="text-sm">当前气血 {jindanPreview.maxHp}</p>
+              <p className="mt-1 text-sm">
+                减伤 {Math.round(jindanPreview.reduction * 100)}%
+                {jindanPreview.sources.length > 0
+                  ? `（${jindanPreview.sources.map((s) => `${s.name} ${Math.round(s.pct * 100)}%`).join(" + ")}）`
+                  : "（无减伤来源）"}
+              </p>
+              <p className="mt-1 text-sm">
+                消耗修为 {jindanPreview.cost.cultivation}、灵气 {jindanPreview.cost.spirit}、灵石 {jindanPreview.cost.spiritStone}
+              </p>
+              <div className="mt-2 space-y-0.5 text-sm">
+                {jindanPreview.waves.map((w, i) => (
+                  <p key={i}>
+                    第{i + 1}波：伤 {w.damage}，余 {w.hpAfter}
+                    {jindanPreview.pillHealed?.wave === i + 1 && (
+                      <span className="text-cinnabar">（丹药回 {jindanPreview.pillHealed.amount}）</span>
+                    )}
+                  </p>
+                ))}
+              </div>
+              <p className="mt-2 text-sm">
+                丹药{jindanPreview.pillPrepared ? "已预置" : "未预置"} ｜ 预计
+                {jindanPreview.success ? <span className="text-cinnabar">成功</span> : <span className="text-muted">失败</span>}
+              </p>
+              {!jindanPreview.success && (
+                <p className="mt-1 text-xs text-muted">建议：主修玄龟诀提升减伤、穿戴减伤装备、预置护劫丹。</p>
+              )}
+              <button onClick={startJindanTrial} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white">
+                开始结丹试炼
+              </button>
+            </>
+          ) : (
+            <p className="text-sm">{jindanPreview.reason}</p>
+          )}
+        </Section>
+      )}
+
       {state.tribulationLog && (
         <Section title="渡劫战报">
           {state.tribulationLog.log.map((l, i) => (
@@ -228,6 +273,19 @@ export default function XiulianPage() {
           {!state.tribulationLog.success && (
             <p className="mt-1 text-xs text-muted">重新积累门槛，建议提升减伤与气血后再试。</p>
           )}
+        </Section>
+      )}
+
+      {state.jindanTrial && (
+        <Section title="结丹战报">
+          {state.jindanTrial.log.map((l, i) => (
+            <p key={i} className="py-0.5 text-sm text-ink/80">
+              {l}
+            </p>
+          ))}
+          <p className="mt-1 text-sm font-medium">
+            {state.jindanTrial.success ? <span className="text-cinnabar">结丹成功</span> : <span className="text-muted">结丹失败</span>}
+          </p>
         </Section>
       )}
 

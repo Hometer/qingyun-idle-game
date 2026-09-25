@@ -13,11 +13,14 @@ export const CONFIG = {
   baseHp: 100,
 
   realms: [
-    { id: "qi1", name: "炼气一层", cultivationCost: 0, spiritCost: 0 },
-    { id: "qi2", name: "炼气二层", cultivationCost: 120, spiritCost: 20 },
-    { id: "qi3", name: "炼气三层", cultivationCost: 300, spiritCost: 50 },
-    { id: "qi4", name: "炼气圆满", cultivationCost: 700, spiritCost: 100 },
-    { id: "foundation1", name: "筑基一层", cultivationCost: 1500, spiritCost: 200 },
+    { id: "qi1", name: "炼气一层", cultivationCost: 0, spiritCost: 0, attack: 0, defense: 0, hp: 0 },
+    { id: "qi2", name: "炼气二层", cultivationCost: 120, spiritCost: 20, attack: 0, defense: 0, hp: 0 },
+    { id: "qi3", name: "炼气三层", cultivationCost: 300, spiritCost: 50, attack: 0, defense: 0, hp: 0 },
+    { id: "qi4", name: "炼气圆满", cultivationCost: 700, spiritCost: 100, attack: 0, defense: 0, hp: 0 },
+    { id: "foundation1", name: "筑基一层", cultivationCost: 1500, spiritCost: 200, attack: 0, defense: 0, hp: 0 },
+    { id: "foundation2", name: "筑基二层", cultivationCost: 3000, spiritCost: 400, attack: 3, defense: 2, hp: 20 },
+    { id: "foundation3", name: "筑基圆满", cultivationCost: 6000, spiritCost: 800, attack: 6, defense: 4, hp: 40 },
+    { id: "jindan1", name: "金丹一层", cultivationCost: 12000, spiritCost: 1600, attack: 10, defense: 7, hp: 60 },
   ] as const,
 
   spiritRoots: ["金", "木", "水", "火", "土"] as const,
@@ -140,6 +143,32 @@ export const CONFIG = {
         },
       },
     },
+    map_yunling: {
+      name: "云岭古道",
+      nodes: {
+        node_ape: {
+          name: "断崖山魈", gate: "foundation1",
+          enemy: { attack: 23, defense: 15, hp: 160 },
+          firstClear: { cultivation: 300, spiritStone: 150, page: 0, equipment: null },
+          repeat: { cultivation: 80, page: 0 },
+          suppressRate: 0.8,
+        },
+        node_golem: {
+          name: "古道石傀", gate: "foundation2",
+          enemy: { attack: 25, defense: 17, hp: 200 },
+          firstClear: { cultivation: 600, spiritStone: 250, page: 0, equipment: null },
+          repeat: { cultivation: 120, page: 0 },
+          suppressRate: 1.0,
+        },
+        node_guardian: {
+          name: "护丹灵", gate: "foundation3",
+          enemy: { attack: 27, defense: 19, hp: 240 },
+          firstClear: { cultivation: 900, spiritStone: 400, page: 0, equipment: null },
+          repeat: { cultivation: 180, page: 0 },
+          suppressRate: 1.2,
+        },
+      },
+    },
   } as const,
 
   encounters: {
@@ -179,6 +208,11 @@ export const CONFIG = {
     reductionCap: 0.4,
     pillHealPct: 0.3,
     pillWave: 3, // 第三波结束后恢复
+  },
+
+  jindanTrial: {
+    wavesPct: [0.22, 0.27, 0.32, 0.37, 0.42],
+    spiritStoneCost: 3000,
   },
 
   suppressionDurationHours: 24,
