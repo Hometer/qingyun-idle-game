@@ -806,7 +806,7 @@ function unlockNext(s: SaveState, mapId: MapId, nodeId: string): void {
 
 function syncYunlingUnlock(s: SaveState): void {
   const first = Object.keys(MAP_CFG.map_yunling.nodes)[0];
-  if (realmIndex(s.realm) >= realmIndex("foundation1")) {
+  if (realmIndex(s.realm) >= realmIndex("foundation1") && s.maps.map_yunling?.[first]) {
     s.maps.map_yunling[first].unlocked = true;
   }
 }
@@ -1112,6 +1112,8 @@ export function startTribulation(state: SaveState, nowMs: number): Result<SaveSt
 export interface JindanTrialPreview {
   ok: boolean;
   reason: string;
+  canAfford: boolean;
+  shortfall: { cultivation: number; spirit: number; spiritStone: number };
   maxHp: number;
   reduction: number;
   sources: ReductionSource[];
@@ -1122,37 +1124,45 @@ export interface JindanTrialPreview {
   cost: { cultivation: number; spirit: number; spiritStone: number };
 }
 
+export function jindanTrialCost(): { cultivation: number; spirit: number; spiritStone: number } {
+  const next = REALMS[realmIndex("foundation3") + 1];
+  if (!next) return { cultivation: 0, spirit: 0, spiritStone: 0 };
+  return { cultivation: next.cultivationCost, spirit: next.spiritCost, spiritStone: JINDAN_TRIAL_CFG.spiritStoneCost };
+}
+
 export function jindanTrialGateOk(state: SaveState): { ok: boolean; reason: string } {
   if (state.realm !== "foundation3") return { ok: false, reason: "仅筑基圆满可结丹" };
   const nodeIds = Object.keys(MAP_CFG.map_yunling.nodes);
   const guardian = nodeIds[nodeIds.length - 1]; // 护丹灵（第三节点）
   if (!state.maps.map_yunling?.[guardian]?.cleared) return { ok: false, reason: "需先首通云岭古道·护丹灵" };
-  const next = REALMS[realmIndex("foundation3") + 1];
-  if (!next) return { ok: false, reason: "金丹门槛未配置" };
-  if (
-    state.resources.cultivation < next.cultivationCost ||
-    state.resources.spirit < next.spiritCost ||
-    state.resources.spiritStone < JINDAN_TRIAL_CFG.spiritStoneCost
-  ) {
-    return { ok: false, reason: `结丹门槛未足（需修为${next.cultivationCost}、灵气${next.spiritCost}、灵石${JINDAN_TRIAL_CFG.spiritStoneCost}）` };
-  }
   return { ok: true, reason: "" };
 }
 
 export function previewJindanTrial(state: SaveState): JindanTrialPreview {
   const gate = jindanTrialGateOk(state);
-  const empty = {
-    ok: false, reason: gate.reason, maxHp: 0, reduction: 0, sources: [] as ReductionSource[],
-    waves: [] as TribulationWave[], pillHealed: null, success: false, pillPrepared: false,
+  const empty: JindanTrialPreview = {
+    ok: false, reason: gate.reason, canAfford: false,
+    shortfall: { cultivation: 0, spirit: 0, spiritStone: 0 },
+    maxHp: 0, reduction: 0, sources: [], waves: [], pillHealed: null, success: false, pillPrepared: false,
     cost: { cultivation: 0, spirit: 0, spiritStone: 0 },
   };
   if (!gate.ok) return empty;
   const sim = simulateTribulation(state, JINDAN_TRIAL_CFG.wavesPct, "结丹试炼");
-  const next = REALMS[realmIndex("foundation3") + 1];
+  const cost = jindanTrialCost();
+  const canAfford =
+    state.resources.cultivation >= cost.cultivation &&
+    state.resources.spirit >= cost.spirit &&
+    state.resources.spiritStone >= cost.spiritStone;
+  const shortfall = {
+    cultivation: Math.max(0, cost.cultivation - state.resources.cultivation),
+    spirit: Math.max(0, cost.spirit - state.resources.spirit),
+    spiritStone: Math.max(0, cost.spiritStone - state.resources.spiritStone),
+  };
   return {
-    ok: true, reason: "", maxHp: sim.maxHp, reduction: sim.reduction, sources: sim.sources,
+    ok: true, reason: "", canAfford, shortfall,
+    maxHp: sim.maxHp, reduction: sim.reduction, sources: sim.sources,
     waves: sim.waves, pillHealed: sim.pillHealed, success: sim.success, pillPrepared: state.preparedPill,
-    cost: { cultivation: next.cultivationCost, spirit: next.spiritCost, spiritStone: JINDAN_TRIAL_CFG.spiritStoneCost },
+    cost,
   };
 }
 
@@ -1160,11 +1170,17 @@ export function startJindanTrial(state: SaveState, nowMs: number): Result<SaveSt
   const s = settle(state, nowMs);
   const gate = jindanTrialGateOk(s);
   if (!gate.ok) return fail(gate.reason);
-  const next = REALMS[realmIndex("foundation3") + 1];
-  if (!next) return fail("金丹门槛未配置");
-  s.resources.cultivation -= next.cultivationCost;
-  s.resources.spirit -= next.spiritCost;
-  s.resources.spiritStone -= JINDAN_TRIAL_CFG.spiritStoneCost;
+  const cost = jindanTrialCost();
+  if (
+    s.resources.cultivation < cost.cultivation ||
+    s.resources.spirit < cost.spirit ||
+    s.resources.spiritStone < cost.spiritStone
+  ) {
+    return fail(`结丹门槛未足（需修为${cost.cultivation}、灵气${cost.spirit}、灵石${cost.spiritStone}）`);
+  }
+  s.resources.cultivation -= cost.cultivation;
+  s.resources.spirit -= cost.spirit;
+  s.resources.spiritStone -= cost.spiritStone;
 
   const sim = simulateTribulation(s, JINDAN_TRIAL_CFG.wavesPct, "结丹试炼");
   const pill = s.preparedPill;
@@ -1292,16 +1308,21 @@ function validateEquipmentAndInventory(eq: unknown, inv: unknown): string | null
   return null;
 }
 
-function validateMaps(maps: unknown, suppression: unknown): string | null {
+function validateMaps(maps: unknown, suppression: unknown, schemaVersion: number): string | null {
   const m = (maps ?? {}) as Record<string, unknown>;
   for (const mid of Object.keys(MAP_CFG) as MapId[]) {
     const nodes = m[mid];
-    if (nodes === undefined) continue; // 旧档缺失的地图，导入时由 normalizeSave 补默认
+    const isNewMap = mid === "map_yunling";
+    const allowMissing = isNewMap && schemaVersion < SCHEMA_VERSION; // 旧档缺新地图，迁移补默认
+    if (nodes === undefined) {
+      if (allowMissing) continue;
+      return "地图数据无效";
+    }
     if (!nodes || typeof nodes !== "object") return "地图数据无效";
     const rec = nodes as Record<string, unknown>;
     for (const nid of Object.keys(MAP_CFG[mid].nodes)) {
       const ns = rec[nid] as Record<string, unknown> | undefined;
-      if (ns && (typeof ns.unlocked !== "boolean" || typeof ns.cleared !== "boolean")) return "节点数据无效";
+      if (!ns || typeof ns.unlocked !== "boolean" || typeof ns.cleared !== "boolean") return "节点数据无效";
     }
   }
   const sup = (suppression ?? {}) as Record<string, unknown>;
@@ -1485,12 +1506,15 @@ function validateJindanTrial(v: unknown): string | null {
   if (!isNonNegNum(r.reduction) || (r.reduction as number) > 1) return "结丹试炼记录减伤无效";
   if (typeof r.pillUsed !== "boolean") return "结丹试炼记录丹药无效";
   if (typeof r.success !== "boolean") return "结丹试炼记录结果无效";
-  if (!Array.isArray(r.waves)) return "结丹试炼记录波次无效";
+  if (!Array.isArray(r.waves) || r.waves.length !== JINDAN_TRIAL_CFG.wavesPct.length) return "结丹试炼记录波次无效";
   for (const w of r.waves as unknown[]) {
     const wv = w as Record<string, unknown>;
     if (!wv || !isNonNegNum(wv.damage) || !isNonNegNum(wv.hpAfter)) return "结丹试炼记录波次无效";
   }
   if (!Array.isArray(r.log)) return "结丹试炼记录日志无效";
+  for (const l of r.log as unknown[]) {
+    if (typeof l !== "string") return "结丹试炼记录日志无效";
+  }
   return null;
 }
 
@@ -1516,7 +1540,7 @@ export function importSave(json: string): Result<SaveState> {
     validateBuildings(o.buildings),
     validateTechnique(o.technique, o.techniqueLevel),
     validateEquipmentAndInventory(o.equipment, o.inventory),
-    validateMaps(o.maps, o.suppression),
+    validateMaps(o.maps, o.suppression, ver),
     validateEncounter(o.encounter),
     validateMilestonesAndFirsts(o.milestones, o.firsts),
     validateDaily(o.daily),

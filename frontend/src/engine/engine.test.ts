@@ -954,3 +954,68 @@ describe("v0.7 迁移", () => {
     expect(m.maps.map_yunling[first].unlocked).toBe(true); // 筑基一层旧档直接解锁首节点
   });
 });
+
+describe("v0.7 复核修复回归", () => {
+  function jindanWaves(): Array<{ damage: number; hpAfter: number }> {
+    return [
+      { damage: 33, hpAfter: 167 },
+      { damage: 41, hpAfter: 126 },
+      { damage: 48, hpAfter: 138 },
+      { damage: 56, hpAfter: 82 },
+      { damage: 63, hpAfter: 19 },
+    ];
+  }
+
+  it("v6 缺 map_qingyun 拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    delete (bad.maps as Record<string, unknown>).map_qingyun;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v6 缺 map_yunling 节点拒绝导入", () => {
+    const s = fresh();
+    const bad = structuredClone(s) as unknown as Record<string, unknown>;
+    delete ((bad.maps as Record<string, unknown>).map_yunling as Record<string, unknown>).node_ape;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v5 缺 map_yunling 可迁移导入", () => {
+    const s = fresh();
+    const v5 = structuredClone(s) as unknown as Record<string, unknown>;
+    delete (v5.maps as Record<string, unknown>).map_yunling;
+    delete (v5.suppression as Record<string, unknown>).map_yunling;
+    delete (v5.suppressionSince as Record<string, unknown>).map_yunling;
+    v5.schemaVersion = 5;
+    const r = importSave(JSON.stringify(v5));
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).maps.map_yunling).toBeDefined();
+  });
+
+  it("结丹战报缺波拒绝导入", () => {
+    const s = fresh();
+    s.jindanTrial = { maxHp: 200, reduction: 0.25, pillUsed: true, waves: [{ damage: 33, hpAfter: 167 }], success: true, log: ["a"] };
+    expect(importSave(JSON.stringify(s)).ok).toBe(false);
+  });
+
+  it("结丹战报对象日志拒绝导入", () => {
+    const s = fresh();
+    s.jindanTrial = { maxHp: 200, reduction: 0.25, pillUsed: true, waves: jindanWaves(), success: true, log: [{ bad: "x" } as unknown as string] };
+    expect(importSave(JSON.stringify(s)).ok).toBe(false);
+  });
+
+  it("资源不足时结丹预览仍显示五波与差额", () => {
+    const s = fresh();
+    s.realm = "foundation3";
+    s.maps.map_yunling.node_guardian.cleared = true;
+    s.maps.map_yunling.node_guardian.unlocked = true;
+    s.resources.cultivation = 12000;
+    s.resources.spirit = 1600;
+    s.resources.spiritStone = 2999; // 差 1 灵石
+    const p = previewJindanTrial(s);
+    expect(p.ok).toBe(true);
+    expect(p.canAfford).toBe(false);
+    expect(p.waves.length).toBe(5);
+    expect(p.shortfall.spiritStone).toBe(1);
+  });
+});

@@ -250,7 +250,12 @@ export default function XiulianPage() {
               {!jindanPreview.success && (
                 <p className="mt-1 text-xs text-muted">建议：主修玄龟诀提升减伤、穿戴减伤装备、预置护劫丹。</p>
               )}
-              <button onClick={startJindanTrial} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white">
+              {!jindanPreview.canAfford && (
+                <p className="mt-1 text-xs text-cinnabar">
+                  还差 {fmt(jindanPreview.shortfall.cultivation)} 修为、{fmt(jindanPreview.shortfall.spirit)} 灵气、{fmt(jindanPreview.shortfall.spiritStone)} 灵石
+                </p>
+              )}
+              <button onClick={startJindanTrial} disabled={!jindanPreview.canAfford} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white disabled:opacity-40">
                 开始结丹试炼
               </button>
             </>

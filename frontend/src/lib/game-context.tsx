@@ -585,7 +585,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!state) return;
     const p = eng.previewJindanTrial(state);
     const costTxt = p.ok ? `消耗修为 ${p.cost.cultivation}、灵气 ${p.cost.spirit}、灵石 ${p.cost.spiritStone}` : "";
-    if (!window.confirm(`确定结丹试炼？${costTxt}，失败境界不退。`)) return;
+    const failWarn = p.ok && !p.success ? "；本次预计失败，仍会消耗上述资源与预置丹药" : "";
+    if (!window.confirm(`确定结丹试炼？${costTxt}，失败境界不退${failWarn}。`)) return;
     const nowMs = Date.now();
     const settled = eng.settle(state, nowMs);
     const r = eng.startJindanTrial(settled, nowMs);
