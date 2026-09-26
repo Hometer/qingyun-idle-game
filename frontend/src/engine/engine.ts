@@ -58,6 +58,8 @@ const MAP_CFG = CONFIG.maps as unknown as Record<
 const MAP_ORDER: MapId[] = ["map_qingyun", "map_nether", "map_yunling"];
 // map_yunling 在 schema v6 引入；v1~v5 旧档可缺失，v6 及以后缺失即坏档
 const MAP_YUNLING_INTRO_VERSION = 6;
+// secretRealm 三字段在 schema v8 引入；v1~v7 旧档可缺失，v8 及以后缺失即坏档
+const SECRET_REALM_INTRO_VERSION = 8;
 
 const EQUIP_CFG = CONFIG.equipment as unknown as Record<
   string,
@@ -1386,7 +1388,7 @@ export function startJindanTrial(state: SaveState, nowMs: number): Result<SaveSt
 
 // ---- 秘境（v0.9） ----
 
-function secretRealmReward(realmId: SecretRealmId): Resources {
+export function secretRealmReward(realmId: SecretRealmId): Resources {
   const cfg = SECRET_REALM_CFG[realmId];
   return { cultivation: 0, spirit: 0, spiritStone: cfg.reward.spiritStone ?? 0, herb: cfg.reward.herb ?? 0, page: cfg.reward.page ?? 0, iron: IRON_CFG.realmDrop[realmId] ?? 0 };
 }
@@ -1576,7 +1578,7 @@ function validateAuxiliaryTechnique(tech: unknown, aux: unknown, library: unknow
 }
 
 function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaVersion: number): string | null {
-  const isCurrent = schemaVersion >= SCHEMA_VERSION;
+  const isCurrent = schemaVersion >= SECRET_REALM_INTRO_VERSION;
   const hasDate = date !== undefined && date !== null;
   const hasUsed = used !== undefined && used !== null;
   const hasLog = log !== undefined && log !== null;

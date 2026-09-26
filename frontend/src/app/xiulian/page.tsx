@@ -5,7 +5,7 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtPct, fmtTime, fmtDuration } from "@/lib/labels";
 import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate } from "@/engine/engine";
-import type { TechniqueId, BreakthroughMethod, BreakthroughLayer } from "@/engine/types";
+import type { TechniqueId, BreakthroughLayer } from "@/engine/types";
 
 function eff(id: string, lvl: number, aux: boolean): string {
   if (lvl < 1) return "未研习";
@@ -36,26 +36,30 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 export default function XiulianPage() {
   const { state, view, now, doBreakthrough, startTrib, tribPreview, jindanPreview, startJindanTrial, setTechnique, setAuxiliaryTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
   const [seclusionDuration, setSeclusionDuration] = useState(30);
-  if (!state || !view) return null;
-  const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
-  const next = REALM_LIST[idx + 1];
-  const isQi4 = state.realm === "qi4";
-  const isFoundation3 = state.realm === "foundation3";
-  const isMax = state.realm === "jindan1";
-  const isBreakthroughLayer = state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" || state.realm === "foundation1" || state.realm === "foundation2";
-  const prod = productionBreakdown(state);
-  const seclusionPred = useMemo(() => predictLongTask(state, "seclusion", "map_qingyun", "", "steady", seclusionDuration, false), [state, seclusionDuration]);
-  const enough = !isMax && !!next && view.resources.cultivation >= next.cultivationCost && view.resources.spirit >= next.spiritCost;
-  const steadyCosts = useMemo(() => (isBreakthroughLayer ? breakthroughCosts(state, "steady") : null), [state, isBreakthroughLayer]);
-  const riskyCosts = useMemo(() => (isBreakthroughLayer ? breakthroughCosts(state, "risky") : null), [state, isBreakthroughLayer]);
-  const riskyRate = useMemo(() => (isBreakthroughLayer ? breakthroughSuccessRate(state) : 1), [state, isBreakthroughLayer]);
-  const riskyFails = isBreakthroughLayer ? (state.breakthroughFails?.[state.realm as BreakthroughLayer] ?? 0) : 0;
-  const steadyEnough = !!steadyCosts && view.resources.cultivation >= steadyCosts.success.cultivation && view.resources.spirit >= steadyCosts.success.spirit;
-  const riskyEnough = !!riskyCosts && view.resources.cultivation >= riskyCosts.success.cultivation && view.resources.spirit >= riskyCosts.success.spirit;
+
+  const isQi4 = state?.realm === "qi4";
+  const isBreakthroughLayer = !!state && (state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" || state.realm === "foundation1" || state.realm === "foundation2");
+
+  const seclusionPred = useMemo(() => (state ? predictLongTask(state, "seclusion", "map_qingyun", "", "steady", seclusionDuration, false) : null), [state, seclusionDuration]);
+  const steadyCosts = useMemo(() => (state && isBreakthroughLayer ? breakthroughCosts(state, "steady") : null), [state, isBreakthroughLayer]);
+  const riskyCosts = useMemo(() => (state && isBreakthroughLayer ? breakthroughCosts(state, "risky") : null), [state, isBreakthroughLayer]);
+  const riskyRate = useMemo(() => (state && isBreakthroughLayer ? breakthroughSuccessRate(state) : 1), [state, isBreakthroughLayer]);
 
   useEffect(() => {
     if (isQi4 && tribPreview?.ok) markTribPreviewViewed();
   }, [isQi4, tribPreview?.ok, markTribPreviewViewed]);
+
+  if (!state || !view) return null;
+
+  const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
+  const next = REALM_LIST[idx + 1];
+  const isFoundation3 = state.realm === "foundation3";
+  const isMax = state.realm === "jindan1";
+  const prod = productionBreakdown(state);
+  const enough = !isMax && !!next && view.resources.cultivation >= next.cultivationCost && view.resources.spirit >= next.spiritCost;
+  const riskyFails = isBreakthroughLayer ? (state.breakthroughFails?.[state.realm as BreakthroughLayer] ?? 0) : 0;
+  const steadyEnough = !!steadyCosts && view.resources.cultivation >= steadyCosts.success.cultivation && view.resources.spirit >= steadyCosts.success.spirit;
+  const riskyEnough = !!riskyCosts && view.resources.cultivation >= riskyCosts.success.cultivation && view.resources.spirit >= riskyCosts.success.spirit;
 
   return (
     <>
@@ -124,10 +128,10 @@ export default function XiulianPage() {
                 </button>
               ))}
             </div>
-            {seclusionPred.ok && (
+            {seclusionPred!.ok && (
               <>
                 <p className="mt-2 text-sm">
-                  预计额外获得：修为 {fmt(seclusionPred.reward.cultivation)}、灵气 {fmt(seclusionPred.reward.spirit)}
+                  预计额外获得：修为 {fmt(seclusionPred!.reward.cultivation)}、灵气 {fmt(seclusionPred!.reward.spirit)}
                 </p>
                 <p className="mt-1 text-xs text-muted">
                   预计 {fmtTime(now + seclusionDuration * 60000)} 结束（{fmtDuration(seclusionDuration)}）

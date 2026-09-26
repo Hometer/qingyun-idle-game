@@ -10,3 +10,4 @@ data/
 .vefaas/
 .DS_Store
 dist/
+*.tsbuildinfo

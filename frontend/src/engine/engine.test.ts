@@ -4,8 +4,6 @@ import {
   createGame,
   settle,
   breakthrough,
-  breakthroughCosts,
-  breakthroughSuccessRate,
   upgradeBuilding,
   setTechnique,
   upgradeTechnique,
@@ -39,7 +37,7 @@ import {
   jindanTrialGateOk,
   previewJindanTrial,
 } from "./engine";
-import type { SaveState, RealmId, MapId, AptitudeId, BreakthroughMethod, SecretRealmId } from "./types";
+import type { SaveState, RealmId, MapId, SecretRealmId } from "./types";
 
 const H = 3600_000;
 const T0 = 1_700_000_000_000;
@@ -100,7 +98,7 @@ describe("时间结算", () => {
 
 describe("小进阶", () => {
   it("稳妥进阶按 1.15 倍成本扣费并进阶", () => {
-    let s = fresh();
+    const s = fresh();
     s.resources.cultivation = 138;
     s.resources.spirit = 23;
     const r = breakthrough(s, T0, "steady");
@@ -165,7 +163,7 @@ describe("战斗", () => {
 
 describe("洞府与功法", () => {
   it("升级建筑扣除灵石并生效", () => {
-    let s = fresh();
+    const s = fresh();
     s.resources.spiritStone = 100;
     const r = upgradeBuilding(s, T0, "cultivationRoom");
     expect(r.ok).toBe(true);
@@ -193,7 +191,7 @@ describe("洞府与功法", () => {
 
 describe("护劫丹", () => {
   it("炼丹炉炼制并预置", () => {
-    let s = fresh();
+    const s = fresh();
     s.buildings.alchemyFurnace = 1;
     s.resources.herb = 50;
     s.resources.spiritStone = 100;
@@ -719,7 +717,7 @@ describe("概率小进阶", () => {
   });
 
   it("冲关两次失败后第三次保底成功", () => {
-    let s = fresh();
+    const s = fresh();
     s.resources.cultivation = 360;
     s.resources.spirit = 60;
     // 初次 80%：rng 0.85 失败
@@ -1600,5 +1598,46 @@ describe("v1.0 迁移与坏档", () => {
     const bad = structuredClone(s) as unknown as Record<string, unknown>;
     delete bad.forge;
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});
+
+describe("v1.0.1 存档回归", () => {
+  function wonHerbV8(): Record<string, unknown> {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.library = 1;
+    s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s.technique = "poYue";
+    s.techniqueLevel.poYue = 3;
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    const v8 = structuredClone(r.state as SaveState) as unknown as Record<string, unknown>;
+    v8.schemaVersion = 8;
+    return v8;
+  }
+
+  it("v8 缺 secretRealmUsed 拒绝导入（不再当成旧档重置当日次数）", () => {
+    const bad = wonHerbV8();
+    delete bad.secretRealmUsed;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v8 缺 secretRealmDate 拒绝导入", () => {
+    const bad = wonHerbV8();
+    delete bad.secretRealmDate;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("v8 缺 secretRealmLog 拒绝导入", () => {
+    const bad = wonHerbV8();
+    delete bad.secretRealmLog;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("字段齐全的 v8 已领奖档可正常导入、当日次数保留", () => {
+    const v8 = wonHerbV8();
+    const r = importSave(JSON.stringify(v8));
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).secretRealmUsed.realm_herb).toBe(true);
+    expect((r.state as SaveState).secretRealmLog.length).toBe(1);
   });
 });

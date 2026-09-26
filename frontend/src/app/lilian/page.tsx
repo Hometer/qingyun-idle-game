@@ -5,7 +5,7 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, SECRET_REALMS, fmt, fmtTime, fmtDuration } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
-import { predictFight, predictLongTask, predictSecretRealm } from "@/engine/engine";
+import { predictFight, predictLongTask, predictSecretRealm, secretRealmReward } from "@/engine/engine";
 import type { MapId, SecretRealmId } from "@/engine/types";
 
 type NodeCfg = {
@@ -135,10 +135,12 @@ export default function LilianPage() {
           const pred = predictSecretRealm(view ?? state, rid);
           const gateOk = pred.ok;
           const used = (view?.secretRealmUsed ?? state.secretRealmUsed)[rid];
+          const reward = secretRealmReward(rid);
           const rewardParts = [
-            cfg.reward.spiritStone ? `灵石 ${cfg.reward.spiritStone}` : "",
-            cfg.reward.herb ? `灵草 ${cfg.reward.herb}` : "",
-            cfg.reward.page ? `残页 ${cfg.reward.page}` : "",
+            reward.spiritStone ? `灵石 ${reward.spiritStone}` : "",
+            reward.herb ? `灵草 ${reward.herb}` : "",
+            reward.page ? `残页 ${reward.page}` : "",
+            reward.iron ? `玄铁 ${reward.iron}` : "",
           ].filter(Boolean).join("、");
           return (
             <div key={rid} className="border-b border-line/60 py-2 last:border-0">

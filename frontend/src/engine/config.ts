@@ -138,7 +138,7 @@ export const CONFIG = {
     w_bronze: { name: "青铜剑", slot: "weapon", attack: 5 },
     w_azure: { name: "青锋剑", slot: "weapon", attack: 15 },
     a_cloth: { name: "粗布衣", slot: "armor", defense: 3 },
-    a_iron: { name: "玄铁甲", slot: "armor", defense: 10, tribulationReduction: 0.05 },
+    a_iron: { name: "玄铁软甲", slot: "armor", defense: 10, tribulationReduction: 0.05 },
     c_wood: { name: "木牌", slot: "accessory", hp: 20 },
     c_jade: { name: "玉佩", slot: "accessory", hp: 60, tribulationReduction: 0.05 },
     w_steel: { name: "精钢剑", slot: "weapon", attack: 20 },
