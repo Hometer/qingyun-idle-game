@@ -1620,7 +1620,7 @@ function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaV
       if (reward.iron !== undefined && !isNonNegNum(reward.iron)) return "秘境记录无效";
       const expected = r.won ? secretRealmReward(r.realm as SecretRealmId) : emptyResources();
       const expRec = expected as unknown as Record<string, number>;
-      for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page"]) {
+      for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page", "iron"]) {
         if ((reward[k] ?? 0) !== (expRec[k] ?? 0)) return "秘境记录奖励不符";
       }
       if (dateStr) {

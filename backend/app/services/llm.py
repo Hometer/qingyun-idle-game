@@ -10,7 +10,7 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.schemas.encounter import GenerateRequest, GenerateResponse, OptionOut
-from app.services import fallback, moderation
+from app.services import budget, fallback, moderation
 
 _PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "encounter.txt"
 _PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
@@ -73,6 +73,10 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
         return _template_response(req)
 
     prompt = _build_prompt(req)
+    if budget.budget_exceeded(budget.estimate_call_cost(prompt, 400)):
+        logger.info("fallback event=%s reason=budget", req.event_id)
+        return _template_response(req)
+
     try:
         client = OpenAI(
             api_key=settings.model_api_key,
@@ -113,6 +117,12 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
             latency,
             getattr(getattr(resp, "usage", None), "total_tokens", None),
         )
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            budget.record_usage(
+                int(getattr(usage, "prompt_tokens", 0) or 0),
+                int(getattr(usage, "completion_tokens", 0) or 0),
+            )
         return GenerateResponse(
             source="model",
             event_id=req.event_id,

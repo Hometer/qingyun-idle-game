@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.core.config import settings
 from app.main import app
 from app.schemas.encounter import GenerateRequest
-from app.services import fallback, llm, moderation
+from app.services import budget, fallback, llm, moderation
 
 client = TestClient(app)
 
@@ -149,3 +149,42 @@ def test_templates_cover_all_events():
         t = fallback.template_for(eid)
         assert t is not None
         assert len(t["options"]) == 2
+
+
+# ---- v1.0.2 上线安全回归 ----
+
+def test_access_code_fail_closed_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "model_api_key", "")
+    monkeypatch.setattr(settings, "access_code", "")
+    monkeypatch.setattr(settings, "environment", "production")
+    r = client.post("/api/v1/encounter/generate", json=_req())
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "FORBIDDEN"
+    monkeypatch.setattr(settings, "environment", "development")
+
+
+def test_overlong_name_422():
+    body = _req()
+    body["character"]["name"] = "长" * 100
+    r = client.post("/api/v1/encounter/generate", json=body)
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+def test_budget_exceeded_returns_template(monkeypatch):
+    monkeypatch.setattr(settings, "model_api_key", "dummy")
+    monkeypatch.setattr(budget, "budget_exceeded", lambda cost: True)
+    r = client.post("/api/v1/encounter/generate", json=_req())
+    assert r.status_code == 200
+    assert r.json()["source"] == "template"
+
+
+def test_budget_record_and_read(tmp_path, monkeypatch):
+    monkeypatch.setattr(budget, "_DATA_DIR", tmp_path)
+    monkeypatch.setattr(budget, "_SPEND_FILE", tmp_path / "spend.json")
+    monkeypatch.setattr(settings, "model_input_price_per_mtok", 2.0)
+    monkeypatch.setattr(settings, "model_output_price_per_mtok", 8.0)
+    assert budget.current_spend_rmb() == 0.0
+    budget.record_usage(1_000_000, 500_000)  # 1M 入 + 0.5M 出 = 6 元
+    assert budget.current_spend_rmb() == 6.0
+    assert (tmp_path / "spend.json").exists()

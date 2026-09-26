@@ -1641,3 +1641,18 @@ describe("v1.0.1 存档回归", () => {
     expect((r.state as SaveState).secretRealmLog.length).toBe(1);
   });
 });
+
+describe("v1.0.2 上线安全回归", () => {
+  it("秘境记录玄铁奖励被改拒绝导入", () => {
+    const s = fresh();
+    s.realm = "foundation1";
+    s.library = 1;
+    s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
+    s.technique = "poYue";
+    s.techniqueLevel.poYue = 3;
+    const r = enterSecretRealm(s, T0, "realm_herb");
+    const bad = structuredClone(r.state as SaveState) as unknown as Record<string, unknown>;
+    (bad.secretRealmLog as unknown as Array<Record<string, unknown>>)[0].reward = { cultivation: 0, spirit: 0, spiritStone: 100, herb: 30, page: 0, iron: 999 };
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});

@@ -10,8 +10,9 @@ _hits: dict[str, deque] = defaultdict(deque)
 
 
 def access_allowed(request: Request) -> bool:
+    # 生产环境未配置访问码：一律拒绝，防止无鉴权对外消耗模型额度
     if not settings.access_code:
-        return True
+        return settings.environment != "production"
     provided = request.headers.get("x-access-code") or request.query_params.get("code") or ""
     return provided == settings.access_code
 
