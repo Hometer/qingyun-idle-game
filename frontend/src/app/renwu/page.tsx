@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
@@ -114,6 +115,17 @@ export default function RenwuPage() {
         </p>
         {wearing.length > 0 && (
           <p className="mt-1 text-sm text-muted">穿戴：{wearing.map((id) => EQUIPMENT[id].name).join("、")}</p>
+        )}
+      </Section>
+
+      <Section title="金丹篇章">
+        {state.realm === "jindan1" ? (
+          <div className="flex items-center justify-between">
+            <p className="text-sm">已达金丹，可回看这段修行经历。</p>
+            <Link href="/pianzhang" className="shrink-0 text-sm text-cinnabar">查看篇章 →</Link>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">尚未开启 · 需达到金丹一层（当前 {REALM_NAMES[state.realm]}）。</p>
         )}
       </Section>
 
