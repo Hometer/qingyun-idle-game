@@ -316,6 +316,15 @@ describe("存档导入导出", () => {
     const bad = { ...s, resources: { ...s.resources, cultivation: -1 } };
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
   });
+  it("修仙录和修行记录的畸形条目拒绝导入", () => {
+    const s = fresh();
+    for (const milestones of [[null], [{ type: "create", time: T0, text: { bad: true } }], [{ type: "create", time: "bad", text: "入道" }]]) {
+      expect(importSave(JSON.stringify({ ...s, milestones })).ok).toBe(false);
+    }
+    expect(importSave(JSON.stringify({ ...s, recentLogs: [{ bad: true }] })).ok).toBe(false);
+    expect(importSave(JSON.stringify({ ...s, firsts: null })).ok).toBe(false);
+    expect(importSave(exportSave(s)).ok).toBe(true);
+  });
 });
 
 describe("修订号", () => {

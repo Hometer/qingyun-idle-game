@@ -1693,12 +1693,27 @@ function validateEncounter(v: unknown): string | null {
 
 function validateMilestonesAndFirsts(milestones: unknown, firsts: unknown): string | null {
   if (milestones !== undefined && !Array.isArray(milestones)) return "修仙录数据无效";
+  if (Array.isArray(milestones)) {
+    for (const item of milestones) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return "修仙录记录无效";
+      const m = item as Record<string, unknown>;
+      if (typeof m.type !== "string" || typeof m.text !== "string" ||
+        typeof m.time !== "number" || !Number.isFinite(m.time) || m.time < 0) return "修仙录记录无效";
+    }
+  }
   if (firsts !== undefined) {
+    if (!firsts || typeof firsts !== "object" || Array.isArray(firsts)) return "首玩目标数据无效";
     const f = firsts as Record<string, unknown>;
     for (const k of ["settledOnce", "suppressedFirstNodeOnce", "viewedTribPreviewOnce"]) {
       if (f[k] !== undefined && typeof f[k] !== "boolean") return "首玩目标数据无效";
     }
   }
+  return null;
+}
+
+function validateRecentLogs(value: unknown): string | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value) || value.some((line) => typeof line !== "string")) return "修行记录数据无效";
   return null;
 }
 
@@ -1897,6 +1912,7 @@ export function importSave(json: string): Result<SaveState> {
     validateMaps(o.maps, o.suppression, ver),
     validateEncounter(o.encounter),
     validateMilestonesAndFirsts(o.milestones, o.firsts),
+    validateRecentLogs(o.recentLogs),
     validateDaily(o.daily),
     validateSuppressionSince(o.suppressionSince),
     validateLongTask(o.longTask),
