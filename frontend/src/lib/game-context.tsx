@@ -48,9 +48,7 @@ interface GameContextValue {
   battleLog: string[];
   encounter: EncounterCopy | null;
   encounterLoading: boolean;
-  tribPreview: eng.TribulationPreview | null;
-  jindanPreview: eng.JindanTrialPreview | null;
-  yuanyingPreview: eng.JindanTrialPreview | null;
+  trialPreview: eng.JindanTrialPreview | null;
   create: (name: string, root: SpiritRoot, aptitude: AptitudeId) => void;
   settleNow: () => void;
   doBreakthrough: (method: BreakthroughMethod) => void;
@@ -73,9 +71,7 @@ interface GameContextValue {
   fight: (mapId: MapId, nodeId: string) => void;
   suppress: (mapId: MapId, nodeId: string) => void;
   choose: (optionId: string) => void;
-  startTrib: () => void;
-  startJindanTrial: () => void;
-  startYuanyingTrial: () => void;
+  startTrial: () => void;
   doExport: () => void;
   doImport: (file: File) => void;
   doReset: () => void;
@@ -265,18 +261,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const view = useMemo(() => (state ? eng.settle(state, now) : null), [state, now]);
 
-  const tribPreview = useMemo(
-    () => (state && state.realm === "qi10" ? eng.previewTribulation(state) : null),
-    [state],
-  );
-
-  const jindanPreview = useMemo(
-    () => (view && view.realm === "zhuji10" ? eng.previewJindanTrial(view) : null),
-    [view],
-  );
-
-  const yuanyingPreview = useMemo(
-    () => (view && view.realm === "jindan10" ? eng.previewYuanyingTrial(view) : null),
+  const trialPreview = useMemo(
+    () => (view ? eng.previewCrossStageTrial(view) : null),
     [view],
   );
 
@@ -759,78 +745,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [state, apply],
   );
 
-  const startTrib = useCallback(async () => {
+  const startTrial = useCallback(async () => {
     if (!state) return;
-    if (!window.confirm("确定渡劫？将消耗门槛资源与预置丹药，失败门槛不退。")) return;
+    const p = eng.previewCrossStageTrial(state);
+    const costTxt = p.ok
+      ? `消耗修为 ${p.cost.cultivation}、灵气 ${p.cost.spirit}、灵石 ${p.cost.spiritStone}${p.pillPrepared ? "、护劫丹 1 枚" : ""}`
+      : "";
+    const failWarn = p.ok && !p.success ? "；本次预计失败，仍会消耗上述资源" : "";
+    if (!window.confirm(`确定跨境试炼？${costTxt}，失败境界不退${failWarn}。`)) return;
     const nowMs = Date.now();
     const settled = eng.settle(state, nowMs);
-    const r = eng.startTribulation(settled, nowMs);
+    const r = eng.startCrossStageTrial(settled, nowMs);
     if (!r.ok || !r.state) {
       setNotice(r.reason);
       return;
     }
-    const ok = await apply(
-      r.state,
-      r.state.realm === "zhuji1" ? "渡劫成功，晋入筑基一层" : "渡劫失败，可重新积累再试",
-    );
+    const success = r.state.realm !== settled.realm;
+    const ok = await apply(r.state, success ? "跨境成功，晋入下一境" : "跨境试炼失败，可准备后重试");
     if (ok) {
       setLastResult({
-        title: r.state.realm === "zhuji1" ? "渡劫成功" : "渡劫失败",
+        title: success ? "跨境成功" : "跨境失败",
         lines: [...deltaLines(settled, r.state), ...(r.state.tribulationLog?.log ?? [])],
-      });
-    }
-  }, [state, apply]);
-
-  const startJindanTrial = useCallback(async () => {
-    if (!state) return;
-    const p = eng.previewJindanTrial(state);
-    const costTxt = p.ok
-      ? `消耗修为 ${p.cost.cultivation}、灵气 ${p.cost.spirit}、灵石 ${p.cost.spiritStone}${p.pillPrepared ? "、护劫丹 1 枚" : ""}`
-      : "";
-    const failWarn = p.ok && !p.success ? "；本次预计失败，仍会消耗上述资源" : "";
-    if (!window.confirm(`确定结丹试炼？${costTxt}，失败境界不退${failWarn}。`)) return;
-    const nowMs = Date.now();
-    const settled = eng.settle(state, nowMs);
-    const r = eng.startJindanTrial(settled, nowMs);
-    if (!r.ok || !r.state) {
-      setNotice(r.reason);
-      return;
-    }
-    const ok = await apply(
-      r.state,
-      r.state.realm === "jindan1" ? "结丹成功，晋入金丹一层" : "结丹试炼失败，可准备后重试",
-    );
-    if (ok) {
-      setLastResult({
-        title: r.state.realm === "jindan1" ? "结丹成功" : "结丹失败",
-        lines: [...deltaLines(settled, r.state), ...(r.state.jindanTrial?.log ?? [])],
-      });
-    }
-  }, [state, apply]);
-
-  const startYuanyingTrial = useCallback(async () => {
-    if (!state) return;
-    const p = eng.previewYuanyingTrial(state);
-    const costTxt = p.ok
-      ? `消耗修为 ${p.cost.cultivation}、灵气 ${p.cost.spirit}、灵石 ${p.cost.spiritStone}${p.pillPrepared ? "、护劫丹 1 枚" : ""}`
-      : "";
-    const failWarn = p.ok && !p.success ? "；本次预计失败，仍会消耗上述资源" : "";
-    if (!window.confirm(`确定元婴天劫？${costTxt}，失败境界不退${failWarn}。`)) return;
-    const nowMs = Date.now();
-    const settled = eng.settle(state, nowMs);
-    const r = eng.startYuanyingTrial(settled, nowMs);
-    if (!r.ok || !r.state) {
-      setNotice(r.reason);
-      return;
-    }
-    const ok = await apply(
-      r.state,
-      r.state.realm === "yuanying1" ? "元婴成功，晋入元婴一层" : "元婴天劫失败，可准备后重试",
-    );
-    if (ok) {
-      setLastResult({
-        title: r.state.realm === "yuanying1" ? "元婴成功" : "元婴失败",
-        lines: [...deltaLines(settled, r.state), ...(r.state.yuanyingTrial?.log ?? [])],
       });
     }
   }, [state, apply]);
@@ -945,9 +880,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     battleLog,
     encounter,
     encounterLoading,
-    tribPreview,
-    jindanPreview,
-    yuanyingPreview,
+    trialPreview,
     create,
     settleNow,
     doBreakthrough,
@@ -970,9 +903,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     fight,
     suppress,
     choose,
-    startTrib,
-    startJindanTrial,
-    startYuanyingTrial,
+    startTrial,
     doExport,
     doImport,
     doReset,

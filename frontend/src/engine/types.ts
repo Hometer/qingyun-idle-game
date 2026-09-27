@@ -12,7 +12,7 @@ export type BuildingId = "cultivationRoom" | "spiritArray" | "spiritField" | "al
 export type TechniqueId = "qingYun" | "xuanGui" | "poYue" | "juYuan";
 export type EquipSlot = "weapon" | "armor" | "accessory";
 export type ItemId = "tribulationPill";
-export type MapId = "map_qingyun" | "map_nether" | "map_yunling" | "map_jindan";
+export type MapId = "map_qingyun" | "map_nether" | "map_yunling" | `map_${RealmStagePrefix}`;
 export type SecretRealmId = "realm_herb" | "realm_relic" | "realm_deep";
 
 export interface Resources {

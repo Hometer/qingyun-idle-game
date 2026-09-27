@@ -38,6 +38,10 @@ import {
   previewJindanTrial,
   startYuanyingTrial,
   yuanyingTrialGateOk,
+  canBreakthrough,
+  isTrialRealm,
+  crossStageTrialGateOk,
+  startCrossStageTrial,
 } from "./engine";
 import { CONFIG } from "./config";
 import type { SaveState, RealmId, MapId, SecretRealmId } from "./types";
@@ -1575,8 +1579,8 @@ describe("v1.0 炼器", () => {
   it("镇压产玄铁、秘境成功掉玄铁", () => {
     const s = fresh();
     s.realm = "zhuji1";
-    s.suppression = { map_qingyun: "node_wolf", map_nether: null, map_yunling: null, map_jindan: null };
-    s.suppressionSince = { map_qingyun: 0, map_nether: 0, map_yunling: 0, map_jindan: 0 };
+    s.suppression = { ...s.suppression, map_qingyun: "node_wolf" };
+    s.suppressionSince = { ...s.suppressionSince, map_qingyun: 0 };
     const settled = settle(s, T0 + 1000);
     expect(settled.resources.iron).toBeCloseTo(0.02, 5); // 0.02/秒 × 1 秒
     // 秘境成功掉玄铁
@@ -1757,11 +1761,42 @@ describe("v1.2 金丹与元婴", () => {
     expect((r.state as SaveState).realm).toBe("yuanying1");
   });
 
-  it("金丹一层迁移解锁金丹秘境首节点", () => {
+  it("金丹二层迁移解锁金丹秘境首节点", () => {
     const s = fresh();
-    s.realm = "jindan1";
+    s.realm = "jindan2";
     const m = migrateSave(s);
     const first = Object.keys(CONFIG.maps.map_jindan.nodes)[0];
     expect(m.maps.map_jindan[first].unlocked).toBe(true);
+  });
+});
+
+describe("v1.2 二十境通用", () => {
+  it("跨境试炼通用：元婴十层可渡化神", () => {
+    const s = fresh();
+    s.realm = "yuanying10";
+    s.resources.cultivation = 90000;
+    s.resources.spirit = 12000;
+    s.resources.spiritStone = 6000;
+    s.preparedPill = true;
+    s.inventory.tribulationPill = 1;
+    s.technique = "xuanGui";
+    s.techniqueLevel.xuanGui = 3;
+    s.equipment = { weapon: "w_steel", armor: "a_steel", accessory: "c_jade" };
+    const nodeIds = Object.keys(CONFIG.maps.map_yuanying.nodes);
+    const guardian = nodeIds[nodeIds.length - 1];
+    s.maps.map_yuanying[guardian].cleared = true;
+    s.maps.map_yuanying[guardian].unlocked = true;
+    expect(crossStageTrialGateOk(s).ok).toBe(true);
+    const r = startCrossStageTrial(s, T0);
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).realm).toBe("huashen1");
+  });
+
+  it("最高境鸿蒙十层不可跨境也不可小进阶", () => {
+    const s = fresh();
+    s.realm = "hongmeng10";
+    expect(canBreakthrough(s)).toBe(false);
+    expect(isTrialRealm(s.realm)).toBe(false);
+    expect(crossStageTrialGateOk(s).ok).toBe(false);
   });
 });
