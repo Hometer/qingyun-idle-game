@@ -145,10 +145,32 @@ def test_validate_result_rejects_wrong_event():
 
 
 def test_templates_cover_all_events():
-    for eid in ["event_well", "event_beast", "event_cave"]:
+    for eid in ["event_well", "event_beast", "event_cave", "event_star", "event_wanderer", "event_mirror", "event_inscription", "event_origin"]:
         t = fallback.template_for(eid)
         assert t is not None
         assert len(t["options"]) == 2
+
+
+def test_late_event_has_valid_template_response(monkeypatch):
+    monkeypatch.setattr(settings, "model_api_key", "")
+    options = [
+        {"option_id": "origin_a", "label": "静听回声", "meaning": "停步聆听初元余音"},
+        {"option_id": "origin_b", "label": "继续前行", "meaning": "沿紫气指引向前"},
+    ]
+    r = client.post("/api/v1/encounter/generate", json=_req("event_origin", options))
+    assert r.status_code == 200
+    data = r.json()
+    assert data["source"] == "template"
+    assert {o["option_id"] for o in data["options"]} == {"origin_a", "origin_b"}
+
+
+def test_late_secret_realm_templates_cover_all_tiers(monkeypatch):
+    monkeypatch.setattr(settings, "model_api_key", "")
+    for realm in ["soul", "cloud", "lotus", "origin", "hongmeng"]:
+        event_id = f"event_realm_{realm}"
+        r = client.post("/api/v1/encounter/generate", json=_req(event_id, [{"option_id": "enter", "label": "进入秘境", "meaning": "探索秘境"}]))
+        assert r.status_code == 200
+        assert r.json()["source"] == "template"
 
 
 # ---- v1.0.2 上线安全回归 ----

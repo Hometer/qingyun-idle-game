@@ -2,20 +2,21 @@
 
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { EQUIPMENT, BUILDINGS } from "@/lib/labels";
+import { EQUIPMENT, BUILDINGS, REALM_NAMES, REALM_ORDER } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
 
 export default function BeibaoPage() {
-  const { state, equip, craftPill, togglePill, craftEquipment } = useGame();
+  const { state, view, equip, craftPill, togglePill, craftEquipment } = useGame();
   if (!state) return null;
+  const current = view ?? state;
 
   const ownedEquip = Object.keys(EQUIPMENT).filter((id) => (state.inventory[id] || 0) > 0);
   const furnaceLvl = state.buildings.alchemyFurnace;
   const recipe = furnaceLvl >= 1 ? BUILDINGS.alchemyFurnace.levels[furnaceLvl - 1] : null;
   const canCraft =
     recipe !== null &&
-    state.resources.herb >= (recipe.pillHerbCost ?? 0) &&
-    state.resources.spiritStone >= (recipe.pillStoneCost ?? 0);
+    current.resources.herb >= (recipe.pillHerbCost ?? 0) &&
+    current.resources.spiritStone >= (recipe.pillStoneCost ?? 0);
 
   return (
     <>
@@ -48,14 +49,16 @@ export default function BeibaoPage() {
         {state.forge < 1 ? (
           <p className="text-sm text-muted">需先建造炼器台方可炼器</p>
         ) : (
-          (["w_steel", "a_steel"] as string[]).map((id) => {
+          Object.keys(CONFIG.crafts).map((id) => {
             const cfg = CONFIG.crafts[id as keyof typeof CONFIG.crafts];
             const eq = CONFIG.equipment[id as keyof typeof CONFIG.equipment] as unknown as { name: string; attack?: number; defense?: number; hp?: number; tribulationReduction?: number };
             if (!cfg || !eq) return null;
+            const gateOk = REALM_ORDER.indexOf(current.realm) >= REALM_ORDER.indexOf(cfg.gate);
             const canCraft =
-              state.resources.iron >= cfg.cost.iron &&
-              state.resources.spiritStone >= cfg.cost.spiritStone &&
-              state.resources.herb >= cfg.cost.herb;
+              gateOk && current.resources.iron >= cfg.cost.iron &&
+              current.resources.spiritStone >= cfg.cost.spiritStone &&
+              current.resources.herb >= cfg.cost.herb &&
+              current.resources.page >= cfg.cost.page;
             const attrs = [
               eq.attack ? `攻+${eq.attack}` : "",
               eq.defense ? `防+${eq.defense}` : "",
@@ -63,9 +66,10 @@ export default function BeibaoPage() {
               eq.tribulationReduction ? `护劫减伤+${Math.round(eq.tribulationReduction * 100)}%` : "",
             ].filter(Boolean).join("、");
             const shortfall = [
-              Math.max(0, cfg.cost.iron - state.resources.iron) > 0 ? `玄铁 ${Math.max(0, cfg.cost.iron - state.resources.iron)}` : "",
-              Math.max(0, cfg.cost.spiritStone - state.resources.spiritStone) > 0 ? `灵石 ${Math.max(0, cfg.cost.spiritStone - state.resources.spiritStone)}` : "",
-              Math.max(0, cfg.cost.herb - state.resources.herb) > 0 ? `灵草 ${Math.max(0, cfg.cost.herb - state.resources.herb)}` : "",
+              Math.max(0, cfg.cost.iron - current.resources.iron) > 0 ? `玄铁 ${Math.max(0, cfg.cost.iron - current.resources.iron)}` : "",
+              Math.max(0, cfg.cost.spiritStone - current.resources.spiritStone) > 0 ? `灵石 ${Math.max(0, cfg.cost.spiritStone - current.resources.spiritStone)}` : "",
+              Math.max(0, cfg.cost.herb - current.resources.herb) > 0 ? `灵草 ${Math.max(0, cfg.cost.herb - current.resources.herb)}` : "",
+              Math.max(0, cfg.cost.page - current.resources.page) > 0 ? `残页 ${Math.max(0, cfg.cost.page - current.resources.page)}` : "",
             ].filter(Boolean).join("、");
             return (
               <div key={id} className="border-b border-line/60 py-2 last:border-0">
@@ -84,7 +88,8 @@ export default function BeibaoPage() {
                 <p className="mt-0.5 text-xs text-muted">
                   材料：玄铁 {cfg.cost.iron}、灵石 {cfg.cost.spiritStone}
                   {cfg.cost.herb ? `、灵草 ${cfg.cost.herb}` : ""}
-                  {!canCraft && shortfall && `（还差 ${shortfall}）`}
+                  {cfg.cost.page ? `、残页 ${cfg.cost.page}` : ""}
+                  {!gateOk ? `（需${REALM_NAMES[cfg.gate]}）` : !canCraft && shortfall ? `（还差 ${shortfall}）` : ""}
                 </p>
               </div>
             );
@@ -116,7 +121,8 @@ export default function BeibaoPage() {
                     <span className="ml-1 text-xs text-muted">
                       {e.attack ? `攻+${e.attack}` : ""}
                       {e.defense ? ` 防+${e.defense}` : ""}
-                      {e.hp ? ` 气血+${e.hp}` : ""}
+                  {e.hp ? ` 气血+${e.hp}` : ""}
+                  {e.tribulationReduction ? ` 护劫减伤+${Math.round(e.tribulationReduction * 100)}%` : ""}
                     </span>
                     {wearing && <span className="text-muted">（穿戴中）</span>}
                   </div>

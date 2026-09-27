@@ -23,7 +23,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 13;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -69,6 +69,7 @@ const MAP_YUNLING_INTRO_VERSION = 6;
 const MAP_JINDAN_INTRO_VERSION = 10; // v1.2 引入
 // v10 的旧地图可能尚未包含 v1.2 扩展的中间节点。
 const MAP_EXPANDED_VERSION = 11;
+const REPEAT_REWARDS_INTRO_VERSION = 12;
 const LEGACY_MISSING_NODES: Record<string, ReadonlySet<string>> = {
   map_nether: new Set(["node_wraith", "node_zombie", "node_specter"]),
   map_yunling: new Set(["node_stoneking", "node_lingyuan", "node_shanxiaowang"]),
@@ -90,7 +91,7 @@ const EQUIP_CFG = CONFIG.equipment as unknown as Record<
 
 const ENC_CFG = CONFIG.encounters as unknown as Record<
   string,
-  { title: string; options: Record<string, { label: string; meaning: string; reward: Partial<Resources> }> }
+  { minStage: number; title: string; options: Record<string, { label: string; meaning: string; reward: Partial<Resources> }> }
 >;
 
 const LONG_TASK_CFG = CONFIG.longTask as unknown as {
@@ -118,7 +119,7 @@ const BREAKTHROUGH_CFG = CONFIG.breakthrough as unknown as {
 
 const TRIAL_CFG = CONFIG.trials as unknown as Record<
   number,
-  { wavesPct: readonly number[]; spiritStoneCost: number; gateMap: string | null }
+  { name: string; description: string; wavesPct: readonly number[]; spiritStoneCost: number; gateMap: string | null }
 >;
 
 const SECRET_REALM_CFG = CONFIG.secretRealms as unknown as Record<
@@ -127,10 +128,16 @@ const SECRET_REALM_CFG = CONFIG.secretRealms as unknown as Record<
 >;
 
 const SECRET_REALM_IDS = Object.keys(SECRET_REALM_CFG) as SecretRealmId[];
+const LEGACY_SECRET_REALM_IDS: SecretRealmId[] = ["realm_herb", "realm_relic", "realm_deep"];
+const SECRET_REALM_EXPANSION_VERSION = 13;
+
+function emptySecretRealmUsed(): Record<SecretRealmId, boolean> {
+  return Object.fromEntries(SECRET_REALM_IDS.map((id) => [id, false])) as Record<SecretRealmId, boolean>;
+}
 
 const FORGE_CFG = CONFIG.forge as unknown as { cost: { spiritStone: number; page: number } };
 const IRON_CFG = CONFIG.iron as unknown as { suppressionPerSec: number; realmDrop: Record<SecretRealmId, number> };
-const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { cost: { iron: number; spiritStone: number; herb: number } }>;
+const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { gate: RealmId; cost: { iron: number; spiritStone: number; herb: number; page: number } }>;
 
 const realmOrder: RealmId[] = REALMS.map((r) => r.id as RealmId);
 const BREAKTHROUGH_LAYERS: BreakthroughLayer[] = REALMS
@@ -245,6 +252,7 @@ function emptyDaily(dateStr: string): DailyState {
       battle: { progress: 0, claimed: false },
       suppress: { progress: 0, claimed: false },
     },
+    rewardedRepeats: 0,
   };
 }
 
@@ -258,7 +266,7 @@ function ensureSecretRealm(s: SaveState, nowMs: number): void {
   const today = todayStr(nowMs);
   if (s.secretRealmDate !== today) {
     s.secretRealmDate = today;
-    s.secretRealmUsed = { realm_herb: false, realm_relic: false, realm_deep: false };
+    s.secretRealmUsed = emptySecretRealmUsed();
   }
 }
 
@@ -532,7 +540,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     library: 0,
     auxiliaryTechnique: null,
     secretRealmDate: todayStr(nowMs),
-    secretRealmUsed: { realm_herb: false, realm_relic: false, realm_deep: false },
+    secretRealmUsed: emptySecretRealmUsed(),
     secretRealmLog: [],
     forge: 0,
     recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}。`],
@@ -605,6 +613,11 @@ function aptitudeCultivationMult(s: SaveState): number {
 }
 function aptitudeSpiritMult(s: SaveState): number {
   return APTITUDE_CFG[s.aptitude]?.spiritMult ?? 1;
+}
+function realmProductionMult(s: SaveState): number {
+  const stage = REALMS[realmIndex(s.realm)]?.stage ?? 1;
+  const cfg = CONFIG.realmProduction;
+  return stage < cfg.startStage ? 1 : cfg.startMult * cfg.growthPerStage ** (stage - cfg.startStage);
 }
 function suppressionRate(s: SaveState): number {
   let rate = 0;
@@ -684,20 +697,21 @@ export function productionBreakdown(state: SaveState): ProductionBreakdown {
   const spiritBuilding = buildingSpiritMult(state);
   const spiritTech = techniqueSpiritMult(state);
   const spiritApt = aptitudeSpiritMult(state);
+  const realmMult = realmProductionMult(state);
   const aptName = APTITUDE_CFG[state.aptitude]?.name ?? "均衡";
   const herb = spiritFieldRate(state);
   const stone = suppressionRate(state);
   const iron = suppressionRate(state) > 0 ? IRON_CFG.suppressionPerSec * Object.keys(state.suppression).filter((m) => state.suppression[m as MapId]).length : 0;
-  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt;
-  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt;
+  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt * realmMult;
+  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt * realmMult;
   const w = CONFIG.weathers[state.daily.weather.id as keyof typeof CONFIG.weathers];
   const a = CONFIG.astrologies[state.daily.astrology.id as keyof typeof CONFIG.astrologies];
   const lines: string[] = [
     `天气·${w.name}：${w.desc}${state.daily.weather.used ? "（已用）" : ""}`,
     `星象·${a.name}：${a.desc}${state.daily.astrology.used ? "（已用）" : ""}`,
     `资质·${aptName}：修为 ×${n1(cultApt)}、灵气 ×${n1(spiritApt)}`,
-    `修为 ${n1(cultivationPerSec)}/秒（基础 ${n1(CONFIG.baseCultivationPerSecond)} × 资质 ${n1(cultApt)}${cultBuilding > 1 ? ` × 修炼室 ${n1(cultBuilding)}` : ""}${cultTech > 1 ? ` × 功法 ${n1(cultTech)}` : ""}）`,
-    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)} × 资质 ${n1(spiritApt)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}${spiritTech > 1 ? ` × 功法 ${n1(spiritTech)}` : ""}）`,
+    `修为 ${n1(cultivationPerSec)}/秒（基础 ${n1(CONFIG.baseCultivationPerSecond)} × 资质 ${n1(cultApt)}${cultBuilding > 1 ? ` × 修炼室 ${n1(cultBuilding)}` : ""}${cultTech > 1 ? ` × 功法 ${n1(cultTech)}` : ""}${realmMult > 1 ? ` × 境界 ${n1(realmMult)}` : ""}）`,
+    `灵气 ${n1(spiritPerSec)}/秒（基础 ${n1(CONFIG.baseSpiritPerSecond)} × 资质 ${n1(spiritApt)}${spiritBuilding > 1 ? ` × 聚灵阵 ${n1(spiritBuilding)}` : ""}${spiritTech > 1 ? ` × 功法 ${n1(spiritTech)}` : ""}${realmMult > 1 ? ` × 境界 ${n1(realmMult)}` : ""}）`,
     herb > 0 ? `灵草 ${n1(herb)}/秒（灵田）` : "灵草 0/秒（未建灵田）",
     stone > 0 ? `灵石 ${n1(stone)}/秒（镇压产出）` : "灵石 0/秒（未镇压节点）",
     iron > 0 ? `玄铁 ${n1(iron)}/秒（镇压产出）` : "玄铁 0/秒（未镇压节点）",
@@ -717,9 +731,7 @@ export function settle(state: SaveState, nowMs: number): SaveState {
   const deltaMs = Math.max(0, to - from);
   const deltaSec = deltaMs / 1000;
 
-  const cultMult = buildingCultivationMult(s) * techniqueCultivationMult(s) * aptitudeCultivationMult(s);
-  const spiritMult = buildingSpiritMult(s) * techniqueSpiritMult(s) * aptitudeSpiritMult(s);
-  const herbRate = spiritFieldRate(s);
+  const production = productionBreakdown(s);
 
   let spiritStoneGain = 0;
   let ironGain = 0;
@@ -751,9 +763,9 @@ export function settle(state: SaveState, nowMs: number): SaveState {
     }
   }
 
-  s.resources.cultivation += CONFIG.baseCultivationPerSecond * cultMult * deltaSec;
-  s.resources.spirit += CONFIG.baseSpiritPerSecond * spiritMult * deltaSec;
-  s.resources.herb += herbRate * deltaSec;
+  s.resources.cultivation += production.cultivationPerSec * deltaSec;
+  s.resources.spirit += production.spiritPerSec * deltaSec;
+  s.resources.herb += production.herbPerSec * deltaSec;
   s.resources.spiritStone += spiritStoneGain;
   s.resources.iron += ironGain;
   s.lastSettledAt = Math.max(s.lastSettledAt, nowMs);
@@ -839,6 +851,7 @@ export function breakthrough(state: SaveState, nowMs: number, method: Breakthrou
     s.recentLogs.push(`稳妥进阶，晋入${next.name}。`);
     pushMilestone(s, "breakthrough", nowMs, `稳妥进阶，晋入${next.name}`);
   }
+  if (s.realm !== layer) syncRealmMaps(s);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -944,12 +957,15 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
   if (!cfg) return fail("无此配方");
   if (!EQUIP_CFG[id]) return fail("无此装备");
   if (s.forge < 1) return fail("需先建炼器台");
-  if (s.resources.iron < cfg.cost.iron || s.resources.spiritStone < cfg.cost.spiritStone || s.resources.herb < cfg.cost.herb) {
-    return fail(`材料不足（需玄铁${cfg.cost.iron}、灵石${cfg.cost.spiritStone}、灵草${cfg.cost.herb}）`);
+  if (realmIndex(s.realm) < realmIndex(cfg.gate)) return fail(`需${realmName(cfg.gate)}方可炼制`);
+  if (s.resources.iron < cfg.cost.iron || s.resources.spiritStone < cfg.cost.spiritStone ||
+    s.resources.herb < cfg.cost.herb || s.resources.page < cfg.cost.page) {
+    return fail(`材料不足（需玄铁${cfg.cost.iron}、灵石${cfg.cost.spiritStone}、灵草${cfg.cost.herb}、残页${cfg.cost.page}）`);
   }
   s.resources.iron -= cfg.cost.iron;
   s.resources.spiritStone -= cfg.cost.spiritStone;
   s.resources.herb -= cfg.cost.herb;
+  s.resources.page -= cfg.cost.page;
   s.inventory[id] = (s.inventory[id] || 0) + 1;
   s.recentLogs.push(`炼得${EQUIP_CFG[id].name}。`);
   pushMilestone(s, "craft", nowMs, `炼得${EQUIP_CFG[id].name}`);
@@ -1071,8 +1087,9 @@ function rollEncounter(s: SaveState, nowMs: number): boolean {
   return Math.random() < CONFIG.encounter.probability;
 }
 
-function randomEventId(): string {
-  const ids = Object.keys(ENC_CFG);
+function randomEventId(s: SaveState): string {
+  const stage = REALMS[realmIndex(s.realm)]?.stage ?? 1;
+  const ids = Object.keys(ENC_CFG).filter((id) => ENC_CFG[id].minStage <= stage);
   return ids[Math.floor(Math.random() * ids.length)];
 }
 
@@ -1185,9 +1202,14 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     unlockNext(s, mapId, nodeId);
   } else {
     const rc = nodeCfg.repeat;
-    s.resources.cultivation += rc.cultivation;
-    s.resources.page += rc.page;
-    s.recentLogs.push(`再胜${nodeCfg.name}。`);
+    if (s.daily.rewardedRepeats < CONFIG.rewardedRepeatBattlesPerDay) {
+      s.daily.rewardedRepeats += 1;
+      s.resources.cultivation += rc.cultivation;
+      s.resources.page += rc.page;
+      s.recentLogs.push(`再胜${nodeCfg.name}，领取今日重复历练奖励。`);
+    } else {
+      s.recentLogs.push(`再胜${nodeCfg.name}，今日重复历练奖励已领尽。`);
+    }
   }
 
   let encounterTriggered = false;
@@ -1197,7 +1219,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     s.encounter.guideDone = true;
     encounterTriggered = true;
   } else if (rollEncounter(s, nowMs)) {
-    triggerEncounter(s, mapId, randomEventId());
+    triggerEncounter(s, mapId, randomEventId(s));
     encounterTriggered = true;
   }
 
@@ -1527,13 +1549,18 @@ export function startYuanyingTrial(state: SaveState, nowMs: number): Result<Save
 
 // ---- 跨境试炼（通用：覆盖渡劫/结丹/元婴及后续各境）----
 
-function trialFor(state: SaveState): { toRealm: RealmId; stage: number; cfg: { wavesPct: readonly number[]; spiritStoneCost: number; gateMap: string | null } } | null {
+function trialFor(state: SaveState): { toRealm: RealmId; stage: number; cfg: (typeof TRIAL_CFG)[number] } | null {
   const idx = realmIndex(state.realm);
   const r = REALMS[idx];
   if (!r || r.layer !== 10 || idx >= realmOrder.length - 1) return null;
   const cfg = TRIAL_CFG[r.stage];
   if (!cfg) return null;
   return { toRealm: REALMS[idx + 1].id as RealmId, stage: r.stage, cfg };
+}
+
+export function crossStageTrialInfo(state: SaveState): { name: string; description: string } | null {
+  const trial = trialFor(state);
+  return trial ? { name: trial.cfg.name, description: trial.cfg.description } : null;
 }
 
 export function crossStageTrialGateOk(state: SaveState): { ok: boolean; reason: string } {
@@ -1567,8 +1594,7 @@ export function previewCrossStageTrial(state: SaveState): JindanTrialPreview {
     cost: { cultivation: 0, spirit: 0, spiritStone: 0 },
   };
   if (!t || !gate.ok) return empty;
-  const to = REALMS[realmIndex(t.toRealm)];
-  const sim = simulateTribulation(state, t.cfg.wavesPct, `晋入${to.name}试炼`);
+  const sim = simulateTribulation(state, t.cfg.wavesPct, t.cfg.name);
   const cost = crossStageTrialCost(state);
   const canAfford =
     state.resources.cultivation >= cost.cultivation &&
@@ -1604,18 +1630,18 @@ export function startCrossStageTrial(state: SaveState, nowMs: number): Result<Sa
   s.resources.spirit -= cost.spirit;
   s.resources.spiritStone -= cost.spiritStone;
   const to = REALMS[realmIndex(t.toRealm)];
-  const sim = simulateTribulation(s, t.cfg.wavesPct, `晋入${to.name}试炼`);
+  const sim = simulateTribulation(s, t.cfg.wavesPct, t.cfg.name);
   const pill = s.preparedPill;
   if (pill) s.inventory.tribulationPill = Math.max(0, (s.inventory.tribulationPill || 0) - 1);
   s.preparedPill = false;
   if (sim.success) {
     s.realm = t.toRealm;
     syncRealmMaps(s);
-    s.recentLogs.push(`跨境试炼五波尽数扛下，晋入${to.name}。`);
-    pushMilestone(s, "breakthrough", nowMs, `跨境试炼成功，晋入${to.name}`);
+    s.recentLogs.push(`${t.cfg.name}五波尽数扛下，晋入${to.name}。`);
+    pushMilestone(s, "breakthrough", nowMs, `${t.cfg.name}成功，晋入${to.name}`);
   } else {
-    s.recentLogs.push(`跨境试炼失败，境界不动，可按短板准备后重试。`);
-    pushMilestone(s, "breakthrough", nowMs, "跨境试炼失败");
+    s.recentLogs.push(`${t.cfg.name}失败，境界不动，可按短板准备后重试。`);
+    pushMilestone(s, "breakthrough", nowMs, `${t.cfg.name}失败`);
   }
   s.tribulationLog = { maxHp: sim.maxHp, reduction: sim.reduction, pillUsed: pill, waves: sim.waves, success: sim.success, log: sim.log };
   s.revision += 1;
@@ -1689,6 +1715,8 @@ export function migrateSave(raw: SaveState): SaveState {
   const hasNewDaily = !!rawDaily && typeof rawDaily.weather === "object" && typeof rawDaily.astrology === "object";
   if (!hasNewDaily) {
     s.daily = emptyDaily(todayStr(Date.now()));
+  } else if (rawDaily.rewardedRepeats === undefined) {
+    rawDaily.rewardedRepeats = 0;
   }
   const lastSettled = (s.lastSettledAt as number) || Date.now();
   if (!s.suppressionSince || typeof s.suppressionSince !== "object") {
@@ -1729,7 +1757,10 @@ export function migrateSave(raw: SaveState): SaveState {
     (s.resources as Record<string, unknown>).iron = 0;
   }
   if (s.secretRealmDate === undefined) s.secretRealmDate = todayStr(Date.now());
-  if (!s.secretRealmUsed || typeof s.secretRealmUsed !== "object") s.secretRealmUsed = { realm_herb: false, realm_relic: false, realm_deep: false };
+  if (!s.secretRealmUsed || typeof s.secretRealmUsed !== "object") s.secretRealmUsed = emptySecretRealmUsed();
+  if ((s.schemaVersion as number) < SECRET_REALM_EXPANSION_VERSION) {
+    s.secretRealmUsed = { ...emptySecretRealmUsed(), ...(s.secretRealmUsed as Record<string, boolean>) };
+  }
   if (!Array.isArray(s.secretRealmLog)) s.secretRealmLog = [];
   if (s.aptitude === undefined) s.aptitude = "balanced";
   if (!s.techniqueLevel || typeof s.techniqueLevel !== "object") {
@@ -1839,8 +1870,11 @@ function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaV
   if (hasUsed) {
     if (typeof used !== "object") return "秘境状态无效";
     u = used as Record<string, unknown>;
-    for (const id of SECRET_REALM_IDS) {
+    for (const id of schemaVersion >= SECRET_REALM_EXPANSION_VERSION ? SECRET_REALM_IDS : LEGACY_SECRET_REALM_IDS) {
       if (typeof u[id] !== "boolean") return "秘境状态无效";
+    }
+    for (const id of SECRET_REALM_IDS) {
+      if (u[id] !== undefined && typeof u[id] !== "boolean") return "秘境状态无效";
     }
   }
 
@@ -1880,6 +1914,7 @@ function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaV
       const cnt = sameDayCount[id] ?? 0;
       if (usedVal === true && cnt !== 1) return "秘境次数与记录矛盾";
       if (usedVal === false && cnt !== 0) return "秘境次数与记录矛盾";
+      if (usedVal === undefined && cnt !== 0) return "秘境次数与记录矛盾";
     }
   }
   return null;
@@ -1963,13 +1998,18 @@ function validateRecentLogs(value: unknown): string | null {
   return null;
 }
 
-function validateDaily(v: unknown): string | null {
-  if (v === undefined || v === null) return null;
+function validateDaily(v: unknown, schemaVersion: number): string | null {
+  if (v === undefined || v === null) return schemaVersion >= REPEAT_REWARDS_INTRO_VERSION ? "每日数据无效" : null;
   const d = v as Record<string, unknown>;
   if (typeof d.date !== "string") return "每日数据日期无效";
   const weather = d.weather as Record<string, unknown> | undefined;
   const astrology = d.astrology as Record<string, unknown> | undefined;
   const goals = d.goals as Record<string, unknown> | undefined;
+  const rewardedRepeats = d.rewardedRepeats;
+  if (schemaVersion >= REPEAT_REWARDS_INTRO_VERSION || rewardedRepeats !== undefined) {
+    if (!Number.isInteger(rewardedRepeats) || (rewardedRepeats as number) < 0 ||
+      (rewardedRepeats as number) > CONFIG.rewardedRepeatBattlesPerDay) return "重复历练次数无效";
+  }
   if (weather && (typeof weather.id !== "string" || typeof weather.used !== "boolean")) return "天气数据无效";
   if (astrology && (typeof astrology.id !== "string" || typeof astrology.used !== "boolean")) return "星象数据无效";
   if (goals) {
@@ -2160,7 +2200,7 @@ export function importSave(json: string): Result<SaveState> {
     validateEncounter(o.encounter),
     validateMilestonesAndFirsts(o.milestones, o.firsts),
     validateRecentLogs(o.recentLogs),
-    validateDaily(o.daily),
+    validateDaily(o.daily, ver),
     validateSuppressionSince(o.suppressionSince),
     validateLongTask(o.longTask),
     validateLongTaskResult(o.lastLongTaskResult),
@@ -2195,7 +2235,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.forge = typeof o.forge === "number" ? (o.forge as number) : 0;
   base.auxiliaryTechnique = (o.auxiliaryTechnique as TechniqueId | null) ?? null;
   base.secretRealmDate = typeof o.secretRealmDate === "string" ? (o.secretRealmDate as string) : todayStr(Date.now());
-  base.secretRealmUsed = { realm_herb: false, realm_relic: false, realm_deep: false, ...((o.secretRealmUsed as Partial<SaveState["secretRealmUsed"]>) || {}) };
+  base.secretRealmUsed = { ...emptySecretRealmUsed(), ...((o.secretRealmUsed as Partial<SaveState["secretRealmUsed"]>) || {}) };
   base.secretRealmLog = Array.isArray(o.secretRealmLog) ? (o.secretRealmLog as SaveState["secretRealmLog"]) : [];
   base.recentLogs = Array.isArray(o.recentLogs) ? (o.recentLogs as string[]).slice(-20) : base.recentLogs;
   base.milestones = Array.isArray(o.milestones) ? (o.milestones as Milestone[]) : [];

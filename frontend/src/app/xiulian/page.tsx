@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtPct, fmtTime, fmtDuration } from "@/lib/labels";
-import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate, canBreakthrough, isTrialRealm } from "@/engine/engine";
+import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate, canBreakthrough, isTrialRealm, crossStageTrialInfo } from "@/engine/engine";
 import type { TechniqueId, BreakthroughLayer } from "@/engine/types";
 
 function eff(id: string, lvl: number, aux: boolean): string {
@@ -39,6 +39,7 @@ export default function XiulianPage() {
 
   const isBreakthroughLayer = !!state && canBreakthrough(state);
   const isTrial = !!state && isTrialRealm(state.realm);
+  const trialInfo = state ? crossStageTrialInfo(state) : null;
 
   const seclusionPred = useMemo(() => (state ? predictLongTask(state, "seclusion", "map_qingyun", "", "steady", seclusionDuration, false) : null), [state, seclusionDuration]);
   const steadyCosts = useMemo(() => (state && isBreakthroughLayer ? breakthroughCosts(state, "steady") : null), [state, isBreakthroughLayer]);
@@ -64,6 +65,7 @@ export default function XiulianPage() {
     <>
       <Section title="境界">
         <div className="text-xl font-semibold">{REALM_NAMES[state.realm]}</div>
+        {isMax && <p className="mt-2 text-sm text-cinnabar">二十境修行已圆满。仍可历练秘境、收集装备，并在人物页回看修行经历。</p>}
         {!isMax && next && (
           <>
             <Bar label="修为" value={view.resources.cultivation} max={next.cultivationCost} />
@@ -210,7 +212,8 @@ export default function XiulianPage() {
       </Section>
 
       {isTrial && trialPreview && (
-        <Section title="跨境试炼">
+        <Section title={trialInfo?.name ?? "跨境试炼"}>
+          {trialInfo && <p className="mb-2 text-sm text-muted">{trialInfo.description}</p>}
           {trialPreview.ok ? (
             <>
               <p className="text-sm">当前气血 {trialPreview.maxHp}</p>

@@ -29,7 +29,8 @@ const SECRET_REALM_CFG = CONFIG.secretRealms as unknown as Record<SecretRealmId,
 const APTITUDE_CFG = CONFIG.aptitudes as unknown as Record<string, { name: string }>;
 const REALM_CFG = CONFIG.realms as unknown as Array<{ id: string; name: string }>;
 
-const SECRET_REALM_IDS = Object.keys(SECRET_REALM_CFG) as SecretRealmId[];
+// 金丹篇章的三个目标固定为早期秘境；后续新增秘境不改变已完成的篇章。
+const SECRET_REALM_IDS: SecretRealmId[] = ["realm_herb", "realm_relic", "realm_deep"];
 
 function realmName(id: string): string {
   return REALM_CFG.find((r) => r.id === id)?.name ?? id;

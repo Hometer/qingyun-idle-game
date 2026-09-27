@@ -28,12 +28,13 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"]): string {
   const repeat: string[] = [];
   if (rc.cultivation) repeat.push(`修为 ${rc.cultivation}`);
   if (rc.page) repeat.push(`残页 ${rc.page}`);
-  return `首胜：${parts.join("、") || "无"} ｜ 重复：${repeat.join("、") || "无"}`;
+  return `首胜：${parts.join("、") || "无"} ｜ 重复胜利：${repeat.join("、") || "无"}（共用每日奖励额度）`;
 }
 
 export default function LilianPage() {
   const { state, view, now, fight, suppress, battleLog, startLong, realmPending, realmNarrative, realmNarrativeLoading, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedMap, setSelectedMap] = useState<MapId | null>(null);
   const [trainNode, setTrainNode] = useState<{ mid: MapId; nid: string } | null>(null);
   const [trainDifficulty, setTrainDifficulty] = useState<"steady" | "risky">("steady");
   const [trainDuration, setTrainDuration] = useState(30);
@@ -56,6 +57,13 @@ export default function LilianPage() {
   }, [state, trainNode, trainDifficulty, trainDuration, trainProtection]);
 
   if (!state) return null;
+
+  const mapIds = Object.keys(MAPS) as MapId[];
+  const currentMap = [...mapIds].reverse().find((mid) => {
+    const firstNode = Object.values(MAPS[mid].nodes)[0];
+    return REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf(firstNode.gate);
+  }) ?? mapIds[0];
+  const activeMap = selectedMap ?? currentMap;
 
   const remainingHours = (mid: MapId): number => {
     const since = state.suppressionSince[mid] || 0;
@@ -170,7 +178,19 @@ export default function LilianPage() {
         })}
       </Section>
 
-      {(Object.keys(MAPS) as MapId[]).map((mid) => (
+      <p className="mb-2 text-xs text-muted">重复历练：今日已领取 {(view ?? state).daily.rewardedRepeats}/{CONFIG.rewardedRepeatBattlesPerDay} 次奖励；首通奖励不占额度，额度用尽仍可战斗。</p>
+
+      <div className="mb-3 flex items-center gap-2 text-sm">
+        <label htmlFor="map-picker" className="shrink-0">历练地图</label>
+        <select id="map-picker" value={activeMap} onChange={(e) => setSelectedMap(e.target.value as MapId)} className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-3 py-2">
+          {mapIds.map((mid) => {
+            const cleared = Object.keys(MAPS[mid].nodes).filter((nid) => state.maps[mid][nid]?.cleared).length;
+            return <option key={mid} value={mid}>{MAPS[mid].name}（{cleared}/{Object.keys(MAPS[mid].nodes).length}）</option>;
+          })}
+        </select>
+      </div>
+
+      {[activeMap].map((mid) => (
         <Section key={mid} title={MAPS[mid].name}>
           <p className="mb-2 text-sm text-muted">{WORLD_TEXT[mid]}</p>
           {Object.entries(MAPS[mid].nodes).map(([nid, n]) => {

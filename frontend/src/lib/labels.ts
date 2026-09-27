@@ -38,7 +38,7 @@ export const SECRET_REALMS = CONFIG.secretRealms as unknown as Record<
 
 export const EQUIPMENT = CONFIG.equipment as unknown as Record<
   string,
-  { name: string; slot: string; attack?: number; defense?: number; hp?: number }
+  { name: string; slot: string; attack?: number; defense?: number; hp?: number; tribulationReduction?: number }
 >;
 
 export const MAPS = CONFIG.maps as unknown as Record<
@@ -90,6 +90,24 @@ export const WORLD_TEXT: Record<string, string> = {
   map_qingyun: "青云山层峦叠翠，灵气自谷底升腾。山中妖兽盘踞，正是历练之所。",
   map_nether: "幽冥谷阴气沉沉，雾锁深壑。传闻谷底藏有前人遗蜕，凶险与机缘并藏。",
   map_yunling: "云岭古道盘山而上，雾瘴缭绕。古时修士结丹必经之地，至今仍留石傀护道、山魈拦路。",
+  map_jindan: "丹火未熄，残炉仍温。循着药香深入，可见结丹修士留下的试炼痕迹。",
+  map_yuanying: "灵胎初成，神识在虚实之间游走。守住本心，方能安然出入这片旧道场。",
+  map_huashen: "山川如画，神念却能改换眼前景象。每一道幻影都在试探修士的本心。",
+  map_lianxu: "虚空裂隙间散落着旧日道纹，路随念动，稍有迟疑便会回到原处。",
+  map_heti: "阴阳二气在此交汇，孤身难渡的关隘，须以形神相合之力通过。",
+  map_dacheng: "云海之上有古人问道遗迹，越往高处，越能听见自己的回答。",
+  map_dujie: "九霄雷云终年不散。修士在此辨明劫意，为真正的飞升做准备。",
+  map_zhenxian: "洗尽凡尘后，玉阙初开。仙籍与旧日誓言都藏在飞升台深处。",
+  map_xuanxian: "玄光照见万象，真伪难分。守住一念清明，才能穿过镜门。",
+  map_jinxian: "金霞凝成不朽道纹，长生之路不在躲避岁月，而在经得起岁月。",
+  map_taiyi: "星轨交错如棋，太乙阵盘随步而转；每一步都要先看清来路。",
+  map_daluo: "三花聚顶、五气朝元的旧迹仍在，周天法相于此守候后来者。",
+  map_hunyuan: "万象归于一气，散乱的力量在此重聚，化作可追寻的道痕。",
+  map_hunyuan_daluo: "太虚深处传来开天余响，古老法则交织成一条险而可行的路。",
+  map_hunyuan_wuji: "有形与无形在此相接。越执着于边界，越难看见无极之门。",
+  map_tiandao: "天则如细密经纬，因果自有回声。行过此境，须直面自己的选择。",
+  map_dadao: "万法同源之处，太古钟声仍在；修士要辨认属于自己的那一笔。",
+  map_hongmeng: "初元紫气浮沉，旧路到了尽头。守望者留下最后一问，答案仍由你写。",
 };
 
 export const REALM_ORDER: string[] = REALM_LIST.map((r) => r.id);

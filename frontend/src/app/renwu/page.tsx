@@ -67,6 +67,7 @@ export default function RenwuPage() {
   const ownedEquip = Object.keys(EQUIPMENT).filter((id) => (state.inventory[id] || 0) > 0);
   const learnedTech = (Object.keys(TECHNIQUES) as string[]).filter((id) => state.techniqueLevel[id as "qingYun" | "xuanGui"] > 0);
   const built = (Object.keys(BUILDINGS) as string[]).filter((id) => state.buildings[id as keyof typeof state.buildings] > 0);
+  const currentStage = CONFIG.realms.find((r) => r.id === state.realm)?.stage ?? 1;
 
   const pickTheme = (t: Theme) => {
     setThemeState(t);
@@ -113,6 +114,7 @@ export default function RenwuPage() {
         <p className="mt-1 text-sm font-medium">
           合计 攻 {stats.attack} ／ 防 {stats.defense} ／ 气血 {stats.hp}
         </p>
+        <p className="mt-1 text-sm text-muted">修行进度：第 {currentStage}/20 境 · 历练首通 {clearedNodes.length}/{totalEnemies}</p>
         {wearing.length > 0 && (
           <p className="mt-1 text-sm text-muted">穿戴：{wearing.map((id) => EQUIPMENT[id].name).join("、")}</p>
         )}

@@ -41,6 +41,8 @@ import {
   canBreakthrough,
   isTrialRealm,
   crossStageTrialGateOk,
+  crossStageTrialInfo,
+  previewCrossStageTrial,
   startCrossStageTrial,
 } from "./engine";
 import { CONFIG } from "./config";
@@ -1374,7 +1376,7 @@ describe("v0.9 迁移与校验", () => {
     v7.schemaVersion = 7;
     const m = migrateSave(v7 as unknown as SaveState);
     expect(m.schemaVersion).toBe(SCHEMA_VERSION);
-    expect(m.secretRealmUsed).toEqual({ realm_herb: false, realm_relic: false, realm_deep: false });
+    expect(m.secretRealmUsed).toEqual(Object.fromEntries(Object.keys(CONFIG.secretRealms).map((id) => [id, false])));
     expect(m.secretRealmLog).toEqual([]);
   });
 
@@ -1559,7 +1561,7 @@ describe("v0.9 最终复核修复回归", () => {
     delete v7.secretRealmLog;
     const r = importSave(JSON.stringify(v7));
     expect(r.ok).toBe(true);
-    expect((r.state as SaveState).secretRealmUsed).toEqual({ realm_herb: false, realm_relic: false, realm_deep: false });
+    expect((r.state as SaveState).secretRealmUsed).toEqual(Object.fromEntries(Object.keys(CONFIG.secretRealms).map((id) => [id, false])));
   });
 });
 
@@ -1827,5 +1829,176 @@ describe("v1.2 二十境通用", () => {
     expect(canBreakthrough(s)).toBe(false);
     expect(isTrialRealm(s.realm)).toBe(false);
     expect(crossStageTrialGateOk(s).ok).toBe(false);
+  });
+});
+
+describe("二十境内容与日常节奏", () => {
+  it("后期地图节点有各自名称，跨境试炼有不同主题", () => {
+    const names: string[] = [];
+    for (const [mid, map] of Object.entries(CONFIG.maps)) {
+      if (["map_qingyun", "map_nether", "map_yunling", "map_jindan"].includes(mid)) continue;
+      names.push(...Object.values(map.nodes).map((n) => n.name));
+    }
+    expect(names).toHaveLength(85);
+    expect(new Set(names).size).toBe(85);
+    expect(names.some((name) => name.includes("秘境灵兽"))).toBe(false);
+    const trialNames = Object.values(CONFIG.trials).map((t) => t.name);
+    expect(new Set(trialNames).size).toBe(19);
+    expect(new Set(Object.values(CONFIG.trials).slice(3).map((t) => t.wavesPct.join(","))).size).toBe(16);
+    const s = fresh();
+    s.realm = "yuanying10";
+    expect(crossStageTrialInfo(s)?.name).toBe("化神问心");
+  });
+
+  it("高境界挂机加成在预览与结算中一致，低境界不变", () => {
+    const low = fresh();
+    const base = productionBreakdown(low);
+    low.realm = "yuanying1";
+    const high = productionBreakdown(low);
+    expect(high.cultivationPerSec).toBeCloseTo(base.cultivationPerSec * 2);
+    expect(high.spiritPerSec).toBeCloseTo(base.spiritPerSec * 2);
+    const settled = settle(low, T0 + H);
+    expect(settled.resources.cultivation).toBeCloseTo(high.cultivationPerSec * 3600);
+    expect(settled.resources.spirit).toBeCloseTo(high.spiritPerSec * 3600);
+  });
+
+  it("重复战斗奖励全图每日最多三次，跨日恢复，导入保持额度", () => {
+    let s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.encounter.guideDone = true;
+    s.encounter.triggeredToday = CONFIG.encounter.dailyMax;
+    for (let i = 0; i < CONFIG.rewardedRepeatBattlesPerDay + 1; i++) {
+      const r = fightNode(s, T0, "map_qingyun", "node_wolf");
+      expect(r.won).toBe(true);
+      s = r.state;
+    }
+    expect(s.daily.rewardedRepeats).toBe(3);
+    expect(s.resources.cultivation).toBe(12);
+    expect(s.resources.page).toBe(3);
+    const imported = importSave(exportSave(s));
+    expect(imported.ok).toBe(true);
+    expect((imported.state as SaveState).daily.rewardedRepeats).toBe(3);
+    const nextDay = fightNode(s, T0 + 24 * H, "map_qingyun", "node_wolf");
+    expect(nextDay.state.daily.rewardedRepeats).toBe(1);
+  });
+
+  it("新版重复奖励额度缺失或越界拒绝，旧档可迁移", () => {
+    const s = fresh();
+    const bad = JSON.parse(exportSave(s));
+    delete bad.daily.rewardedRepeats;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+    bad.daily.rewardedRepeats = 4;
+    expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+    bad.schemaVersion = 11;
+    delete bad.daily.rewardedRepeats;
+    const old = importSave(JSON.stringify(bad));
+    expect(old.ok).toBe(true);
+    expect((old.state as SaveState).daily.rewardedRepeats).toBe(0);
+  });
+
+  it("十九段试炼在推荐减伤与丹药下均可成功", () => {
+    const s = fresh();
+    s.preparedPill = true;
+    s.inventory.tribulationPill = 1;
+    s.technique = "xuanGui";
+    s.techniqueLevel.xuanGui = 3;
+    s.equipment = { weapon: "w_steel", armor: "a_steel", accessory: "c_jade" };
+    for (const realm of CONFIG.realms.filter((r) => r.layer === 10 && r.stage < 20)) {
+      s.realm = realm.id as RealmId;
+      const gateMap = CONFIG.trials[realm.stage as keyof typeof CONFIG.trials].gateMap as MapId | null;
+      if (gateMap) {
+        const maps = CONFIG.maps as unknown as Record<string, { nodes: Record<string, unknown> }>;
+        const nodes = Object.keys(maps[gateMap].nodes);
+        s.maps[gateMap][nodes[nodes.length - 1]].cleared = true;
+      }
+      const info = crossStageTrialInfo(s);
+      expect(info).not.toBeNull();
+      const preview = previewCrossStageTrial(s);
+      expect(preview.ok, info?.name).toBe(true);
+      expect(preview.success, info?.name).toBe(true);
+    }
+  });
+
+  it("后期装备有境界门槛，炼制扣除四种材料且可穿戴", () => {
+    const recipe = CONFIG.crafts.w_yuanying;
+    const s = fresh();
+    s.forge = 1;
+    s.realm = "yuanying1";
+    s.resources = { cultivation: 0, spirit: 0, spiritStone: recipe.cost.spiritStone, herb: 0, page: recipe.cost.page, iron: recipe.cost.iron };
+    expect(craftEquipment(s, T0, "w_yuanying").ok).toBe(false);
+    s.realm = "yuanying2";
+    const crafted = craftEquipment(s, T0, "w_yuanying");
+    expect(crafted.ok).toBe(true);
+    const owned = crafted.state as SaveState;
+    expect(owned.resources.iron).toBe(0);
+    expect(owned.resources.spiritStone).toBe(0);
+    expect(owned.resources.page).toBe(0);
+    expect(owned.inventory.w_yuanying).toBe(1);
+    const equipped = equipItem(owned, T0, "w_yuanying");
+    expect(equipped.ok).toBe(true);
+    expect((equipped.state as SaveState).equipment.weapon).toBe("w_yuanying");
+  });
+
+  it("新增五处秘境按境界开放，每日一次，奖励与记录一致", () => {
+    const ids: SecretRealmId[] = ["realm_soul", "realm_cloud", "realm_lotus", "realm_origin", "realm_hongmeng"];
+    for (const id of ids) {
+      const cfg = CONFIG.secretRealms[id];
+      const s = fresh();
+      expect(predictSecretRealm(s, id).ok).toBe(false);
+      s.realm = cfg.gate as RealmId;
+      s.equipment.weapon = "w_dadao";
+      s.equipment.armor = "a_dadao";
+      s.inventory.w_dadao = 1;
+      s.inventory.a_dadao = 1;
+      expect(predictSecretRealm(s, id).ok).toBe(true);
+      const r = enterSecretRealm(s, T0, id);
+      expect(r.ok).toBe(true);
+      const result = r.state as SaveState;
+      expect(result.secretRealmUsed[id]).toBe(true);
+      expect(result.secretRealmLog.at(-1)?.realm).toBe(id);
+      expect(enterSecretRealm(result, T0, id).ok).toBe(false);
+      expect(importSave(exportSave(result)).ok).toBe(true);
+    }
+  });
+
+  it("v12 旧秘境状态补新秘境，v13 缺新秘境次数拒绝", () => {
+    const raw = JSON.parse(exportSave(fresh()));
+    raw.schemaVersion = 12;
+    delete raw.secretRealmUsed.realm_soul;
+    delete raw.secretRealmUsed.realm_cloud;
+    delete raw.secretRealmUsed.realm_lotus;
+    delete raw.secretRealmUsed.realm_origin;
+    delete raw.secretRealmUsed.realm_hongmeng;
+    const old = importSave(JSON.stringify(raw));
+    expect(old.ok).toBe(true);
+    expect((old.state as SaveState).secretRealmUsed.realm_soul).toBe(false);
+    raw.schemaVersion = SCHEMA_VERSION;
+    expect(importSave(JSON.stringify(raw)).ok).toBe(false);
+  });
+
+  it("降为 v12 也不能抹去当天新秘境次数后重复领奖", () => {
+    const s = fresh();
+    s.realm = "yuanying4";
+    s.equipment.weapon = "w_dadao";
+    s.equipment.armor = "a_dadao";
+    s.inventory.w_dadao = 1;
+    s.inventory.a_dadao = 1;
+    const played = enterSecretRealm(s, T0, "realm_soul");
+    expect(played.ok).toBe(true);
+    const raw = JSON.parse(exportSave(played.state as SaveState));
+    raw.schemaVersion = 12;
+    delete raw.secretRealmUsed.realm_soul;
+    expect(importSave(JSON.stringify(raw)).ok).toBe(false);
+  });
+
+  it("每个后期炼器档位都有武器和护甲配方", () => {
+    for (const tier of ["yuanying", "dacheng", "jinxian", "hunyuan", "dadao"]) {
+      const weapon = CONFIG.crafts[`w_${tier}` as keyof typeof CONFIG.crafts];
+      const armor = CONFIG.crafts[`a_${tier}` as keyof typeof CONFIG.crafts];
+      expect(weapon).toBeDefined();
+      expect(armor).toBeDefined();
+      expect(weapon.cost.page).toBeGreaterThan(0);
+      expect(armor.cost.herb).toBeGreaterThan(0);
+    }
   });
 });

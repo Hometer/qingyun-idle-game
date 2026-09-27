@@ -119,7 +119,7 @@ export default function DongfuPage() {
           )}
         </div>
         <p className="mt-0.5 text-xs text-muted">
-          当前：{state.forge === 0 ? "未建" : "已建成（可炼制精钢剑、玄铁甲）"}
+          当前：{state.forge === 0 ? "未建" : "已建成（随境界解锁更多配方）"}
         </p>
         {forgeCost && (
           <p className={`text-xs ${forgeRealmOk ? (forgeAfford ? "text-muted" : "text-cinnabar") : "text-cinnabar"}`}>

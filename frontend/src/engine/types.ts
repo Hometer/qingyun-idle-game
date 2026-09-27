@@ -13,7 +13,7 @@ export type TechniqueId = "qingYun" | "xuanGui" | "poYue" | "juYuan";
 export type EquipSlot = "weapon" | "armor" | "accessory";
 export type ItemId = "tribulationPill";
 export type MapId = "map_qingyun" | "map_nether" | "map_yunling" | `map_${RealmStagePrefix}`;
-export type SecretRealmId = "realm_herb" | "realm_relic" | "realm_deep";
+export type SecretRealmId = "realm_herb" | "realm_relic" | "realm_deep" | "realm_soul" | "realm_cloud" | "realm_lotus" | "realm_origin" | "realm_hongmeng";
 
 export interface Resources {
   cultivation: number;
@@ -83,6 +83,7 @@ export interface DailyState {
   weather: { id: string; used: boolean };
   astrology: { id: string; used: boolean };
   goals: DailyGoals;
+  rewardedRepeats: number;
 }
 
 export type LongTaskType = "training" | "seclusion";
