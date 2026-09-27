@@ -46,7 +46,7 @@ export default function BeibaoPage() {
       </Section>
 
       <Section title="炼器">
-        {state.forge < 1 ? (
+        {state.forge < CONFIG.forge.levels.length ? (
           <p className="text-sm text-muted">需先建造炼器台方可炼器</p>
         ) : (
           Object.keys(CONFIG.crafts).map((id) => {

@@ -135,7 +135,7 @@ function emptySecretRealmUsed(): Record<SecretRealmId, boolean> {
   return Object.fromEntries(SECRET_REALM_IDS.map((id) => [id, false])) as Record<SecretRealmId, boolean>;
 }
 
-const FORGE_CFG = CONFIG.forge as unknown as { cost: { spiritStone: number; page: number } };
+const FORGE_CFG = CONFIG.forge as unknown as { levels: Array<{ cost: { spiritStone: number; page: number } }> };
 const IRON_CFG = CONFIG.iron as unknown as { suppressionPerSec: number; realmDrop: Record<SecretRealmId, number> };
 const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { gate: RealmId; cost: { iron: number; spiritStone: number; herb: number; page: number } }>;
 
@@ -861,7 +861,7 @@ export function breakthrough(state: SaveState, nowMs: number, method: Breakthrou
 export function upgradeBuilding(state: SaveState, nowMs: number, id: BuildingId): Result<SaveState> {
   const s = settle(state, nowMs);
   const lvl = s.buildings[id];
-  if (lvl >= 3) return fail("已满级");
+  if (lvl >= CONFIG.buildings[id].levels.length) return fail("已满级");
   const cfg = CONFIG.buildings[id].levels[lvl];
   if (s.resources.spiritStone < cfg.cost) return fail("灵石不足");
   s.resources.spiritStone -= cfg.cost;
@@ -918,7 +918,7 @@ export function setAuxiliaryTechnique(state: SaveState, nowMs: number, id: Techn
 
 export function buildLibrary(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
-  if (s.library >= 2) return fail("藏经阁已满级");
+  if (s.library >= CONFIG.library.levels.length) return fail("藏经阁已满级");
   if (realmIndex(s.realm) < realmIndex("zhuji1")) return fail("需筑基一层方可建藏经阁");
   const cfg = CONFIG.library.levels[s.library];
   if (s.resources.spiritStone < cfg.cost.spiritStone || s.resources.page < cfg.cost.page) {
@@ -937,16 +937,17 @@ export function buildLibrary(state: SaveState, nowMs: number): Result<SaveState>
 
 export function buildForge(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
-  if (s.forge >= 1) return fail("炼器台已建");
+  if (s.forge >= CONFIG.forge.levels.length) return fail("炼器台已满级");
   if (realmIndex(s.realm) < realmIndex("zhuji1")) return fail("需筑基一层方可建炼器台");
-  if (s.resources.spiritStone < FORGE_CFG.cost.spiritStone || s.resources.page < FORGE_CFG.cost.page) {
-    return fail(`炼器台需灵石${FORGE_CFG.cost.spiritStone}、残页${FORGE_CFG.cost.page}`);
+  const forgeCfg = FORGE_CFG.levels[s.forge];
+  if (s.resources.spiritStone < forgeCfg.cost.spiritStone || s.resources.page < forgeCfg.cost.page) {
+    return fail(`炼器台需灵石${forgeCfg.cost.spiritStone}、残页${forgeCfg.cost.page}`);
   }
-  s.resources.spiritStone -= FORGE_CFG.cost.spiritStone;
-  s.resources.page -= FORGE_CFG.cost.page;
-  s.forge = 1;
-  s.recentLogs.push("建起炼器台，可炼制装备。");
-  pushMilestone(s, "forge", nowMs, "建起炼器台");
+  s.resources.spiritStone -= forgeCfg.cost.spiritStone;
+  s.resources.page -= forgeCfg.cost.page;
+  s.forge += 1;
+  s.recentLogs.push("炼器台扩建，可炼制更高阶装备。");
+  pushMilestone(s, "forge", nowMs, `炼器台升至${s.forge}级`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -979,7 +980,7 @@ export function upgradeTechnique(state: SaveState, nowMs: number): Result<SaveSt
   if (!t) return fail("未装备功法");
   if ((t === "poYue" || t === "juYuan") && s.library < 1) return fail("需先建一级藏经阁");
   const lvl = s.techniqueLevel[t];
-  if (lvl >= 3) return fail("功法已满级");
+  if (lvl >= CONFIG.techniques[t].levels.length) return fail("功法已满级");
   const cost = CONFIG.techniques[t].levels[lvl].pageCost;
   if (s.resources.page < cost) return fail("残页不足");
   s.resources.page -= cost;
@@ -1806,9 +1807,10 @@ function validateResources(v: unknown, schemaVersion: number): string | null {
 }
 
 function validateForge(v: unknown, schemaVersion: number): string | null {
+  const max = CONFIG.forge.levels.length;
   if (schemaVersion >= 9) {
-    if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > 1) return "炼器台等级无效";
-  } else if (v !== undefined && v !== null && (!Number.isInteger(v) || (v as number) < 0 || (v as number) > 1)) {
+    if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > max) return "炼器台等级无效";
+  } else if (v !== undefined && v !== null && (!Number.isInteger(v) || (v as number) < 0 || (v as number) > max)) {
     return "炼器台等级无效";
   }
   return null;
@@ -1818,7 +1820,8 @@ function validateBuildings(v: unknown): string | null {
   const o = (v ?? {}) as Record<string, unknown>;
   for (const id of Object.keys(CONFIG.buildings)) {
     const x = o[id];
-    if (x !== undefined && (!Number.isInteger(x) || (x as number) < 0 || (x as number) > 3)) return "建筑等级无效";
+    const max = (CONFIG.buildings as unknown as Record<string, { levels: unknown[] }>)[id].levels.length;
+    if (x !== undefined && (!Number.isInteger(x) || (x as number) < 0 || (x as number) > max)) return "建筑等级无效";
   }
   return null;
 }
@@ -1829,14 +1832,15 @@ function validateTechnique(tech: unknown, levels: unknown, library: unknown): st
   const o = (levels ?? {}) as Record<string, unknown>;
   for (const id of Object.keys(CONFIG.techniques)) {
     const x = o[id];
-    if (x !== undefined && (!Number.isInteger(x) || (x as number) < 0 || (x as number) > 3)) return "功法等级无效";
+    const max = (CONFIG.techniques as unknown as Record<string, { levels: unknown[] }>)[id].levels.length;
+    if (x !== undefined && (!Number.isInteger(x) || (x as number) < 0 || (x as number) > max)) return "功法等级无效";
   }
   return null;
 }
 
 function validateLibrary(v: unknown): string | null {
   if (v === undefined || v === null) return null;
-  if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > 2) return "藏经阁等级无效";
+  if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > CONFIG.library.levels.length) return "藏经阁等级无效";
   return null;
 }
 

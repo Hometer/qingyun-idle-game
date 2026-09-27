@@ -1258,7 +1258,7 @@ describe("v0.8 迁移与校验", () => {
 
   it("坏档：藏经阁等级越界拒绝导入", () => {
     const s = fresh();
-    s.library = 3;
+    s.library = 8;
     expect(importSave(JSON.stringify(s)).ok).toBe(false);
   });
 });

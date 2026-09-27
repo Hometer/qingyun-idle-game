@@ -161,7 +161,7 @@ export default function XiulianPage() {
           {(["qingYun", "xuanGui", "poYue", "juYuan"] as TechniqueId[]).map((id) => {
             const t = TECHNIQUES[id];
             const lvl = state.techniqueLevel[id];
-            const nextLvl = lvl < 3 ? t.levels[lvl] : null;
+            const nextLvl = lvl < t.levels.length ? t.levels[lvl] : null;
             const isNew = id === "poYue" || id === "juYuan";
             const locked = isNew && state.library < 1;
             const isPrimary = state.technique === id;

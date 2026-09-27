@@ -24,10 +24,10 @@ function effectText(id: string, lv: Record<string, number>): string {
 export default function DongfuPage() {
   const { state, upgradeBuilding, buildLibrary, buildForge } = useGame();
   if (!state) return null;
-  const libCost = state.library < 2 ? CONFIG.library.levels[state.library].cost : null;
+  const libCost = state.library < CONFIG.library.levels.length ? CONFIG.library.levels[state.library].cost : null;
   const libRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("zhuji1");
   const libAfford = !!libCost && libRealmOk && state.resources.spiritStone >= libCost.spiritStone && state.resources.page >= libCost.page;
-  const forgeCost = state.forge < 1 ? CONFIG.forge.cost : null;
+  const forgeCost = state.forge < CONFIG.forge.levels.length ? CONFIG.forge.levels[state.forge].cost : null;
   const forgeRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("zhuji1");
   const forgeAfford = !!forgeCost && forgeRealmOk && state.resources.spiritStone >= forgeCost.spiritStone && state.resources.page >= forgeCost.page;
 
@@ -37,17 +37,17 @@ export default function DongfuPage() {
       {(Object.keys(BUILDINGS) as BuildingId[]).map((id) => {
         const b = BUILDINGS[id];
         const lvl = state.buildings[id];
-        const cost = lvl < 3 ? b.levels[lvl].cost : null;
+        const cost = lvl < b.levels.length ? b.levels[lvl].cost : null;
         const affordable = cost !== null && state.resources.spiritStone >= cost;
         const current = lvl >= 1 ? effectText(id, b.levels[lvl - 1]) : "未建";
-        const next = lvl < 3 ? effectText(id, b.levels[lvl]) : null;
+        const next = lvl < b.levels.length ? effectText(id, b.levels[lvl]) : null;
         return (
           <div key={id} className="border-b border-line/60 py-2 last:border-0">
             <div className="flex items-center justify-between">
               <div className="font-medium">
                 {b.name} <span className="text-muted">Lv{lvl}</span>
               </div>
-              {lvl < 3 && (
+              {lvl < b.levels.length && (
                 <button
                   onClick={() => upgradeBuilding(id)}
                   disabled={!affordable}
@@ -75,7 +75,7 @@ export default function DongfuPage() {
           <div className="font-medium">
             藏经阁 <span className="text-muted">Lv{state.library}</span>
           </div>
-          {state.library < 2 && (
+          {state.library < CONFIG.library.levels.length && (
             <button
               onClick={buildLibrary}
               disabled={!libAfford}
@@ -87,7 +87,7 @@ export default function DongfuPage() {
         </div>
         <p className="mt-0.5 text-xs text-muted">
           当前：{state.library === 0 ? "未建" : state.library === 1 ? "一级（已解锁破岳诀、聚元诀）" : "二级（已开放辅修位）· 已满级"}
-          {state.library < 2 && (
+          {state.library < CONFIG.library.levels.length && (
             <>
               {" → 下级："}
               {state.library === 0 ? "解锁破岳诀、聚元诀" : "开放辅修位"}
@@ -108,7 +108,7 @@ export default function DongfuPage() {
           <div className="font-medium">
             炼器台 <span className="text-muted">Lv{state.forge}</span>
           </div>
-          {state.forge < 1 && (
+          {state.forge < CONFIG.forge.levels.length && (
             <button
               onClick={buildForge}
               disabled={!forgeAfford}
