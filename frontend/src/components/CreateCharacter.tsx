@@ -3,34 +3,50 @@
 import { useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { CONFIG } from "@/engine/config";
+import { randomFortune, type Fortune } from "@/engine/engine";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
-import type { SpiritRoot, AptitudeId } from "@/engine/types";
+import type { AptitudeId } from "@/engine/types";
 
 const NAME_A = ["青", "白", "玄", "云", "霜", "剑", "道", "尘", "月", "松", "清", "流"];
 const NAME_B = ["尘", "云", "风", "霜", "月", "山", "川", "雪", "竹", "鹤", "松", "泉"];
 const NAME_C = ["子", "真人", "散人", "道人", "居士", "上人", "客"];
 const APTITUDE_ORDER: AptitudeId[] = ["balanced", "focus", "spirit"];
+const MERIDIAN_ORDER = ["blocked", "sluggish", "normal", "smooth", "innate"];
+const COMPREHENSION_ORDER = ["dull", "slow", "normal", "clever", "genius"];
 
 function pick(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
 }
-
 function randomName(): string {
   return pick(NAME_A) + pick(NAME_B) + (Math.random() < 0.5 ? pick(NAME_C) : "");
 }
 
+const MERIDIAN_CFG = CONFIG.meridians as unknown as Record<string, { name: string; probability: number; productionMult: number }>;
+const COMPREHENSION_CFG = CONFIG.comprehensions as unknown as Record<string, { name: string; probability: number; pageMult: number }>;
+
 export function CreateCharacter() {
-  const { create } = useGame();
+  const { createWithFortune } = useGame();
   const [name, setName] = useState("林青");
-  const [root, setRoot] = useState<SpiritRoot>("金");
   const [copyMode, setCopyModeState] = useState<CopyMode>(getCopyMode());
-  const [recommended] = useState<AptitudeId>(() => APTITUDE_ORDER[Math.floor(Math.random() * APTITUDE_ORDER.length)]);
-  const [aptitude, setAptitude] = useState<AptitudeId>(recommended);
+  const [mode, setMode] = useState<"random" | "custom">("random");
+  const [fortune, setFortune] = useState<Fortune>(() => randomFortune());
+  const [aptitude, setAptitude] = useState<AptitudeId>("balanced");
+  const [meridian, setMeridian] = useState("normal");
+  const [comprehension, setComprehension] = useState("normal");
 
   const toggleCopy = (m: CopyMode) => {
     setCopyModeState(m);
     setCopyMode(m);
   };
+
+  const reroll = () => setFortune(randomFortune());
+
+  const finalFortune: Fortune =
+    mode === "random" ? fortune : { spiritRoots: ["金"], meridians: meridian as Fortune["meridians"], comprehension: comprehension as Fortune["comprehension"] };
+
+  const m = MERIDIAN_CFG[finalFortune.meridians];
+  const c = COMPREHENSION_CFG[finalFortune.comprehension];
+  const mult = m.productionMult * (CONFIG.aptitudes[aptitude] as unknown as { cultivationMult: number }).cultivationMult;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-6">
@@ -48,74 +64,83 @@ export function CreateCharacter() {
           <div>
             <span className="text-sm text-muted">际遇文案</span>
             <div className="mt-1 flex gap-2">
-              <button
-                onClick={() => toggleCopy("ai")}
-                className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "ai" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
-              >
-                AI 文案
-              </button>
-              <button
-                onClick={() => toggleCopy("template")}
-                className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "template" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
-              >
-                仅用模板
-              </button>
+              <button onClick={() => toggleCopy("ai")} className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "ai" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>AI 文案</button>
+              <button onClick={() => toggleCopy("template")} className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "template" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>仅用模板</button>
             </div>
           </div>
 
           <label className="block">
             <span className="text-sm text-muted">道号</span>
             <div className="mt-1 flex gap-2">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={8}
-                className="flex-1 rounded-lg border border-line bg-paper px-3 py-2"
-              />
-              <button onClick={() => setName(randomName())} className="rounded-lg border border-line bg-paper px-3 text-sm">
-                随机
-              </button>
+              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={8} className="flex-1 rounded-lg border border-line bg-paper px-3 py-2" />
+              <button onClick={() => setName(randomName())} className="rounded-lg border border-line bg-paper px-3 text-sm">随机</button>
             </div>
           </label>
 
           <div>
-            <span className="text-sm text-muted">五行灵根</span>
+            <span className="text-sm text-muted">开局方式</span>
             <div className="mt-1 flex gap-2">
-              {(CONFIG.spiritRoots as readonly string[]).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRoot(r as SpiritRoot)}
-                  className={`flex-1 rounded-lg border py-2 ${root === r ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
-                >
-                  {r}
-                </button>
-              ))}
+              <button onClick={() => setMode("random")} className={`flex-1 rounded-lg border py-2 text-sm ${mode === "random" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>随机鉴灵</button>
+              <button onClick={() => setMode("custom")} className={`flex-1 rounded-lg border py-2 text-sm ${mode === "custom" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>自行设定</button>
             </div>
           </div>
 
+          {mode === "random" ? (
+            <div className="rounded-lg border border-line/60 bg-paper p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">命盘</span>
+                <button onClick={reroll} className="rounded-lg border border-line bg-paper px-3 py-1 text-xs">重新鉴灵</button>
+              </div>
+              <div className="mt-2 space-y-1 text-sm">
+                <p>灵根：{fortune.spiritRoots.join("、")}（{fortune.spiritRoots.length === 1 && ["雷", "冰", "风"].includes(fortune.spiritRoots[0]) ? "变异" : `${fortune.spiritRoots.length}灵根`}）</p>
+                <p>经脉：{MERIDIAN_CFG[fortune.meridians].name}（产速 ×{MERIDIAN_CFG[fortune.meridians].productionMult}）</p>
+                <p>悟性：{COMPREHENSION_CFG[fortune.comprehension].name}（功法费用 ×{COMPREHENSION_CFG[fortune.comprehension].pageMult}）</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                <span className="text-sm text-muted">经脉（定修炼产速）</span>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {MERIDIAN_ORDER.map((id) => (
+                    <button key={id} onClick={() => setMeridian(id)} className={`rounded-lg border px-3 py-1.5 text-sm ${meridian === id ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                      {MERIDIAN_CFG[id].name} ×{MERIDIAN_CFG[id].productionMult}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="text-sm text-muted">悟性（定功法费用）</span>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {COMPREHENSION_ORDER.map((id) => (
+                    <button key={id} onClick={() => setComprehension(id)} className={`rounded-lg border px-3 py-1.5 text-sm ${comprehension === id ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                      {COMPREHENSION_CFG[id].name} ×{COMPREHENSION_CFG[id].pageMult}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
           <div>
-            <span className="text-sm text-muted">修行资质（可自行选择，创建后固定）</span>
+            <span className="text-sm text-muted">修炼侧重（创建后可在洞府切换）</span>
             <div className="mt-1 flex flex-col gap-2">
               {APTITUDE_ORDER.map((a) => {
                 const cfg = CONFIG.aptitudes[a];
                 return (
-                  <button
-                    key={a}
-                    onClick={() => setAptitude(a)}
-                    className={`rounded-lg border px-3 py-2 text-left text-sm ${aptitude === a ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
-                  >
+                  <button key={a} onClick={() => setAptitude(a)} className={`rounded-lg border px-3 py-2 text-left text-sm ${aptitude === a ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
                     <span className="font-medium">{cfg.name}</span>
                     <span className="ml-2 text-xs text-muted">修为 ×{cfg.cultivationMult}、灵气 ×{cfg.spiritMult}</span>
-                    {recommended === a && <span className="ml-2 text-xs text-cinnabar">推荐</span>}
                   </button>
                 );
               })}
             </div>
-            <p className="mt-1 text-xs text-muted">凝神修炼更快但灵气稍慢，聚灵反之，均衡二者持平；五行灵根不影响资质。</p>
           </div>
 
+          <p className="text-xs text-muted">当前修为产速约 {mult.toFixed(2)}×（基础 × 经脉 × 侧重）。</p>
+
           <button
-            onClick={() => create(name.trim() || "无名修士", root, aptitude)}
+            onClick={() => createWithFortune(name.trim() || "无名修士", finalFortune, aptitude)}
             className="w-full rounded-lg bg-cinnabar py-2.5 text-white"
           >
             踏入仙途

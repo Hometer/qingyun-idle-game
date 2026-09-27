@@ -50,6 +50,7 @@ interface GameContextValue {
   encounterLoading: boolean;
   trialPreview: eng.JindanTrialPreview | null;
   create: (name: string, root: SpiritRoot, aptitude: AptitudeId) => void;
+  createWithFortune: (name: string, fortune: { spiritRoots: string[]; meridians: string; comprehension: string }, aptitude: AptitudeId) => void;
   settleNow: () => void;
   doBreakthrough: (method: BreakthroughMethod) => void;
   upgradeBuilding: (id: BuildingId) => void;
@@ -394,6 +395,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const create = useCallback(
     async (name: string, root: SpiritRoot, aptitude: AptitudeId) => {
       const s = eng.createGame(name, root, aptitude, Date.now());
+      try {
+        localStorage.setItem("qingyun_notice_shown", "1");
+      } catch {}
+      setLastResult(null);
+      await apply(s, "角色已创建，踏上仙途");
+    },
+    [apply],
+  );
+
+  const createWithFortune = useCallback(
+    async (name: string, fortune: { spiritRoots: string[]; meridians: string; comprehension: string }, aptitude: AptitudeId) => {
+      const s = eng.createGameWithFortune(name, fortune as eng.Fortune, aptitude, Date.now());
       try {
         localStorage.setItem("qingyun_notice_shown", "1");
       } catch {}
@@ -915,6 +928,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     encounterLoading,
     trialPreview,
     create,
+    createWithFortune,
     settleNow,
     doBreakthrough,
     upgradeBuilding,
