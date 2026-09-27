@@ -343,6 +343,20 @@ function battleMods(s: SaveState): { critRate: number; regen: number; lowHpBoost
 // ---- 装备词条（v1.6）----
 const AFFIX_IDS = Object.keys(CONFIG.affixes).filter((k) => k !== "maxByStage");
 
+function hashSeed(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h) || 1;
+}
+
+function seededRng(seed: number): () => number {
+  let x = seed;
+  return () => {
+    x = (x * 1103515245 + 12345) & 0x7fffffff;
+    return x / 0x7fffffff;
+  };
+}
+
 function randomAffixes(rng: () => number = Math.random): Affix[] {
   const count = 1 + Math.floor(rng() * 4); // 1~4 条
   const out: Affix[] = [];
@@ -360,8 +374,11 @@ function randomAffixes(rng: () => number = Math.random): Affix[] {
   return out;
 }
 
-function ensureAffixes(s: SaveState, baseId: string, rng: () => number = Math.random): void {
-  if (!s.equipmentAffixes[baseId]) s.equipmentAffixes[baseId] = randomAffixes(rng);
+function ensureAffixes(s: SaveState, baseId: string): void {
+  if (s.equipmentAffixes[baseId]) return;
+  // 确定性种子：装备 ID 哈希 + 当前已生成装备数，保证可复现（同名装备后续可随获得顺序不同）
+  const seed = hashSeed(baseId) + Object.keys(s.equipmentAffixes).length + 1;
+  s.equipmentAffixes[baseId] = randomAffixes(seededRng(seed));
 }
 
 function equippedAffixes(s: SaveState): Affix[] {
@@ -1307,6 +1324,7 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
     if (v > 0) res[k] -= v;
   }
   s.inventory[id] = (s.inventory[id] || 0) + 1;
+  ensureAffixes(s, id);
   s.recentLogs.push(`炼得${EQUIP_CFG[id].name}。`);
   pushMilestone(s, "craft", nowMs, `炼得${EQUIP_CFG[id].name}`);
   s.revision += 1;
@@ -1672,6 +1690,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     if (mat && !nodeCfg.side) (s.resources as unknown as Record<string, number>)[mat] += 4;
     if (fc.equipment) {
       s.inventory[fc.equipment] = 1;
+      ensureAffixes(s, fc.equipment as string);
       s.recentLogs.push(`得装备「${EQUIP_CFG[fc.equipment].name}」。`);
     }
     s.recentLogs.push(`首通${mapCfg.name}·${nodeCfg.name}。`);

@@ -6,6 +6,16 @@ import { EQUIPMENT, BUILDINGS, REALM_NAMES, REALM_ORDER, RESOURCE_LABELS } from 
 import { CONFIG } from "@/engine/config";
 import { playerStats } from "@/engine/engine";
 
+function affixText(affixes: Array<{ id: string; value: number }> | undefined): string {
+  if (!affixes || affixes.length === 0) return "";
+  const cfg = CONFIG.affixes as unknown as Record<string, { name: string; type: string }>;
+  return affixes.map((a) => {
+    const c = cfg[a.id];
+    const v = c?.type === "flat" ? `${a.value}` : `${Math.round(a.value * 100)}%`;
+    return `${c?.name ?? a.id} +${v}`;
+  }).join("、");
+}
+
 export default function BeibaoPage() {
   const { state, view, equip, craftPill, togglePill, craftGainPill, useGainPill: consumeGainPill, quenchEquipment, craftEquipment } = useGame();
   if (!state) return null;
@@ -66,6 +76,9 @@ export default function BeibaoPage() {
                 {!wearing && delta.length > 0 && (
                   <p className="mt-0.5 text-xs text-cinnabar">穿上后 {delta.join("，")}</p>
                 )}
+                {state.equipmentAffixes[id]?.length ? (
+                  <p className="mt-0.5 text-xs text-gold">词条：{affixText(state.equipmentAffixes[id])}</p>
+                ) : null}
               </div>
             );
           })
