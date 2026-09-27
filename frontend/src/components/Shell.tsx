@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useGame } from "@/lib/game-context";
 import type { CopyMode } from "@/lib/prefs";
 import { fmtTime, fmtDuration, fmtRemaining } from "@/lib/labels";
-import { BottomNav } from "./BottomNav";
+import { BottomNav, NavIcon, TABS } from "./BottomNav";
 import { ResourceBar } from "./ResourceBar";
 import { EncounterModal } from "./EncounterModal";
 import { CreateCharacter } from "./CreateCharacter";
@@ -13,6 +14,7 @@ import { CreateCharacter } from "./CreateCharacter";
 export function Shell({ children }: { children: React.ReactNode }) {
   const { ready, state, notice, clearNotice, lastResult, clearResult, targets, showDataNotice, dismissDataNotice, claimLong, abortLong, now } = useGame();
   const [noticeMode, setNoticeMode] = useState<CopyMode>("ai");
+  const pathname = usePathname();
 
   if (!ready) {
     return <div className="flex min-h-screen items-center justify-center text-muted">载入中…</div>;
@@ -22,13 +24,45 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }
 
   const incomplete = targets.filter((t) => !t.done);
+  const nextTarget = incomplete.find((t) => !t.later) ?? incomplete[0];
+  const pageInfo = {
+    "/xiulian": ["修炼", "凝神养气，向下一境迈进"],
+    "/lilian": ["历练", "入山海，遇万象，磨砺自身"],
+    "/dongfu": ["洞府", "经营一方清静地，蓄养修行根基"],
+    "/beibao": ["背包", "丹药法器，各有其用"],
+    "/renwu": ["人物", "回望来路，续写修行录"],
+    "/pianzhang": ["修行篇章", "每一次突破，都是故事的一页"],
+  }[pathname] ?? ["修行", "山高水长，道途未尽"];
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col pb-16">
+    <div className="game-shell mx-auto min-h-screen w-full max-w-[1240px] lg:grid lg:grid-cols-[228px_minmax(0,1fr)] lg:gap-8 lg:px-6 xl:gap-10">
+      <aside className="desktop-sidebar hidden lg:sticky lg:top-5 lg:my-5 lg:flex lg:h-[calc(100vh-40px)] lg:flex-col">
+        <div className="flex items-center gap-3 px-5 pt-6">
+          <span className="brand-seal flex h-11 w-11 items-center justify-center rounded-xl text-xl">青</span>
+          <div><div className="display-font text-lg font-semibold tracking-[.1em]">青云修仙录</div><div className="mt-0.5 text-[10px] tracking-[.2em] text-[#b7c6bc]">IMMORTAL JOURNEY</div></div>
+        </div>
+        <div className="mx-5 mt-8 border-t border-white/15 pt-4 text-[10px] tracking-[.23em] text-[#98b0a6]">修行目录 · JOURNEY</div>
+        <nav aria-label="主导航" className="mt-3 flex flex-col gap-1 px-3">
+          {TABS.map((tab) => {
+            const active = pathname.startsWith(tab.href);
+            return <Link key={tab.href} href={tab.href} aria-current={active ? "page" : undefined}
+              className={`sidebar-link flex items-center gap-3 rounded-xl px-3 py-3 ${active ? "sidebar-link-active" : ""}`}>
+              <NavIcon name={tab.icon} className="h-5 w-5 shrink-0" />
+              <span className="text-sm font-medium">{tab.label}</span>
+              <span className="ml-auto text-[9px] tracking-widest opacity-60">{tab.english}</span>
+            </Link>;
+          })}
+        </nav>
+        <div className="mt-auto px-5 pb-6">
+          <div className="border-t border-white/15 pt-5 text-xs leading-relaxed text-[#aebfb4]">云深处，自有归途。<br />且行，且修。</div>
+          <div className="mt-5 text-[10px] tracking-widest text-[#729184]">CHAPTER · 01</div>
+        </div>
+      </aside>
+      <div className="min-w-0 pb-24 lg:pb-10 lg:pt-5">
       <ResourceBar />
 
       {state.longTask && (
-        <div className="mx-3 mt-2 rounded-lg border border-line bg-card px-4 py-2">
+        <div className="mx-4 mt-3 rounded-2xl border border-gold/40 bg-card px-4 py-3 sm:mx-5 lg:mx-0">
           <div className="flex items-center justify-between">
             <div className="text-sm">
               {state.longTask.type === "training" ? "持续历练" : "闭关"} · {fmtDuration(state.longTask.durationMinutes)}
@@ -49,8 +83,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
       )}
 
       {incomplete.length > 0 && (
-        <div className="mx-3 mt-2 rounded-lg border border-gold/40 bg-[#fdf6e3] px-4 py-3">
-          <div className="text-sm font-semibold">首玩目标</div>
+        <details className="first-steps mx-4 mt-3 rounded-2xl border border-gold/40 px-4 py-3 sm:mx-5 lg:mx-0">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <span><span className="display-font font-semibold">初入仙途</span><span className="ml-2 text-xs text-muted">下一步 · {nextTarget.label}</span></span>
+            <span className="shrink-0 text-xs text-cinnabar">查看目标 ↓</span>
+          </summary>
+          <div className="mt-3 border-t border-line/70 pt-2">
           {targets.map((t) => (
             <div key={t.id} className="flex items-center justify-between py-1">
               <div className="text-sm">
@@ -66,11 +104,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {!t.done && !t.later && t.hint && <span className="text-xs text-muted">{t.hint}</span>}
             </div>
           ))}
-        </div>
+          </div>
+        </details>
       )}
 
       {notice && (
-        <div className="relative mx-3 mt-2 rounded-lg border border-gold/40 bg-[#fdeeca] px-4 py-2 text-sm">
+        <div role="status" className="surface-note relative mx-4 mt-3 rounded-xl border border-gold/40 px-4 py-3 pr-9 text-sm sm:mx-5 lg:mx-0">
           {notice}
           <button onClick={clearNotice} className="absolute right-2 top-1 text-muted">
             ×
@@ -78,7 +117,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="flex-1 px-3 pb-4">{children}</main>
+      <main className="game-main mx-auto w-full max-w-[920px] px-4 pb-4 sm:px-5 lg:px-0">
+        <div className="page-intro mb-5 mt-7 flex items-end justify-between gap-4">
+          <div><p className="text-[10px] font-semibold tracking-[.28em] text-gold">THE PATH · {TABS.find((tab) => pathname.startsWith(tab.href))?.english ?? "STORY"}</p>
+          <h2 className="display-font mt-1 text-[29px] font-semibold leading-tight tracking-[.08em] text-ink sm:text-[34px]">{pageInfo[0]}</h2>
+          <p className="mt-1 text-sm text-muted">{pageInfo[1]}</p></div>
+          <div aria-hidden="true" className="page-intro-mark hidden text-3xl text-gold/50 sm:block">◌</div>
+        </div>
+        {children}
+      </main>
 
       <EncounterModal />
 
@@ -111,13 +158,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() => setNoticeMode("ai")}
-                className={`flex-1 rounded-lg border py-2 text-sm ${noticeMode === "ai" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+                className={`flex-1 rounded-lg border py-2 text-sm ${noticeMode === "ai" ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}
               >
                 AI 文案
               </button>
               <button
                 onClick={() => setNoticeMode("template")}
-                className={`flex-1 rounded-lg border py-2 text-sm ${noticeMode === "template" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+                className={`flex-1 rounded-lg border py-2 text-sm ${noticeMode === "template" ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}
               >
                 仅用模板
               </button>
@@ -130,6 +177,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       )}
 
       <BottomNav />
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@
  * 体验目标：首次筑基 45～75 分钟（PRD 7.1 调参基线，非硬指标）。
  */
 
-export const CONFIG = {
+const BASE_CONFIG = {
   baseCultivationPerSecond: 1,
   baseSpiritPerSecond: 0.25,
   offlineCapHours: 12,
@@ -423,22 +423,22 @@ export const CONFIG = {
     },
     realm_cloud: {
       name: "问道云海", gate: "dacheng4",
-      enemy: { attack: 64, defense: 32, hp: 480 },
+      enemy: { attack: 90, defense: 45, hp: 720 },
       reward: { spiritStone: 9000, herb: 200, page: 1200 },
     },
     realm_lotus: {
       name: "不朽莲池", gate: "jinxian4",
-      enemy: { attack: 88, defense: 44, hp: 640 },
+      enemy: { attack: 116, defense: 58, hp: 980 },
       reward: { spiritStone: 30000, herb: 500, page: 5000 },
     },
     realm_origin: {
       name: "太初道藏", gate: "hunyuan_daluo4",
-      enemy: { attack: 112, defense: 56, hp: 800 },
+      enemy: { attack: 145, defense: 73, hp: 1250 },
       reward: { spiritStone: 90000, herb: 1200, page: 15000 },
     },
     realm_hongmeng: {
       name: "鸿蒙源海", gate: "hongmeng4",
-      enemy: { attack: 136, defense: 68, hp: 960 },
+      enemy: { attack: 175, defense: 90, hp: 1500 },
       reward: { spiritStone: 250000, herb: 3000, page: 40000 },
     },
   } as const,
@@ -1577,5 +1577,129 @@ export const CONFIG = {
     riskyFailBoost: 0.1, // 每次失败 +10%
     steadyCostMult: 1.15, // 稳妥成本倍率
     riskyFailCostMult: 0.2, // 冲关失败成本倍率
+  },
+} as const;
+
+type MapNodeConfig = {
+  name: string;
+  gate: string;
+  enemy: { attack: number; defense: number; hp: number };
+  firstClear: { cultivation: number; spiritStone: number; page: number; equipment: string | null };
+  repeat: { cultivation: number; page: number };
+  suppressRate: number;
+  side?: boolean;
+};
+
+// 境界越高，战斗属性进入更高量级。三境前保持新手数值；
+// 同境敌我使用同一倍率，让装备、功法与怪物的强弱关系继续成立。
+export function combatScaleForStage(stage: number): number {
+  return stage <= 3 ? 1 : 1.25 ** (stage - 3);
+}
+
+export function scaleCombatStats(stats: { attack: number; defense: number; hp: number }, stage: number) {
+  const scale = combatScaleForStage(stage);
+  return {
+    attack: Math.round(stats.attack * scale),
+    defense: Math.round(stats.defense * scale),
+    hp: Math.round(stats.hp * scale),
+  };
+}
+
+function stageForGate(gate: string): number {
+  const stage = BASE_CONFIG.realms.find((realm) => realm.id === gate)?.stage;
+  if (!stage) throw new Error(`未知境界门槛：${gate}`);
+  return stage;
+}
+
+function scaleMaps<T extends Record<string, { name: string; nodes: Record<string, MapNodeConfig> }>>(maps: T): T {
+  return Object.fromEntries(Object.entries(maps).map(([id, map]) => [id, {
+    ...map,
+    nodes: Object.fromEntries(Object.entries(map.nodes).map(([nodeId, node]) => [nodeId, {
+      ...node,
+      enemy: scaleCombatStats(node.enemy, stageForGate(node.gate)),
+    }])),
+  }])) as T;
+}
+
+function scaleSecretRealms<T extends Record<string, { gate: string; enemy: { attack: number; defense: number; hp: number } }>>(realms: T): T {
+  return Object.fromEntries(Object.entries(realms).map(([id, realm]) => [id, {
+    ...realm,
+    enemy: scaleCombatStats(realm.enemy, stageForGate(realm.gate)),
+  }])) as T;
+}
+
+// 每图两只入口支线怪；保留既有主线节点的顺序与 ID，避免旧档首通和试炼门槛变化。
+const SIDE_NAMES: Record<keyof typeof BASE_CONFIG.maps, readonly [string, string]> = {
+  map_qingyun: ["山狐", "青羽妖雀"],
+  map_nether: ["游魂", "冥谷骨鸦"],
+  map_yunling: ["雾猿", "古道石卫"],
+  map_jindan: ["丹火游灵", "炉影傀儡"],
+  map_yuanying: ["灵胎微光", "神识残影"],
+  map_huashen: ["幻山灵鹿", "念海魅影"],
+  map_lianxu: ["裂隙游灵", "虚纹影卫"],
+  map_heti: ["阴阳双蛾", "合道残影"],
+  map_dacheng: ["云海灵鹤", "问道影客"],
+  map_dujie: ["雷云电蛇", "劫风灵影"],
+  map_zhenxian: ["玉阙仙侍", "飞升旧影"],
+  map_xuanxian: ["玄光镜灵", "照影道童"],
+  map_jinxian: ["金霞灵雀", "不朽石卫"],
+  map_taiyi: ["星轨灵狐", "阵盘傀儡"],
+  map_daluo: ["三花灵影", "五气巡卫"],
+  map_hunyuan: ["一气游灵", "归元守卫"],
+  map_hunyuan_daluo: ["太虚道影", "开天石卫"],
+  map_hunyuan_wuji: ["无极光影", "虚实守卫"],
+  map_tiandao: ["因果丝灵", "天则巡卫"],
+  map_dadao: ["古钟余响", "大道残影"],
+  map_hongmeng: ["紫气游龙", "初元守卫"],
+};
+
+function addSideNodes<T extends Record<string, { name: string; nodes: Record<string, MapNodeConfig> }>>(
+  maps: T,
+): Record<keyof T, { name: string; nodes: Record<string, MapNodeConfig> }> {
+  const expanded = {} as Record<keyof T, { name: string; nodes: Record<string, MapNodeConfig> }>;
+  for (const mid of Object.keys(maps) as Array<keyof T>) {
+    const map = maps[mid];
+    const first = Object.values(map.nodes)[0];
+    const names = SIDE_NAMES[mid as keyof typeof SIDE_NAMES];
+    const makeSide = (name: string, strength: number, reward: number): MapNodeConfig => ({
+      name,
+      gate: first.gate,
+      enemy: {
+        attack: Math.max(1, Math.ceil(first.enemy.attack * strength)),
+        defense: Math.max(0, Math.ceil(first.enemy.defense * strength)),
+        hp: Math.max(1, Math.ceil(first.enemy.hp * strength)),
+      },
+      firstClear: {
+        cultivation: Math.floor(first.firstClear.cultivation * reward),
+        spiritStone: Math.floor(first.firstClear.spiritStone * reward),
+        page: Math.floor(first.firstClear.page * reward),
+        equipment: null,
+      },
+      repeat: {
+        cultivation: Math.floor(first.repeat.cultivation * reward * 4),
+        page: Math.floor(first.repeat.page * reward * 4),
+      },
+      suppressRate: Number((first.suppressRate * reward * 4).toFixed(3)),
+      side: true,
+    });
+    expanded[mid] = {
+      name: map.name,
+      nodes: {
+        ...map.nodes,
+        node_side_1: makeSide(names[0], 0.9, 0.1),
+        node_side_2: makeSide(names[1], 1.1, 0.15),
+      },
+    };
+  }
+  return expanded;
+}
+
+export const CONFIG = {
+  ...BASE_CONFIG,
+  maps: scaleMaps(addSideNodes(BASE_CONFIG.maps)),
+  secretRealms: scaleSecretRealms(BASE_CONFIG.secretRealms),
+  battleDifficulty: {
+    challenge: { attack: 1.15, defense: 1.1, hp: 1.25, reward: 1.2 },
+    bossChallenge: { attack: 1.25, defense: 1.1, hp: 1.35, reward: 1.3, maxRounds: 12 },
   },
 } as const;

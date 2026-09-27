@@ -1,7 +1,8 @@
-import { CONFIG } from "./config";
+import { CONFIG, combatScaleForStage, scaleCombatStats } from "./config";
 import { MATERIAL_RESOURCES } from "./types";
 import type {
   AptitudeId,
+  BattleDifficulty,
   BreakthroughLayer,
   BreakthroughMethod,
   BreakthroughRecord,
@@ -26,7 +27,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -55,12 +56,20 @@ const MAP_CFG = CONFIG.maps as unknown as Record<
         firstClear: { cultivation: number; spiritStone: number; page: number; equipment: string | null };
         repeat: { cultivation: number; page: number };
         suppressRate: number;
+        side?: boolean;
       }
     >;
   }
 >;
 
 const MAP_ORDER: MapId[] = Object.keys(MAP_CFG) as MapId[];
+export function mainNodeIds(mapId: MapId): string[] {
+  return Object.keys(MAP_CFG[mapId].nodes).filter((nid) => !MAP_CFG[mapId].nodes[nid].side);
+}
+
+export function isBossNode(mapId: MapId, nodeId: string): boolean {
+  return mainNodeIds(mapId).at(-1) === nodeId;
+}
 function emptySuppression(): Record<MapId, string | null> {
   return Object.fromEntries(MAP_ORDER.map((m) => [m, null])) as Record<MapId, string | null>;
 }
@@ -443,7 +452,9 @@ export function predictLongTask(
   if (realmIndex(state.realm) < realmIndex(nodeCfg.gate as RealmId)) {
     return failPred(`需${realmName(nodeCfg.gate as RealmId)}境界`);
   }
-  const defense = base.defense + (protection ? LONG_TASK_CFG.protectionDefense : 0);
+  const stage = REALMS[realmIndex(state.realm)]?.stage ?? 1;
+  const protectionDefense = Math.round(LONG_TASK_CFG.protectionDefense * combatScaleForStage(stage));
+  const defense = base.defense + (protection ? protectionDefense : 0);
   const enemy = difficulty === "risky"
     ? {
         attack: Math.ceil(nodeCfg.enemy.attack * LONG_TASK_CFG.riskyEnemyMultiplier),
@@ -631,7 +642,10 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     maps[mid as MapId] = nodes;
   }
   // 仅第一张图的第一个节点初始解锁
-  maps[MAP_ORDER[0]][Object.keys(MAP_CFG[MAP_ORDER[0]].nodes)[0]].unlocked = true;
+  maps[MAP_ORDER[0]][mainNodeIds(MAP_ORDER[0])[0]].unlocked = true;
+  for (const [nid, node] of Object.entries(MAP_CFG[MAP_ORDER[0]].nodes)) {
+    if (node.side) maps[MAP_ORDER[0]][nid].unlocked = true;
+  }
   const apt = validAptitude(aptitude);
   const state: SaveState = {
     schemaVersion: SCHEMA_VERSION,
@@ -890,7 +904,7 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
   attack += techniqueAttackBonus(s);
   defense += techniqueDefenseBonus(s);
   hp = Math.floor(hp * techniqueHpMult(s));
-  return { attack, defense, hp };
+  return scaleCombatStats({ attack, defense, hp }, REALMS[realmIndex(s.realm)]?.stage ?? 1);
 }
 
 export interface TechniqueSummary {
@@ -1411,26 +1425,36 @@ function analyzeFailure(
 }
 
 function unlockNext(s: SaveState, mapId: MapId, nodeId: string): void {
-  const nodeIds = Object.keys(MAP_CFG[mapId].nodes);
+  const nodeIds = mainNodeIds(mapId);
   const i = nodeIds.indexOf(nodeId);
+  if (i < 0) return; // 支线首通不改变主线顺序。
   if (i >= 0 && i + 1 < nodeIds.length) {
     s.maps[mapId][nodeIds[i + 1]].unlocked = true;
     return;
   }
   // 跨图解锁仅 map_qingyun → map_nether；map_yunling 由境界解锁（见 syncYunlingUnlock），不在此处串图。
   if (mapId === "map_qingyun") {
-    const first = Object.keys(MAP_CFG.map_nether.nodes)[0];
+    const first = mainNodeIds("map_nether")[0];
     s.maps.map_nether[first].unlocked = true;
+    syncRealmMaps(s);
   }
 }
 
 function syncRealmMaps(s: SaveState): void {
   for (const mid of MAP_ORDER) {
-    if (mid === "map_qingyun" || mid === "map_nether") continue; // 这两图由链式解锁
-    const first = Object.keys(MAP_CFG[mid].nodes)[0];
-    const gate = MAP_CFG[mid].nodes[first].gate;
-    if (realmIndex(s.realm) >= realmIndex(gate as RealmId) && s.maps[mid]?.[first]) {
-      s.maps[mid][first].unlocked = true;
+    const first = mainNodeIds(mid)[0];
+    if (mid !== "map_qingyun" && mid !== "map_nether") {
+      const gate = MAP_CFG[mid].nodes[first].gate;
+      if (realmIndex(s.realm) >= realmIndex(gate as RealmId) && s.maps[mid]?.[first]) {
+        s.maps[mid][first].unlocked = true;
+      }
+    }
+    if (s.maps[mid]?.[first]?.unlocked) {
+      for (const [nid, node] of Object.entries(MAP_CFG[mid].nodes)) {
+        if (node.side && realmIndex(s.realm) >= realmIndex(node.gate as RealmId)) {
+          s.maps[mid][nid].unlocked = true;
+        }
+      }
     }
   }
 }
@@ -1461,6 +1485,7 @@ function runBattle(
   enemy: { attack: number; defense: number; hp: number },
   dmgMult = 1,
   takenMult = 1,
+  maxRounds = 50,
 ): { won: boolean; log: string[] } {
   const log: string[] = [];
   let pHp = stats.hp;
@@ -1468,7 +1493,7 @@ function runBattle(
   let playerTurn = true;
   let won = false;
   let guard = 0;
-  while (guard++ < 100) {
+  while (guard++ < maxRounds * 2) {
     if (playerTurn) {
       const dmg = Math.max(1, Math.round((stats.attack - enemy.defense) * dmgMult));
       eHp -= dmg;
@@ -1485,7 +1510,31 @@ function runBattle(
     }
     playerTurn = !playerTurn;
   }
+  if (!won && pHp > 0 && eHp > 0 && maxRounds < 50) log.push(`${maxRounds} 回合已到，挑战失败。`);
   return { won, log };
+}
+
+function fightRules(mapId: MapId, nodeId: string, difficulty: BattleDifficulty) {
+  const node = MAP_CFG[mapId].nodes[nodeId];
+  if (difficulty === "normal") return { enemy: { ...node.enemy }, reward: 1, maxRounds: 50 };
+  const rule = isBossNode(mapId, nodeId) ? CONFIG.battleDifficulty.bossChallenge : CONFIG.battleDifficulty.challenge;
+  return {
+    enemy: {
+      attack: Math.ceil(node.enemy.attack * rule.attack),
+      defense: Math.ceil(node.enemy.defense * rule.defense),
+      hp: Math.ceil(node.enemy.hp * rule.hp),
+    },
+    reward: rule.reward,
+    maxRounds: isBossNode(mapId, nodeId) ? CONFIG.battleDifficulty.bossChallenge.maxRounds : 50,
+  };
+}
+
+export function repeatRewardFor(mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal") {
+  const node = MAP_CFG[mapId].nodes[nodeId];
+  const base = node.repeat;
+  const factor = fightRules(mapId, nodeId, difficulty).reward;
+  const raised = (value: number) => difficulty === "normal" || value === 0 ? value : Math.max(value + 1, Math.floor(value * factor));
+  return { cultivation: raised(base.cultivation), page: raised(base.page), material: node.side ? null : materialForStage(stageOfGate(node.gate)) };
 }
 
 export interface FightPrediction {
@@ -1497,7 +1546,7 @@ export interface FightPrediction {
   player: { attack: number; defense: number; hp: number };
 }
 
-export function predictFight(state: SaveState, mapId: MapId, nodeId: string): FightPrediction {
+export function predictFight(state: SaveState, mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal"): FightPrediction {
   const mapCfg = MAP_CFG[mapId];
   const nodeCfg = mapCfg?.nodes[nodeId];
   const nodeState = state.maps[mapId]?.[nodeId];
@@ -1507,12 +1556,14 @@ export function predictFight(state: SaveState, mapId: MapId, nodeId: string): Fi
   if (realmIndex(state.realm) < realmIndex(nodeCfg.gate as RealmId)) {
     return { ok: false, reason: `需${realmName(nodeCfg.gate as RealmId)}方可挑战`, won: false, log: [], enemy: empty, player: empty };
   }
+  if (difficulty === "challenge" && !nodeState.cleared) return { ok: false, reason: "需先普通首胜，方可挑战高难度", won: false, log: [], enemy: empty, player: empty };
   const stats = playerStats(state);
-  const battle = runBattle(stats, nodeCfg.enemy, battleDamageMult(state), battleTakenMult(state));
-  return { ok: true, reason: "", won: battle.won, log: battle.log, enemy: { ...nodeCfg.enemy }, player: stats };
+  const rules = fightRules(mapId, nodeId, difficulty);
+  const battle = runBattle(stats, rules.enemy, battleDamageMult(state), battleTakenMult(state), rules.maxRounds);
+  return { ok: true, reason: "", won: battle.won, log: battle.log, enemy: rules.enemy, player: stats };
 }
 
-export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId: string): FightOutcome {
+export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal"): FightOutcome {
   const s = settle(state, nowMs);
   const mapCfg = MAP_CFG[mapId];
   const nodeCfg = mapCfg?.nodes[nodeId];
@@ -1522,10 +1573,12 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   if (realmIndex(s.realm) < realmIndex(nodeCfg.gate as RealmId)) {
     return { ok: false, reason: `需${realmName(nodeCfg.gate as RealmId)}方可挑战`, state: s, log: [], won: false, encounterTriggered: false };
   }
+  if (difficulty === "challenge" && !nodeState.cleared) return { ok: false, reason: "需先普通首胜，方可挑战高难度", state: s, log: [], won: false, encounterTriggered: false };
 
   const stats = playerStats(s);
   const dmgMult = battleDamageMult(s);
-  const battle = runBattle(stats, nodeCfg.enemy, dmgMult, battleTakenMult(state));
+  const rules = fightRules(mapId, nodeId, difficulty);
+  const battle = runBattle(stats, rules.enemy, dmgMult, battleTakenMult(s), rules.maxRounds);
   const log = battle.log;
   const won = battle.won;
   s.daily.goals.battle.progress = Math.min(s.daily.goals.battle.progress + 1, CONFIG.dailyGoals.battle.target);
@@ -1539,7 +1592,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   }
 
   if (!won) {
-    log.push(analyzeFailure(stats, nodeCfg.enemy));
+    log.push(analyzeFailure(stats, rules.enemy));
     s.recentLogs.push(`与${nodeCfg.name}交手，不敌落败。`);
     s.revision += 1;
     return { ok: true, reason: "战败", state: s, log, won: false, encounterTriggered: false };
@@ -1553,7 +1606,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     s.resources.spiritStone += fc.spiritStone;
     s.resources.page += fc.page;
     const mat = materialForStage(stageOfGate(nodeCfg.gate as string));
-    if (mat) (s.resources as unknown as Record<string, number>)[mat] += 4;
+    if (mat && !nodeCfg.side) (s.resources as unknown as Record<string, number>)[mat] += 4;
     if (fc.equipment) {
       s.inventory[fc.equipment] = 1;
       s.recentLogs.push(`得装备「${EQUIP_CFG[fc.equipment].name}」。`);
@@ -1562,26 +1615,25 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     pushMilestone(s, "firstClear", nowMs, `首通${mapCfg.name}·${nodeCfg.name}`);
     // 首通授予：新功法按本境首节点，鸿蒙印按终点守关
     for (const [techId, req] of Object.entries(NEW_TECH_REQUIREMENT)) {
-      const firstNode = Object.keys(MAP_CFG[req.grantMap].nodes)[0];
+      const firstNode = mainNodeIds(req.grantMap)[0];
       if (mapId === req.grantMap && nodeId === firstNode && !s.learnedNewTechs.includes(techId)) {
         s.learnedNewTechs.push(techId);
         s.recentLogs.push(`得新功法《${CONFIG.techniques[techId as TechniqueId].name}》。`);
       }
     }
-    const hmLast = Object.keys(MAP_CFG.map_hongmeng.nodes).slice(-1)[0];
+    const hmLast = mainNodeIds("map_hongmeng").at(-1)!;
     if (mapId === "map_hongmeng" && nodeId === hmLast) {
       s.inventory.c_hongmeng = 1;
       s.recentLogs.push("通关鸿蒙守关，得纪念佩饰「鸿蒙印」。");
     }
     unlockNext(s, mapId, nodeId);
   } else {
-    const rc = nodeCfg.repeat;
+    const rc = repeatRewardFor(mapId, nodeId, difficulty);
     if (s.daily.rewardedRepeats < CONFIG.rewardedRepeatBattlesPerDay) {
       s.daily.rewardedRepeats += 1;
       s.resources.cultivation += rc.cultivation;
       s.resources.page += rc.page;
-      const mat = materialForStage(stageOfGate(nodeCfg.gate as string));
-      if (mat) (s.resources as unknown as Record<string, number>)[mat] += 1;
+      if (rc.material) (s.resources as unknown as Record<string, number>)[rc.material] += 1;
       s.recentLogs.push(`再胜${nodeCfg.name}，领取今日重复历练奖励。`);
     } else {
       s.recentLogs.push(`再胜${nodeCfg.name}，今日重复历练奖励已领尽。`);
@@ -1613,7 +1665,7 @@ export function setSuppression(state: SaveState, nowMs: number, mapId: MapId, no
   const supText = `于${MAP_CFG[mapId].name}镇压${MAP_CFG[mapId].nodes[nodeId].name}`;
   s.recentLogs.push(`${supText}，得其产出。`);
   pushMilestone(s, "suppress", nowMs, supText);
-  if (mapId === "map_qingyun" && nodeId === Object.keys(MAP_CFG.map_qingyun.nodes)[0]) {
+  if (mapId === "map_qingyun" && nodeId === mainNodeIds("map_qingyun")[0]) {
     s.firsts.suppressedFirstNodeOnce = true;
   }
   s.daily.goals.suppress.progress = Math.min(s.daily.goals.suppress.progress + 1, CONFIG.dailyGoals.suppress.target);
@@ -1786,7 +1838,7 @@ export function jindanTrialCost(): { cultivation: number; spirit: number; spirit
 
 export function jindanTrialGateOk(state: SaveState): { ok: boolean; reason: string } {
   if (state.realm !== "zhuji10") return { ok: false, reason: "仅筑基十层可结丹" };
-  const nodeIds = Object.keys(MAP_CFG.map_yunling.nodes);
+  const nodeIds = mainNodeIds("map_yunling");
   const guardian = nodeIds[nodeIds.length - 1]; // 护丹灵（第三节点）
   if (!state.maps.map_yunling?.[guardian]?.cleared) return { ok: false, reason: "需先首通云岭古道·护丹灵" };
   return { ok: true, reason: "" };
@@ -1867,7 +1919,7 @@ export function yuanyingTrialCost(): { cultivation: number; spirit: number; spir
 
 export function yuanyingTrialGateOk(state: SaveState): { ok: boolean; reason: string } {
   if (state.realm !== "jindan10") return { ok: false, reason: "仅金丹十层可冲击元婴" };
-  const nodeIds = Object.keys(MAP_CFG.map_jindan.nodes);
+  const nodeIds = mainNodeIds("map_jindan");
   const guardian = nodeIds[nodeIds.length - 1]; // 元婴裂隙（末节点）
   if (!state.maps.map_jindan?.[guardian]?.cleared) return { ok: false, reason: "需先首通金丹秘境·元婴裂隙" };
   return { ok: true, reason: "" };
@@ -1960,7 +2012,7 @@ export function crossStageTrialGateOk(state: SaveState): { ok: boolean; reason: 
   if (!t) return { ok: false, reason: "当前境界不可跨境" };
   if (t.cfg.gateMap) {
     const mid = t.cfg.gateMap as MapId;
-    const nodeIds = Object.keys(MAP_CFG[mid].nodes);
+    const nodeIds = mainNodeIds(mid);
     const guardian = nodeIds[nodeIds.length - 1];
     if (!state.maps[mid]?.[guardian]?.cleared) {
       return { ok: false, reason: `需先首通${MAP_CFG[mid].name}·${MAP_CFG[mid].nodes[guardian].name}` };
@@ -2101,7 +2153,7 @@ function fmtReward(r: Resources): string {
 export function migrateSave(raw: SaveState): SaveState {
   const s = structuredClone(raw) as unknown as Record<string, unknown>;
   migrateRealmRefs(s, (s.schemaVersion as number) ?? 0);
-  const firstNode = Object.keys(MAP_CFG.map_qingyun.nodes)[0];
+  const firstNode = mainNodeIds("map_qingyun")[0];
   const suppression = (s.suppression ?? {}) as Record<string, unknown>;
   if (!Array.isArray(s.milestones)) s.milestones = [];
   if (!s.firsts || typeof s.firsts !== "object") {
@@ -2131,8 +2183,8 @@ export function migrateSave(raw: SaveState): SaveState {
   const maps = (s.maps ?? {}) as Record<string, Record<string, unknown>>;
   for (const mid of MAP_ORDER) {
     if (!maps[mid]) maps[mid] = {};
-    const nodeIds = Object.keys(MAP_CFG[mid].nodes);
-    for (const nid of nodeIds) {
+    const nodeIds = mainNodeIds(mid);
+    for (const nid of Object.keys(MAP_CFG[mid].nodes)) {
       if (!maps[mid][nid]) maps[mid][nid] = { unlocked: false, cleared: false };
     }
     for (let i = 1; i < nodeIds.length; i++) {
@@ -2193,11 +2245,11 @@ export function migrateSave(raw: SaveState): SaveState {
   syncRealmMaps(migrated);
   // 补记已首通的新功法（旧档）与鸿蒙印
   for (const [techId, req] of Object.entries(NEW_TECH_REQUIREMENT)) {
-    const firstNode = Object.keys(MAP_CFG[req.grantMap].nodes)[0];
+    const firstNode = mainNodeIds(req.grantMap)[0];
     const cleared = (migrated.maps[req.grantMap] as Record<string, { cleared: boolean }>)?.[firstNode]?.cleared;
     if (cleared && !migrated.learnedNewTechs.includes(techId)) migrated.learnedNewTechs.push(techId);
   }
-  const hmLast = Object.keys(MAP_CFG.map_hongmeng.nodes).slice(-1)[0];
+  const hmLast = mainNodeIds("map_hongmeng").at(-1)!;
   if ((migrated.maps.map_hongmeng as Record<string, { cleared: boolean }>)?.[hmLast]?.cleared) {
     migrated.inventory.c_hongmeng = 1;
   }
@@ -2383,6 +2435,7 @@ function validateMaps(maps: unknown, suppression: unknown, schemaVersion: number
       const ns = rec[nid] as Record<string, unknown> | undefined;
       if (!ns) {
         if (schemaVersion < MAP_EXPANDED_VERSION && LEGACY_MISSING_NODES[mid]?.has(nid)) continue;
+        if (schemaVersion < 15 && MAP_CFG[mid].nodes[nid].side) continue;
         return "节点数据无效";
       }
       if (typeof ns.unlocked !== "boolean" || typeof ns.cleared !== "boolean") return "节点数据无效";

@@ -45,14 +45,30 @@ export function CreateCharacter() {
     mode === "random" ? fortune : { spiritRoots: ["金"], meridians: meridian as Fortune["meridians"], comprehension: comprehension as Fortune["comprehension"] };
 
   const m = MERIDIAN_CFG[finalFortune.meridians];
-  const c = COMPREHENSION_CFG[finalFortune.comprehension];
   const mult = m.productionMult * (CONFIG.aptitudes[aptitude] as unknown as { cultivationMult: number }).cultivationMult;
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-6">
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-6 shadow-sm">
-        <h1 className="text-center text-2xl font-semibold">青云修仙录</h1>
-        <p className="mt-1 text-center text-sm text-muted">踏入仙途，从炼气一层开启修行</p>
+    <div className="flex min-h-screen items-center justify-center px-4 py-5 sm:py-8">
+      <div className="grid w-full max-w-[980px] overflow-hidden rounded-[28px] border border-line bg-card shadow-[0_24px_70px_rgba(24,47,40,.15)] lg:grid-cols-[.82fr_1fr]">
+        <div className="realm-hero relative flex min-h-[220px] flex-col justify-between overflow-hidden p-7 text-[#f9f2e4] sm:p-9 lg:min-h-[690px]">
+          <svg aria-hidden="true" viewBox="0 0 460 560" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full opacity-50">
+            <circle cx="360" cy="135" r="100" fill="none" stroke="#d9bf88" strokeWidth="1" />
+            <path d="M-30 450 130 225l100 130 52-65 205 270H-30Z" fill="#749187" opacity=".4" />
+            <path d="M-40 550 115 350l85 88 65-58 225 180H-40Z" fill="#a1b7a4" opacity=".24" />
+            <path d="M0 485c95-46 166 24 280-21 72-28 112-6 180-40" fill="none" stroke="#ddcda5" strokeWidth="2" opacity=".5" />
+          </svg>
+          <div className="relative">
+            <div className="brand-seal mb-6 flex h-14 w-14 items-center justify-center rounded-2xl text-2xl">青</div>
+            <p className="text-[11px] tracking-[.28em] text-[#d6c18e]">A JOURNEY BEGINS</p>
+            <h1 className="display-font mt-2 text-4xl font-semibold tracking-[.12em] sm:text-[45px]">青云修仙录</h1>
+            <p className="mt-3 text-sm leading-relaxed text-[#d9e3d9]">从一缕灵气开始，写下你的修行故事。</p>
+          </div>
+          <div className="relative hidden border-t border-white/20 pt-6 text-sm leading-8 text-[#d7e0d5] lg:block">云起青山，路入仙门。<br />命盘既定，前途由你亲手开辟。</div>
+        </div>
+        <div className="p-5 sm:p-8">
+        <p className="text-[10px] font-semibold tracking-[.24em] text-gold">第一卷 · 入道</p>
+        <h2 className="display-font mt-1 text-[25px] font-semibold tracking-wide">定下你的命盘</h2>
+        <p className="mt-1 text-sm text-muted">选好道号与修行资质，即可踏入仙途。</p>
 
         <div className="mt-4 rounded-lg border border-line/60 bg-paper p-3 text-xs text-ink/70 leading-relaxed">
           游戏进度保存在当前浏览器本地，清理浏览器数据或换设备会丢失，请定期导出存档。
@@ -64,8 +80,8 @@ export function CreateCharacter() {
           <div>
             <span className="text-sm text-muted">际遇文案</span>
             <div className="mt-1 flex gap-2">
-              <button onClick={() => toggleCopy("ai")} className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "ai" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>AI 文案</button>
-              <button onClick={() => toggleCopy("template")} className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "template" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>仅用模板</button>
+              <button onClick={() => toggleCopy("ai")} className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "ai" ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>AI 文案</button>
+              <button onClick={() => toggleCopy("template")} className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "template" ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>仅用模板</button>
             </div>
           </div>
 
@@ -80,8 +96,8 @@ export function CreateCharacter() {
           <div>
             <span className="text-sm text-muted">开局方式</span>
             <div className="mt-1 flex gap-2">
-              <button onClick={() => setMode("random")} className={`flex-1 rounded-lg border py-2 text-sm ${mode === "random" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>随机鉴灵</button>
-              <button onClick={() => setMode("custom")} className={`flex-1 rounded-lg border py-2 text-sm ${mode === "custom" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>自行设定</button>
+              <button onClick={() => setMode("random")} className={`flex-1 rounded-lg border py-2 text-sm ${mode === "random" ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>随机鉴灵</button>
+              <button onClick={() => setMode("custom")} className={`flex-1 rounded-lg border py-2 text-sm ${mode === "custom" ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>自行设定</button>
             </div>
           </div>
 
@@ -103,7 +119,7 @@ export function CreateCharacter() {
                 <span className="text-sm text-muted">经脉（定修炼产速）</span>
                 <div className="mt-1 flex flex-wrap gap-2">
                   {MERIDIAN_ORDER.map((id) => (
-                    <button key={id} onClick={() => setMeridian(id)} className={`rounded-lg border px-3 py-1.5 text-sm ${meridian === id ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                    <button key={id} onClick={() => setMeridian(id)} className={`rounded-lg border px-3 py-1.5 text-sm ${meridian === id ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>
                       {MERIDIAN_CFG[id].name} ×{MERIDIAN_CFG[id].productionMult}
                     </button>
                   ))}
@@ -113,7 +129,7 @@ export function CreateCharacter() {
                 <span className="text-sm text-muted">悟性（定功法费用）</span>
                 <div className="mt-1 flex flex-wrap gap-2">
                   {COMPREHENSION_ORDER.map((id) => (
-                    <button key={id} onClick={() => setComprehension(id)} className={`rounded-lg border px-3 py-1.5 text-sm ${comprehension === id ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                    <button key={id} onClick={() => setComprehension(id)} className={`rounded-lg border px-3 py-1.5 text-sm ${comprehension === id ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>
                       {COMPREHENSION_CFG[id].name} ×{COMPREHENSION_CFG[id].pageMult}
                     </button>
                   ))}
@@ -128,7 +144,7 @@ export function CreateCharacter() {
               {APTITUDE_ORDER.map((a) => {
                 const cfg = CONFIG.aptitudes[a];
                 return (
-                  <button key={a} onClick={() => setAptitude(a)} className={`rounded-lg border px-3 py-2 text-left text-sm ${aptitude === a ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                  <button key={a} onClick={() => setAptitude(a)} className={`rounded-lg border px-3 py-2 text-left text-sm ${aptitude === a ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>
                     <span className="font-medium">{cfg.name}</span>
                     <span className="ml-2 text-xs text-muted">修为 ×{cfg.cultivationMult}、灵气 ×{cfg.spiritMult}</span>
                   </button>
@@ -146,6 +162,7 @@ export function CreateCharacter() {
             踏入仙途
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -33,27 +33,7 @@ export default function DongfuPage() {
 
   return (
     <>
-      <Section title="修炼侧重">
-        <p className="mb-2 text-xs text-muted">切换修炼侧重，不收费、不随机；切换前先结算当前收益。</p>
-        {(["balanced", "focus", "spirit"] as const).map((a) => {
-          const cfg = CONFIG.aptitudes[a];
-          const active = state.aptitude === a;
-          return (
-            <div key={a} className="flex items-center justify-between border-b border-line/60 py-2 last:border-0">
-              <div className="text-sm">
-                {cfg.name}
-                <span className="ml-1 text-xs text-muted">修为 ×{cfg.cultivationMult}、灵气 ×{cfg.spiritMult}</span>
-                {active && <span className="ml-1 text-xs text-cinnabar">当前</span>}
-              </div>
-              {!active && (
-                <button onClick={() => setAptitude(a)} className="rounded-lg border border-line bg-paper px-3 py-1 text-xs">切换</button>
-              )}
-            </div>
-          );
-        })}
-      </Section>
-
-    <Section title="洞府建筑">
+    <Section title="洞府建筑" variant="featured">
       <p className="mb-2 text-sm text-muted">{WORLD_TEXT.dongfu}</p>
       {(Object.keys(BUILDINGS) as BuildingId[]).map((id) => {
         const b = BUILDINGS[id];
@@ -151,6 +131,27 @@ export default function DongfuPage() {
         )}
       </div>
     </Section>
+
+      <Section title="修炼侧重">
+        <p className="mb-2 text-xs text-muted">切换修炼侧重，不收费、不随机；切换前先结算当前收益。</p>
+        {(["balanced", "focus", "spirit"] as const).map((a) => {
+          const cfg = CONFIG.aptitudes[a];
+          const active = state.aptitude === a;
+          return (
+            <div key={a} className="flex items-center justify-between border-b border-line/60 py-2 last:border-0">
+              <div className="text-sm">
+                {cfg.name}
+                <span className="ml-1 text-xs text-muted">修为 ×{cfg.cultivationMult}、灵气 ×{cfg.spiritMult}</span>
+                {active && <span className="ml-1 text-xs text-cinnabar">当前</span>}
+              </div>
+              {!active && (
+                <button onClick={() => setAptitude(a)} className="rounded-lg border border-line bg-paper px-3 py-1 text-xs">切换</button>
+              )}
+            </div>
+          );
+        })}
+      </Section>
+
     </>
   );
 }

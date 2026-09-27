@@ -12,7 +12,7 @@ import {
 } from "react";
 import * as eng from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId, BreakthroughMethod, SecretRealmId } from "@/engine/types";
+import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId, BreakthroughMethod, SecretRealmId, BattleDifficulty } from "@/engine/types";
 import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave, type LoadedSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
@@ -75,7 +75,7 @@ interface GameContextValue {
   craftGainPill: (type: "yangYuan" | "juLing", tier: number) => void;
   useGainPill: (type: "yangYuan" | "juLing", tier: number) => void;
   quenchEquipment: (id: string) => void;
-  fight: (mapId: MapId, nodeId: string) => void;
+  fight: (mapId: MapId, nodeId: string, difficulty?: BattleDifficulty) => void;
   suppress: (mapId: MapId, nodeId: string) => void;
   choose: (optionId: string) => void;
   startTrial: () => void;
@@ -764,11 +764,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state, apply]);
 
   const fight = useCallback(
-    async (mapId: MapId, nodeId: string) => {
+    async (mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal") => {
       if (!state) return;
       const nowMs = Date.now();
       const settled = eng.settle(state, nowMs);
-      const r = eng.fightNode(settled, nowMs, mapId, nodeId);
+      const r = eng.fightNode(settled, nowMs, mapId, nodeId, difficulty);
       setBattleLog(r.log);
       if (!r.ok) {
         setNotice(r.reason);

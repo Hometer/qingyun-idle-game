@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SCHEMA_VERSION,
+  mainNodeIds,
   createGame,
   settle,
   breakthrough,
@@ -1783,7 +1784,7 @@ describe("v1.2 金丹与元婴", () => {
     s.technique = "xuanGui";
     s.techniqueLevel.xuanGui = 3;
     s.equipment = { weapon: "w_steel", armor: "a_steel", accessory: "c_jade" };
-    const nodeIds = Object.keys(CONFIG.maps.map_jindan.nodes);
+    const nodeIds = mainNodeIds("map_jindan");
     const guardian = nodeIds[nodeIds.length - 1];
     s.maps.map_jindan[guardian].cleared = true;
     s.maps.map_jindan[guardian].unlocked = true;
@@ -1814,7 +1815,7 @@ describe("v1.2 二十境通用", () => {
     s.technique = "xuanGui";
     s.techniqueLevel.xuanGui = 3;
     s.equipment = { weapon: "w_steel", armor: "a_steel", accessory: "c_jade" };
-    const nodeIds = Object.keys(CONFIG.maps.map_yuanying.nodes);
+    const nodeIds = mainNodeIds("map_yuanying");
     const guardian = nodeIds[nodeIds.length - 1];
     s.maps.map_yuanying[guardian].cleared = true;
     s.maps.map_yuanying[guardian].unlocked = true;
@@ -1840,8 +1841,8 @@ describe("二十境内容与日常节奏", () => {
       if (["map_qingyun", "map_nether", "map_yunling", "map_jindan"].includes(mid)) continue;
       names.push(...Object.values(map.nodes).map((n) => n.name));
     }
-    expect(names).toHaveLength(85);
-    expect(new Set(names).size).toBe(85);
+    expect(names).toHaveLength(119);
+    expect(new Set(names).size).toBe(119);
     expect(names.some((name) => name.includes("秘境灵兽"))).toBe(false);
     const trialNames = Object.values(CONFIG.trials).map((t) => t.name);
     expect(new Set(trialNames).size).toBe(19);
@@ -1908,8 +1909,7 @@ describe("二十境内容与日常节奏", () => {
       s.realm = realm.id as RealmId;
       const gateMap = CONFIG.trials[realm.stage as keyof typeof CONFIG.trials].gateMap as MapId | null;
       if (gateMap) {
-        const maps = CONFIG.maps as unknown as Record<string, { nodes: Record<string, unknown> }>;
-        const nodes = Object.keys(maps[gateMap].nodes);
+        const nodes = mainNodeIds(gateMap);
         s.maps[gateMap][nodes[nodes.length - 1]].cleared = true;
       }
       const info = crossStageTrialInfo(s);

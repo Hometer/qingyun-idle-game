@@ -2,18 +2,23 @@ export function Section({
   title,
   action,
   children,
+  variant = "default",
 }: {
   title: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  variant?: "default" | "featured";
 }) {
   return (
-    <section className="mt-3 rounded-xl border border-line bg-card p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-semibold">{title}</h2>
+    <section className={`game-section relative mt-4 overflow-hidden rounded-[22px] border border-line bg-card p-4 sm:p-5 ${variant === "featured" ? "game-section-featured" : ""}`}>
+      <div className="relative mb-4 flex items-center justify-between gap-3 border-b border-line/70 pb-3">
+        <h2 className="game-section-title flex min-w-0 items-center gap-2.5 text-[18px] font-semibold tracking-wide sm:text-[20px]">
+          <span aria-hidden="true" className="h-4 w-[3px] shrink-0 rounded-full bg-cinnabar" />
+          {title}
+        </h2>
         {action}
       </div>
-      {children}
+      <div className="relative">{children}</div>
     </section>
   );
 }

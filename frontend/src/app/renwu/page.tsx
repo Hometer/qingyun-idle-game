@@ -6,7 +6,7 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { playerStats, marrowTiersReached, marrowCost } from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, DAILY_GOALS, RESOURCE_LABELS, SECRET_REALMS, fmtTime } from "@/lib/labels";
+import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, DAILY_GOALS, RESOURCE_LABELS, SECRET_REALMS, fmtCombat, fmtTime } from "@/lib/labels";
 import { getTheme, setTheme, getReduceMotion, setReduceMotion, getCopyMode, setCopyMode, type Theme, type CopyMode } from "@/lib/prefs";
 import type { MapId, SecretRealmId } from "@/engine/types";
 
@@ -95,7 +95,7 @@ export default function RenwuPage() {
 
   return (
     <>
-      <Section title="人物">
+      <Section title="人物" variant="featured">
         <p className="text-sm">
           {state.name}（灵根：{state.spiritRoots.join("、")}）· {REALM_NAMES[state.realm]}
         </p>
@@ -106,7 +106,7 @@ export default function RenwuPage() {
           修炼侧重：{CONFIG.aptitudes[state.aptitude].name}（修为 ×{CONFIG.aptitudes[state.aptitude].cultivationMult}、灵气 ×{CONFIG.aptitudes[state.aptitude].spiritMult}）
         </p>
         <p className="mt-1 text-sm text-muted">
-          基础 攻{base.attack} 防{base.defense} 气血{base.hp}
+          基础 攻{base.attack} 防{base.defense} 气血{base.hp} · 装备与功法下列为基础加成，战斗合计随境界放大
         </p>
         {eqContrib.length > 0 && <p className="mt-0.5 text-sm text-muted">装备：{eqContrib.join("；")}</p>}
         {(state.technique === "poYue" || state.auxiliaryTechnique === "poYue") && state.techniqueLevel.poYue >= 1 && (
@@ -115,7 +115,7 @@ export default function RenwuPage() {
           </p>
         )}
         <p className="mt-1 text-sm font-medium">
-          合计 攻 {stats.attack} ／ 防 {stats.defense} ／ 气血 {stats.hp}
+          合计 攻 {fmtCombat(stats.attack)} ／ 防 {fmtCombat(stats.defense)} ／ 气血 {fmtCombat(stats.hp)}
         </p>
         <p className="mt-1 text-sm text-muted">修行进度：第 {currentStage}/20 境 · 历练首通 {clearedNodes.length}/{totalEnemies}</p>
         {wearing.length > 0 && (
@@ -326,13 +326,13 @@ export default function RenwuPage() {
         <div className="flex gap-2">
           <button
             onClick={() => pickCopy("ai")}
-            className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "ai" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+            className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "ai" ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}
           >
             AI 文案
           </button>
           <button
             onClick={() => pickCopy("template")}
-            className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "template" ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+            className={`flex-1 rounded-lg border py-2 text-sm ${copyMode === "template" ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}
           >
             仅用模板
           </button>
@@ -345,7 +345,7 @@ export default function RenwuPage() {
             <button
               key={t}
               onClick={() => pickTheme(t)}
-              className={`flex-1 rounded-lg border py-2 text-sm ${theme === t ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+              className={`flex-1 rounded-lg border py-2 text-sm ${theme === t ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}
             >
               {t === "light" ? "浅色" : t === "dark" ? "深色" : "跟随系统"}
             </button>
@@ -389,7 +389,7 @@ export default function RenwuPage() {
           </button>
           <button
             onClick={doReset}
-            className="rounded-lg border border-cinnabar/50 bg-[#f6e3de] px-3 py-1.5 text-sm text-cinnabar"
+            className="rounded-lg border border-cinnabar/50 bg-cinnabar/10 px-3 py-1.5 text-sm text-cinnabar"
           >
             重置（新开一局）
           </button>

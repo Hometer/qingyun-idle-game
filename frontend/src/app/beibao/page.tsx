@@ -4,22 +4,74 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { EQUIPMENT, BUILDINGS, REALM_NAMES, REALM_ORDER, RESOURCE_LABELS } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
+import { playerStats } from "@/engine/engine";
 
 export default function BeibaoPage() {
-  const { state, view, equip, craftPill, togglePill, craftGainPill, useGainPill, quenchEquipment, craftEquipment } = useGame();
+  const { state, view, equip, craftPill, togglePill, craftGainPill, useGainPill: consumeGainPill, quenchEquipment, craftEquipment } = useGame();
   if (!state) return null;
   const current = view ?? state;
+  const equippedStats = playerStats(current);
 
   const ownedEquip = Object.keys(EQUIPMENT).filter((id) => (state.inventory[id] || 0) > 0);
   const furnaceLvl = state.buildings.alchemyFurnace;
   const recipe = furnaceLvl >= 1 ? BUILDINGS.alchemyFurnace.levels[furnaceLvl - 1] : null;
-  const canCraft =
-    recipe !== null &&
-    current.resources.herb >= (recipe.pillHerbCost ?? 0) &&
-    current.resources.spiritStone >= (recipe.pillStoneCost ?? 0);
 
   return (
     <>
+      <Section title="装备" variant="featured">
+        <p className="mb-2 text-xs text-muted">下列装备加成为基础值；战斗时随当前境界放大。“穿上后”显示当前实际属性变化。</p>
+        {ownedEquip.length === 0 ? (
+          <p className="text-sm text-muted">暂无可用装备，历练首通可得</p>
+        ) : (
+          ownedEquip.map((id) => {
+            const e = EQUIPMENT[id];
+            const cur = state.equipment[e.slot as "weapon" | "armor" | "accessory"];
+            const wearing = cur === id;
+            const nextStats = playerStats({ ...current, equipment: { ...current.equipment, [e.slot]: id } });
+            const dAtk = nextStats.attack - equippedStats.attack;
+            const dDef = nextStats.defense - equippedStats.defense;
+            const dHp = nextStats.hp - equippedStats.hp;
+            const delta: string[] = [];
+            if (dAtk) delta.push(`${dAtk > 0 ? "+" : ""}${dAtk} 攻`);
+            if (dDef) delta.push(`${dDef > 0 ? "+" : ""}${dDef} 防`);
+            if (dHp) delta.push(`${dHp > 0 ? "+" : ""}${dHp} 气血`);
+            return (
+              <div key={id} className="border-b border-line/60 py-2 last:border-0">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm">
+                    {e.name}
+                    <span className="ml-1 text-xs text-muted">
+                      {e.attack ? `基础攻+${e.attack}` : ""}
+                      {e.defense ? ` 基础防+${e.defense}` : ""}
+                  {e.hp ? ` 基础气血+${e.hp}` : ""}
+                  {e.tribulationReduction ? ` 护劫减伤+${Math.round(e.tribulationReduction * 100)}%` : ""}
+                    </span>
+                    {wearing && <span className="text-muted">（穿戴中）</span>}
+                  </div>
+                  <div className="flex gap-1">
+                    {CONFIG.crafts[id as keyof typeof CONFIG.crafts] && !state.quenched.includes(id) && (
+                      <button onClick={() => quenchEquipment(id)} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs">
+                        淬炼
+                      </button>
+                    )}
+                    <button
+                      onClick={() => equip(id)}
+                      disabled={wearing}
+                      className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
+                    >
+                      穿戴
+                    </button>
+                  </div>
+                </div>
+                {!wearing && delta.length > 0 && (
+                  <p className="mt-0.5 text-xs text-cinnabar">穿上后 {delta.join("，")}</p>
+                )}
+              </div>
+            );
+          })
+        )}
+      </Section>
+
       <Section title="丹药">
         <div className="mb-2 text-xs text-muted">护劫丹：试炼第三波回血，手动预置不占收益丹次数。</div>
         {[1, 2, 3, 4].map((tier) => {
@@ -75,7 +127,7 @@ export default function BeibaoPage() {
                   </div>
                   <div className="flex gap-1">
                     <button onClick={() => craftGainPill(type, tier)} disabled={!canCraft} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs disabled:opacity-40">炼</button>
-                    <button onClick={() => useGainPill(type, tier)} disabled={held < 1 || danUsed} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs disabled:opacity-40">{danUsed ? "今日已服" : "服用"}</button>
+                    <button onClick={() => consumeGainPill(type, tier)} disabled={held < 1 || danUsed} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs disabled:opacity-40">{danUsed ? "今日已服" : "服用"}</button>
                   </div>
                 </div>
                 <p className="mt-0.5 text-xs text-muted">
@@ -106,12 +158,6 @@ export default function BeibaoPage() {
               eq.hp ? `气血+${eq.hp}` : "",
               eq.tribulationReduction ? `护劫减伤+${Math.round(eq.tribulationReduction * 100)}%` : "",
             ].filter(Boolean).join("、");
-            const shortfall = [
-              Math.max(0, cfg.cost.iron - current.resources.iron) > 0 ? `玄铁 ${Math.max(0, cfg.cost.iron - current.resources.iron)}` : "",
-              Math.max(0, cfg.cost.spiritStone - current.resources.spiritStone) > 0 ? `灵石 ${Math.max(0, cfg.cost.spiritStone - current.resources.spiritStone)}` : "",
-              Math.max(0, cfg.cost.herb - current.resources.herb) > 0 ? `灵草 ${Math.max(0, cfg.cost.herb - current.resources.herb)}` : "",
-              Math.max(0, cfg.cost.page - current.resources.page) > 0 ? `残页 ${Math.max(0, cfg.cost.page - current.resources.page)}` : "",
-            ].filter(Boolean).join("、");
             return (
               <div key={id} className="border-b border-line/60 py-2 last:border-0">
                 <div className="flex items-center justify-between">
@@ -136,58 +182,6 @@ export default function BeibaoPage() {
         )}
       </Section>
 
-      <Section title="装备">
-        {ownedEquip.length === 0 ? (
-          <p className="text-sm text-muted">暂无可用装备，历练首通可得</p>
-        ) : (
-          ownedEquip.map((id) => {
-            const e = EQUIPMENT[id];
-            const cur = state.equipment[e.slot as "weapon" | "armor" | "accessory"];
-            const wearing = cur === id;
-            const curCfg = cur ? EQUIPMENT[cur] : null;
-            const dAtk = (e.attack ?? 0) - (curCfg?.attack ?? 0);
-            const dDef = (e.defense ?? 0) - (curCfg?.defense ?? 0);
-            const dHp = (e.hp ?? 0) - (curCfg?.hp ?? 0);
-            const delta: string[] = [];
-            if (dAtk) delta.push(`${dAtk > 0 ? "+" : ""}${dAtk} 攻`);
-            if (dDef) delta.push(`${dDef > 0 ? "+" : ""}${dDef} 防`);
-            if (dHp) delta.push(`${dHp > 0 ? "+" : ""}${dHp} 气血`);
-            return (
-              <div key={id} className="border-b border-line/60 py-2 last:border-0">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm">
-                    {e.name}
-                    <span className="ml-1 text-xs text-muted">
-                      {e.attack ? `攻+${e.attack}` : ""}
-                      {e.defense ? ` 防+${e.defense}` : ""}
-                  {e.hp ? ` 气血+${e.hp}` : ""}
-                  {e.tribulationReduction ? ` 护劫减伤+${Math.round(e.tribulationReduction * 100)}%` : ""}
-                    </span>
-                    {wearing && <span className="text-muted">（穿戴中）</span>}
-                  </div>
-                  <div className="flex gap-1">
-                    {CONFIG.crafts[id as keyof typeof CONFIG.crafts] && !state.quenched.includes(id) && (
-                      <button onClick={() => quenchEquipment(id)} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs">
-                        淬炼
-                      </button>
-                    )}
-                    <button
-                      onClick={() => equip(id)}
-                      disabled={wearing}
-                      className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
-                    >
-                      穿戴
-                    </button>
-                  </div>
-                </div>
-                {!wearing && delta.length > 0 && (
-                  <p className="mt-0.5 text-xs text-cinnabar">穿上后 {delta.join("，")}</p>
-                )}
-              </div>
-            );
-          })
-        )}
-      </Section>
     </>
   );
 }

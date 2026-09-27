@@ -48,7 +48,7 @@ export const EQUIPMENT = CONFIG.equipment as unknown as Record<
 
 export const MAPS = CONFIG.maps as unknown as Record<
   string,
-  { name: string; nodes: Record<string, { name: string; gate: string; [k: string]: unknown }> }
+  { name: string; nodes: Record<string, { name: string; gate: string; side?: boolean; [k: string]: unknown }> }
 >;
 
 export const DAILY_GOALS = CONFIG.dailyGoals as unknown as Record<
@@ -62,6 +62,10 @@ export const SUPPRESSION_DURATION_HOURS = CONFIG.suppressionDurationHours;
 
 export function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+export function fmtCombat(n: number): string {
+  return n.toLocaleString("zh-CN");
 }
 
 // 百分比显示，保留 0.5 精度（2.5% 显示 2.5，5% 显示 5）

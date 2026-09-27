@@ -10,6 +10,7 @@ export type ComprehensionId = "dull" | "slow" | "normal" | "clever" | "genius"; 
 export type AptitudeId = "balanced" | "focus" | "spirit"; // 均衡 / 凝神 / 聚灵
 export type BreakthroughLayer = `${RealmStagePrefix}${Exclude<RealmLayerNum, "10">}`;
 export type BreakthroughMethod = "steady" | "risky"; // 稳妥 / 冲关
+export type BattleDifficulty = "normal" | "challenge";
 export type BuildingId = "cultivationRoom" | "spiritArray" | "spiritField" | "alchemyFurnace";
 export type TechniqueId = "qingYun" | "xuanGui" | "poYue" | "juYuan" | "ningYing" | "yunHai" | "buXiu" | "hunYuanGuiYi" | "taiChu";
 export type EquipSlot = "weapon" | "armor" | "accessory";

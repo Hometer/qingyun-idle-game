@@ -70,7 +70,7 @@ export default function XiulianPage() {
 
   return (
     <>
-      <Section title="境界">
+      <Section title="境界" variant="featured">
         <div className="text-xl font-semibold">{REALM_NAMES[state.realm]}</div>
         {isMax && <p className="mt-2 text-sm text-cinnabar">二十境修行已圆满。仍可历练秘境、收集装备，并在人物页回看修行经历。</p>}
         {!isMax && next && (
@@ -96,7 +96,7 @@ export default function XiulianPage() {
                 稳妥进阶
                 {steadyCosts && <span className="ml-1 text-xs opacity-80">消耗修为 {fmt(steadyCosts.success.cultivation)}、灵气 {fmt(steadyCosts.success.spirit)} · 必定成功</span>}
               </button>
-              <button onClick={() => doBreakthrough("risky")} disabled={!riskyEnough} className="w-full rounded-lg border border-cinnabar/60 bg-[#f6e3de] px-4 py-2 text-cinnabar disabled:opacity-40">
+              <button onClick={() => doBreakthrough("risky")} disabled={!riskyEnough} className="w-full rounded-lg border border-cinnabar/60 bg-cinnabar/10 px-4 py-2 text-cinnabar disabled:opacity-40">
                 冲关进阶
                 {riskyCosts && (
                   <span className="ml-1 text-xs opacity-80">
@@ -128,7 +128,7 @@ export default function XiulianPage() {
                 <button
                   key={d}
                   onClick={() => setSeclusionDuration(d)}
-                  className={`flex-1 rounded-lg border py-2 text-sm ${seclusionDuration === d ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}
+                  className={`flex-1 rounded-lg border py-2 text-sm ${seclusionDuration === d ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}
                 >
                   {d} 分钟
                 </button>

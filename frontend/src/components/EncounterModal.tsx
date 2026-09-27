@@ -21,7 +21,7 @@ export function EncounterModal() {
                 <button
                   key={o.option_id}
                   onClick={() => choose(o.option_id)}
-                  className="rounded-lg border border-line bg-paper px-4 py-2.5 text-left hover:bg-[#efe8da]"
+                  className="rounded-lg border border-line bg-paper px-4 py-2.5 text-left hover:bg-cinnabar/10"
                 >
                   {o.option_text}
                 </button>
