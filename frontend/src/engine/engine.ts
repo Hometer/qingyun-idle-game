@@ -28,7 +28,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -340,6 +340,11 @@ function battleMods(s: SaveState): { critRate: number; regen: number; lowHpBoost
   return { critRate: affixSum(s, "critRate"), regen: affixSum(s, "regen"), lowHpBoost: affixSum(s, "lowHpBoost") };
 }
 
+// 秘境伤害倍率：只吃装备“战斗伤害”词条，不受破军/金之共鸣等历练专属加成影响
+function secretRealmDamageMult(s: SaveState): number {
+  return 1 + affixSum(s, "damageMult");
+}
+
 // ---- 装备词条（v1.6）----
 const AFFIX_IDS = Object.keys(CONFIG.affixes).filter((k) => k !== "maxByStage");
 
@@ -357,11 +362,23 @@ function seededRng(seed: number): () => number {
   };
 }
 
-function randomAffixes(rng: () => number = Math.random): Affix[] {
-  const count = 1 + Math.floor(rng() * 4); // 1~4 条
+function maxAffixesForStage(stage: number): number {
+  if (stage < 2) return CONFIG.affixes.maxByStage[0];
+  if (stage <= 7) return CONFIG.affixes.maxByStage[1];
+  if (stage <= 15) return CONFIG.affixes.maxByStage[2];
+  return CONFIG.affixes.maxByStage[3];
+}
+
+function currentStage(s: SaveState): number {
+  return REALMS[realmIndex(s.realm)]?.stage ?? 1;
+}
+
+function randomAffixes(rng: () => number = Math.random, maxCount = 4): Affix[] {
+  const count = Math.min(maxCount, 1 + Math.floor(rng() * maxCount)); // 1~maxCount 条
   const out: Affix[] = [];
   const used = new Set<string>();
-  for (let i = 0; i < count; i++) {
+  let guard = 0;
+  while (out.length < count && guard++ < 100) {
     const id = AFFIX_IDS[Math.floor(rng() * AFFIX_IDS.length)];
     if (used.has(id)) continue;
     used.add(id);
@@ -374,18 +391,39 @@ function randomAffixes(rng: () => number = Math.random): Affix[] {
   return out;
 }
 
-function ensureAffixes(s: SaveState, baseId: string): void {
-  if (s.equipmentAffixes[baseId]) return;
-  // 确定性种子：装备 ID 哈希 + 当前已生成装备数，保证可复现（同名装备后续可随获得顺序不同）
-  const seed = hashSeed(baseId) + Object.keys(s.equipmentAffixes).length + 1;
-  s.equipmentAffixes[baseId] = randomAffixes(seededRng(seed));
+export function baseIdOf(s: SaveState, id: string): string {
+  return s.itemInstances[id]?.baseId ?? id;
+}
+
+function instanceAffixes(s: SaveState, id: string): Affix[] {
+  return s.itemInstances[id]?.affixes ?? [];
+}
+
+function makeInstanceId(instances: Record<string, { baseId: string; affixes: Affix[] }>, baseId: string): string {
+  let n = 1;
+  for (const inst of Object.values(instances)) {
+    if (inst.baseId === baseId) n++;
+  }
+  return `${baseId}#${n}`;
+}
+
+function createInstance(s: SaveState, baseId: string, rng?: () => number): string {
+  const instId = makeInstanceId(s.itemInstances, baseId);
+  // 确定性种子：装备 ID 哈希 + 当前已生成实例数；每件实例独立、可复现
+  const seed = hashSeed(baseId) + Object.keys(s.itemInstances).length + 1;
+  s.itemInstances[instId] = {
+    baseId,
+    affixes: randomAffixes(rng ?? seededRng(seed), maxAffixesForStage(currentStage(s))),
+  };
+  s.inventory[instId] = 1;
+  return instId;
 }
 
 function equippedAffixes(s: SaveState): Affix[] {
   const out: Affix[] = [];
   for (const slot of ["weapon", "armor", "accessory"] as const) {
     const id = s.equipment[slot];
-    if (id) out.push(...(s.equipmentAffixes[id] ?? []));
+    if (id) out.push(...instanceAffixes(s, id));
   }
   return out;
 }
@@ -394,55 +432,59 @@ function affixSum(s: SaveState, id: string): number {
   return equippedAffixes(s).filter((a) => a.id === id).reduce((sum, a) => sum + a.value, 0);
 }
 
-export function reforgeCost(s: SaveState, baseId: string): { spiritStone: number; iron: number } {
-  const mult = s.lockedAffixes[baseId] ? CONFIG.reforge.lockedCostMult : 1;
+export function reforgeCost(s: SaveState, itemId: string): { spiritStone: number; iron: number } {
+  const mult = s.lockedAffixes[itemId] ? CONFIG.reforge.lockedCostMult : 1;
   return {
     spiritStone: Math.round(CONFIG.reforge.baseCost.spiritStone * mult),
     iron: Math.round(CONFIG.reforge.baseCost.iron * mult),
   };
 }
 
-export function reforgeEquipment(state: SaveState, nowMs: number, baseId: string): Result<SaveState> {
+export function reforgeEquipment(state: SaveState, nowMs: number, itemId: string): Result<SaveState> {
   const s = settle(state, nowMs);
-  const current = s.equipmentAffixes[baseId];
-  if (!current || current.length === 0) return fail("该装备暂无词条");
-  const cost = reforgeCost(s, baseId);
+  const inst = s.itemInstances[itemId];
+  if (!inst) return fail("该装备暂无词条");
+  const cost = reforgeCost(s, itemId);
   if (s.resources.spiritStone < cost.spiritStone || s.resources.iron < cost.iron) {
     return fail(`重铸需灵石${cost.spiritStone}、玄铁${cost.iron}`);
   }
-  const lockedId = s.lockedAffixes[baseId];
-  const locked = lockedId ? current.find((a) => a.id === lockedId) : undefined;
+  const baseId = inst.baseId;
+  const lockedId = s.lockedAffixes[itemId];
+  const locked = lockedId ? inst.affixes.find((a) => a.id === lockedId) : undefined;
   const seed = hashSeed(baseId) + s.revision + 1;
-  const newAffixes = randomAffixes(seededRng(seed));
+  const newAffixes = randomAffixes(seededRng(seed), maxAffixesForStage(currentStage(s)));
   const filtered = newAffixes.filter((a) => a.id !== lockedId);
-  s.equipmentAffixes[baseId] = locked ? [locked, ...filtered] : newAffixes;
+  const oldAffixes = inst.affixes;
+  const nextAffixes = locked ? [locked, ...filtered] : newAffixes;
+  const fmt = (list: Affix[]) => list.map((a) => `${AFFIX_CFG[a.id]?.name ?? a.id}+${a.value}`).join("、") || "无";
   s.resources.spiritStone -= cost.spiritStone;
   s.resources.iron -= cost.iron;
-  s.recentLogs.push(`重铸${EQUIP_CFG[baseId]?.name ?? baseId}词条。`);
+  inst.affixes = nextAffixes;
+  s.recentLogs.push(`重铸${EQUIP_CFG[baseId]?.name ?? baseId}词条：旧【${fmt(oldAffixes)}】→ 新【${fmt(nextAffixes)}】。`);
   s.revision += 1;
   return { state: s, ok: true };
 }
 
-export function lockAffix(state: SaveState, nowMs: number, baseId: string, affixId: string): Result<SaveState> {
+export function lockAffix(state: SaveState, nowMs: number, itemId: string, affixId: string): Result<SaveState> {
   const s = settle(state, nowMs);
-  const current = s.equipmentAffixes[baseId];
-  if (!current || !current.some((a) => a.id === affixId)) return fail("该装备无此词条");
-  if (s.lockedAffixes[baseId]) return fail("已锁定过一条词条");
+  const inst = s.itemInstances[itemId];
+  if (!inst || !inst.affixes.some((a) => a.id === affixId)) return fail("该装备无此词条");
+  if (s.lockedAffixes[itemId]) return fail("已锁定过一条词条");
   const cost = CONFIG.reforge.lockCost;
   if (s.resources.spiritStone < cost.spiritStone || s.resources.iron < cost.iron) {
     return fail(`锁定需灵石${cost.spiritStone}、玄铁${cost.iron}`);
   }
-  s.lockedAffixes[baseId] = affixId;
+  s.lockedAffixes[itemId] = affixId;
   s.resources.spiritStone -= cost.spiritStone;
   s.resources.iron -= cost.iron;
   s.revision += 1;
   return { state: s, ok: true };
 }
 
-export function unlockAffix(state: SaveState, nowMs: number, baseId: string): Result<SaveState> {
+export function unlockAffix(state: SaveState, nowMs: number, itemId: string): Result<SaveState> {
   const s = settle(state, nowMs);
-  if (!s.lockedAffixes[baseId]) return fail("该装备未锁定词条");
-  delete s.lockedAffixes[baseId];
+  if (!s.lockedAffixes[itemId]) return fail("该装备未锁定词条");
+  delete s.lockedAffixes[itemId];
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -773,7 +815,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     comprehension: "normal",
     resonance: null,
     marrowHistory: [],
-    equipmentAffixes: {},
+    itemInstances: {},
     lockedAffixes: {},
     aptitude: apt,
     resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 },
@@ -1007,9 +1049,10 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
   let hp: number = CONFIG.baseHp;
   for (const slot of ["weapon", "armor", "accessory"] as const) {
     const eqId = s.equipment[slot];
-    if (eqId && EQUIP_CFG[eqId]) {
-      const c = EQUIP_CFG[eqId];
-      const q = s.quenched?.includes(eqId) ? 1.05 : 1;
+    const baseId = eqId ? baseIdOf(s, eqId) : null;
+    if (baseId && EQUIP_CFG[baseId]) {
+      const c = EQUIP_CFG[baseId];
+      const q = s.quenched?.includes(eqId as string) ? 1.05 : 1;
       attack += Math.floor((c.attack ?? 0) * q);
       defense += Math.floor((c.defense ?? 0) * q);
       hp += Math.floor((c.hp ?? 0) * q);
@@ -1378,7 +1421,7 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
     if (v > 0) res[k] -= v;
   }
   s.inventory[id] = (s.inventory[id] || 0) + 1;
-  ensureAffixes(s, id);
+  createInstance(s, id);
   s.recentLogs.push(`炼得${EQUIP_CFG[id].name}。`);
   pushMilestone(s, "craft", nowMs, `炼得${EQUIP_CFG[id].name}`);
   s.revision += 1;
@@ -1387,9 +1430,9 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
 
 export function quenchEquipment(state: SaveState, nowMs: number, equipId: string): Result<SaveState> {
   const s = settle(state, nowMs);
-  const eq = EQUIP_CFG[equipId];
+  const eq = EQUIP_CFG[baseIdOf(s, equipId)];
   if (!eq) return fail("无此装备");
-  const craft = CRAFT_CFG[equipId];
+  const craft = CRAFT_CFG[baseIdOf(s, equipId)];
   if (!craft) return fail("此装备不可淬炼");
   if (s.quenched.includes(equipId)) return fail("已淬炼过该装备");
   const owned = (s.inventory[equipId] || 0) > 0 || s.equipment.weapon === equipId || s.equipment.armor === equipId || s.equipment.accessory === equipId;
@@ -1429,7 +1472,7 @@ export function upgradeTechnique(state: SaveState, nowMs: number): Result<SaveSt
 
 export function equipItem(state: SaveState, nowMs: number, equipId: string): Result<SaveState> {
   const s = settle(state, nowMs);
-  const cfg = EQUIP_CFG[equipId];
+  const cfg = EQUIP_CFG[baseIdOf(s, equipId)];
   if (!cfg) return fail("无此装备");
   if (!(s.inventory[equipId] > 0)) return fail("未获得此装备");
   s.equipment[cfg.slot] = equipId;
@@ -1692,7 +1735,7 @@ export function predictFight(state: SaveState, mapId: MapId, nodeId: string, dif
   if (difficulty === "challenge" && !nodeState.cleared) return { ok: false, reason: "需先普通首胜，方可挑战高难度", won: false, log: [], enemy: empty, player: empty };
   const stats = playerStats(state);
   const rules = fightRules(mapId, nodeId, difficulty);
-  const battle = runBattle(stats, rules.enemy, battleDamageMult(state), battleTakenMult(state), rules.maxRounds);
+  const battle = runBattle(stats, rules.enemy, battleDamageMult(state), battleTakenMult(state), rules.maxRounds, battleMods(state));
   return { ok: true, reason: "", won: battle.won, log: battle.log, enemy: rules.enemy, player: stats };
 }
 
@@ -1711,7 +1754,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   const stats = playerStats(s);
   const dmgMult = battleDamageMult(s);
   const rules = fightRules(mapId, nodeId, difficulty);
-  const battle = runBattle(stats, rules.enemy, dmgMult, battleTakenMult(s), rules.maxRounds);
+  const battle = runBattle(stats, rules.enemy, dmgMult, battleTakenMult(s), rules.maxRounds, battleMods(s));
   const log = battle.log;
   const won = battle.won;
   s.daily.goals.battle.progress = Math.min(s.daily.goals.battle.progress + 1, CONFIG.dailyGoals.battle.target);
@@ -1734,17 +1777,16 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   const first = !nodeState.cleared;
   nodeState.cleared = true;
   const battleCult = affixSum(s, "battleCultivation");
-  if (battleCult > 0) s.resources.cultivation += battleCult;
   if (first) {
     const fc = nodeCfg.firstClear;
     s.resources.cultivation += fc.cultivation;
+    if (battleCult > 0) s.resources.cultivation += battleCult;
     s.resources.spiritStone += fc.spiritStone;
     s.resources.page += fc.page;
     const mat = materialForStage(stageOfGate(nodeCfg.gate as string));
     if (mat && !nodeCfg.side) (s.resources as unknown as Record<string, number>)[mat] += 4;
     if (fc.equipment) {
-      s.inventory[fc.equipment] = 1;
-      ensureAffixes(s, fc.equipment as string);
+      createInstance(s, fc.equipment as string);
       s.recentLogs.push(`得装备「${EQUIP_CFG[fc.equipment].name}」。`);
     }
     s.recentLogs.push(`首通${mapCfg.name}·${nodeCfg.name}。`);
@@ -1759,7 +1801,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     }
     const hmLast = mainNodeIds("map_hongmeng").at(-1)!;
     if (mapId === "map_hongmeng" && nodeId === hmLast) {
-      s.inventory.c_hongmeng = 1;
+      createInstance(s, "c_hongmeng");
       s.recentLogs.push("通关鸿蒙守关，得纪念佩饰「鸿蒙印」。");
     }
     unlockNext(s, mapId, nodeId);
@@ -1768,6 +1810,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     if (s.daily.rewardedRepeats < CONFIG.rewardedRepeatBattlesPerDay) {
       s.daily.rewardedRepeats += 1;
       s.resources.cultivation += rc.cultivation;
+      if (battleCult > 0) s.resources.cultivation += battleCult;
       s.resources.page += rc.page;
       if (rc.material) (s.resources as unknown as Record<string, number>)[rc.material] += 1;
       s.recentLogs.push(`再胜${nodeCfg.name}，领取今日重复历练奖励。`);
@@ -1851,8 +1894,9 @@ export function tribulationReductionInfo(state: SaveState): { reduction: number;
   if (tc > 0) sources.push({ name: CONFIG.techniques.taiChu.name, pct: tc });
   for (const slot of ["weapon", "armor", "accessory"] as const) {
     const eqId = state.equipment[slot];
-    if (eqId && EQUIP_CFG[eqId]?.tribulationReduction) {
-      sources.push({ name: EQUIP_CFG[eqId].name, pct: EQUIP_CFG[eqId].tribulationReduction as number });
+    const eqBase = eqId ? baseIdOf(state, eqId) : null;
+    if (eqBase && EQUIP_CFG[eqBase]?.tribulationReduction) {
+      sources.push({ name: EQUIP_CFG[eqBase].name, pct: EQUIP_CFG[eqBase].tribulationReduction as number });
     }
   }
   const sum = sources.reduce((a, x) => a + x.pct, 0);
@@ -2246,7 +2290,7 @@ export function predictSecretRealm(state: SaveState, realmId: SecretRealmId): { 
     return { ok: false, reason: `需${realmName(cfg.gate as RealmId)}方可进入`, won: false, enemy: { ...cfg.enemy }, player: playerStats(state) };
   }
   const stats = playerStats(state);
-  const battle = runBattle(stats, cfg.enemy, 1, battleTakenMult(state), 50, battleMods(state));
+  const battle = runBattle(stats, cfg.enemy, secretRealmDamageMult(state), battleTakenMult(state), 50, battleMods(state), seededRng(hashSeed(realmId)));
   return { ok: true, reason: "", won: battle.won, enemy: { ...cfg.enemy }, player: stats };
 }
 
@@ -2257,7 +2301,7 @@ export function enterSecretRealm(state: SaveState, nowMs: number, realmId: Secre
   if (realmIndex(s.realm) < realmIndex(cfg.gate as RealmId)) return fail(`需${realmName(cfg.gate as RealmId)}方可进入`);
   if (s.secretRealmUsed[realmId]) return fail("今日已挑战该秘境");
   const stats = playerStats(s);
-  const battle = runBattle(stats, cfg.enemy, 1, battleTakenMult(state), 50, battleMods(state));
+  const battle = runBattle(stats, cfg.enemy, secretRealmDamageMult(s), battleTakenMult(s), 50, battleMods(s), seededRng(hashSeed(realmId)));
   const reward = battle.won ? secretRealmReward(realmId) : emptyResources();
   if (battle.won) {
     applyReward(s, reward);
@@ -2286,10 +2330,46 @@ function fmtReward(r: Resources): string {
 
 // ---- 存档导入导出 ----
 
+function migrateEquipmentInstances(s: SaveState): void {
+  if (s.itemInstances && typeof s.itemInstances === "object" && Object.keys(s.itemInstances).length > 0) return;
+  const oldAffixes = (s as unknown as Record<string, unknown>).equipmentAffixes as Record<string, Affix[]> | undefined;
+  const oldLocked = s.lockedAffixes ?? {};
+  const instances: Record<string, { baseId: string; affixes: Affix[] }> = {};
+  const baseToFirst: Record<string, string> = {};
+  const newInventory: Record<string, number> = {};
+  const oldInventory = s.inventory ?? {};
+  for (const [key, count] of Object.entries(oldInventory)) {
+    if (EQUIP_CFG[key] && typeof count === "number" && count > 0) {
+      for (let i = 0; i < count; i++) {
+        const instId = makeInstanceId(instances, key);
+        const affixes = (i === 0 && Array.isArray(oldAffixes?.[key]))
+          ? (oldAffixes as Record<string, Affix[]>)[key]
+          : randomAffixes(seededRng(hashSeed(key) + Object.keys(instances).length + 1), maxAffixesForStage(currentStage(s)));
+        instances[instId] = { baseId: key, affixes };
+        newInventory[instId] = 1;
+        if (i === 0) baseToFirst[key] = instId;
+      }
+    } else if (typeof count === "number" && count > 0) {
+      newInventory[key] = count;
+    }
+  }
+  for (const slot of ["weapon", "armor", "accessory"] as const) {
+    const oldId = s.equipment[slot];
+    if (oldId && baseToFirst[oldId]) s.equipment[slot] = baseToFirst[oldId];
+  }
+  s.quenched = Array.isArray(s.quenched) ? s.quenched.map((id) => baseToFirst[id] ?? id) : [];
+  const newLocked: Record<string, string> = {};
+  for (const [baseId, affixId] of Object.entries(oldLocked)) {
+    if (baseToFirst[baseId]) newLocked[baseToFirst[baseId]] = affixId;
+  }
+  s.lockedAffixes = newLocked;
+  s.itemInstances = instances;
+  s.inventory = newInventory;
+}
+
 export function migrateSave(raw: SaveState): SaveState {
   const s = structuredClone(raw) as unknown as Record<string, unknown>;
-  migrateRealmRefs(s, (s.schemaVersion as number) ?? 0);
-  const firstNode = mainNodeIds("map_qingyun")[0];
+  migrateRealmRefs(s, (s.schemaVersion as number) ?? 0);  const firstNode = mainNodeIds("map_qingyun")[0];
   const suppression = (s.suppression ?? {}) as Record<string, unknown>;
   if (!Array.isArray(s.milestones)) s.milestones = [];
   if (!s.firsts || typeof s.firsts !== "object") {
@@ -2347,8 +2427,9 @@ export function migrateSave(raw: SaveState): SaveState {
   if (typeof s.comprehension !== "string" || !COMPREHENSION_CFG[s.comprehension]) s.comprehension = "normal";
   if (s.resonance === undefined) s.resonance = null;
   if (!Array.isArray(s.marrowHistory)) s.marrowHistory = [];
-  if (!s.equipmentAffixes || typeof s.equipmentAffixes !== "object") s.equipmentAffixes = {};
   if (!s.lockedAffixes || typeof s.lockedAffixes !== "object") s.lockedAffixes = {};
+  migrateEquipmentInstances(s as unknown as SaveState);
+  delete s.equipmentAffixes;
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -2389,7 +2470,9 @@ export function migrateSave(raw: SaveState): SaveState {
   }
   const hmLast = mainNodeIds("map_hongmeng").at(-1)!;
   if ((migrated.maps.map_hongmeng as Record<string, { cleared: boolean }>)?.[hmLast]?.cleared) {
-    migrated.inventory.c_hongmeng = 1;
+    // 鸿蒙印按实例补发（避免与旧基础 ID 冲突）
+    const hasHongmeng = Object.values(migrated.itemInstances).some((i) => i.baseId === "c_hongmeng");
+    if (!hasHongmeng) createInstance(migrated, "c_hongmeng");
   }
   return migrated;
 }
@@ -2542,16 +2625,71 @@ function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaV
   return null;
 }
 
-function validateEquipmentAndInventory(eq: unknown, inv: unknown): string | null {
+function validateAffixList(list: unknown): string | null {
+  if (!Array.isArray(list)) return "词条列表无效";
+  if (list.length < 1 || list.length > 4) return "词条条数无效";
+  const seen = new Set<string>();
+  for (const raw of list) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "词条无效";
+    const a = raw as Record<string, unknown>;
+    const cfg = AFFIX_CFG[a.id as string];
+    if (typeof a.id !== "string" || !cfg) return "词条 ID 无效";
+    if (typeof a.value !== "number" || !Number.isFinite(a.value)) return "词条数值无效";
+    if (a.value < cfg.min || a.value > cfg.max) return "词条数值超出范围";
+    if (seen.has(a.id as string)) return "词条重复";
+    seen.add(a.id as string);
+  }
+  return null;
+}
+
+function validateItemInstances(o: Record<string, unknown>, ver: number): string | null {
+  const insts = o.itemInstances as Record<string, unknown> | undefined;
+  const locked = o.lockedAffixes as Record<string, unknown> | undefined;
+  if (ver >= 16) {
+    if (!insts || typeof insts !== "object") return "装备实例无效";
+    for (const [instId, raw] of Object.entries(insts)) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "装备实例无效";
+      const inst = raw as Record<string, unknown>;
+      if (typeof inst.baseId !== "string" || !EQUIP_IDS.has(inst.baseId)) return "装备实例基础装备无效";
+      const err = validateAffixList(inst.affixes);
+      if (err) return err;
+    }
+    if (locked !== undefined && typeof locked !== "object") return "锁定词条无效";
+    if (locked && typeof locked === "object") {
+      for (const [instId, affixId] of Object.entries(locked)) {
+        if (!insts[instId]) return "锁定装备无效";
+        if (typeof affixId !== "string") return "锁定词条无效";
+        const inst = insts[instId] as { affixes: Affix[] };
+        if (!inst.affixes.some((a) => a.id === affixId)) return "锁定词条不在装备上";
+      }
+    }
+  } else {
+    const old = o.equipmentAffixes as Record<string, unknown> | undefined;
+    if (old !== undefined && typeof old !== "object") return "装备词条无效";
+    if (old && typeof old === "object") {
+      for (const [baseId, list] of Object.entries(old)) {
+        if (!EQUIP_IDS.has(baseId)) return "装备词条基础装备无效";
+        const err = validateAffixList(list);
+        if (err) return err;
+      }
+    }
+  }
+  return null;
+}
+
+function validateEquipmentAndInventory(eq: unknown, inv: unknown, itemInstances: unknown): string | null {
   const e = (eq ?? {}) as Record<string, unknown>;
+  const insts = (itemInstances ?? {}) as Record<string, unknown>;
   for (const slot of ["weapon", "armor", "accessory"]) {
     const x = e[slot];
-    if (x !== null && x !== undefined && !EQUIP_IDS.has(x as string)) return "装备无效";
+    if (x !== null && x !== undefined && !EQUIP_IDS.has(x as string) && !insts[x as string]) return "装备无效";
   }
   const i = (inv ?? {}) as Record<string, unknown>;
   for (const [k, x] of Object.entries(i)) {
     if (typeof x !== "number" || !Number.isFinite(x) || x < 0) return "库存数量无效";
-    if (k !== "tribulationPill" && !EQUIP_IDS.has(k)) return "库存装备无效";
+    if (k === "tribulationPill" || k.startsWith("tribulationPill_")) continue;
+    if (EQUIP_IDS.has(k) || insts[k]) continue;
+    return "库存装备无效";
   }
   return null;
 }
@@ -2818,7 +2956,8 @@ export function importSave(json: string): Result<SaveState> {
     validateLibrary(o.library),
     validateAuxiliaryTechnique(o.technique, o.auxiliaryTechnique, o.library),
     validateSecretRealm(o.secretRealmUsed, o.secretRealmLog, o.secretRealmDate, ver),
-    validateEquipmentAndInventory(o.equipment, o.inventory),
+    validateItemInstances(o, ver),
+    validateEquipmentAndInventory(o.equipment, o.inventory, o.itemInstances),
     validateMaps(o.maps, o.suppression, ver),
     validateEncounter(o.encounter),
     validateMilestonesAndFirsts(o.milestones, o.firsts),
@@ -2857,8 +2996,11 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.comprehension = typeof o.comprehension === "string" && (o.comprehension as string) in COMPREHENSION_CFG ? (o.comprehension as ComprehensionId) : "normal";
   base.resonance = typeof o.resonance === "string" ? (o.resonance as string) : null;
   base.marrowHistory = Array.isArray(o.marrowHistory) ? (o.marrowHistory as SaveState["marrowHistory"]) : [];
-  base.equipmentAffixes = (o.equipmentAffixes && typeof o.equipmentAffixes === "object") ? (o.equipmentAffixes as Record<string, Affix[]>) : {};
+  base.itemInstances = (o.itemInstances && typeof o.itemInstances === "object") ? (o.itemInstances as SaveState["itemInstances"]) : {};
   base.lockedAffixes = (o.lockedAffixes && typeof o.lockedAffixes === "object") ? (o.lockedAffixes as Record<string, string>) : {};
+  if (Object.keys(base.itemInstances).length === 0) {
+    (base as unknown as Record<string, unknown>).equipmentAffixes = (o.equipmentAffixes && typeof o.equipmentAffixes === "object") ? o.equipmentAffixes : {};
+  }
   base.maps = { ...base.maps, ...((o.maps as Partial<SaveState["maps"]>) || {}) };
   base.suppression = { ...base.suppression, ...((o.suppression as Partial<SaveState["suppression"]>) || {}) };
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };

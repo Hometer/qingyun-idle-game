@@ -168,12 +168,12 @@ export interface SaveState {
   technique: TechniqueId | null;
   techniqueLevel: Record<TechniqueId, number>;
   equipment: Equipment;
-  inventory: Record<string, number>;
+  inventory: Record<string, number>; // 装备实例 ID → 数量（每件 1）；丹药按基础 ID
   preparedPill: boolean;
   preparedPillTier: number; // 预置护劫丹品阶 1~4（凡/灵/仙/道）
   quenched: string[]; // 已淬炼装备实例 ID，每件最多一次
-  equipmentAffixes: Record<string, Affix[]>; // 各装备基础 ID 的词条（同名装备暂时共享）
-  lockedAffixes: Record<string, string>; // 各装备锁定的词条 ID（每件最多一条）
+  itemInstances: Record<string, { baseId: string; affixes: Affix[] }>; // 装备实例 ID → 基础装备 + 词条
+  lockedAffixes: Record<string, string>; // 实例 ID → 锁定词条 ID（每件最多一条）
   learnedNewTechs: string[]; // 已首通获得的新功法 ID
   maps: Record<MapId, Record<string, NodeState>>;
   suppression: Record<MapId, string | null>;

@@ -413,7 +413,8 @@ describe("数值可达性", () => {
       expect(r.won, `${step.map}|${step.node} 可首通`).toBe(true);
       s = r.state;
       if (step.drop) {
-        const eq = equipItem(s, T0, step.drop);
+        const instId = Object.keys(s.itemInstances).find((k) => s.itemInstances[k].baseId === step.drop);
+        const eq = equipItem(s, T0, instId as string);
         expect(eq.ok).toBe(true);
         s = eq.state as SaveState;
       }

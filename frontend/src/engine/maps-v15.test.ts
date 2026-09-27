@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CONFIG } from "./config";
-import { createGame, fightNode, importSave, isBossNode, mainNodeIds, predictFight, repeatRewardFor } from "./engine";
+import { createGame, fightNode, importSave, isBossNode, mainNodeIds, predictFight, repeatRewardFor, SCHEMA_VERSION } from "./engine";
 import type { MapId, SaveState } from "./types";
 
 const NOW = 1_700_000_000_000;
@@ -69,7 +69,7 @@ describe("v1.5 历练地图", () => {
     const imported = importSave(JSON.stringify(old));
     expect(imported.ok).toBe(true);
     const s = imported.state as SaveState;
-    expect(s.schemaVersion).toBe(15);
+    expect(s.schemaVersion).toBe(SCHEMA_VERSION);
     expect(s.maps.map_qingyun.node_wolf.cleared).toBe(true);
     expect(s.maps.map_qingyun.node_bandit.unlocked).toBe(true);
     expect(s.maps.map_qingyun.node_side_1.unlocked).toBe(true);
