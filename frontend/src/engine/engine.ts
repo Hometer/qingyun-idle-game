@@ -1050,6 +1050,16 @@ export function techniqueLockReason(s: SaveState, id: TechniqueId): string | nul
   return newTechUnlocked(s, id);
 }
 
+export function setAptitude(state: SaveState, nowMs: number, aptitude: AptitudeId): Result<SaveState> {
+  const s = settle(state, nowMs);
+  if (!APTITUDE_CFG[aptitude]) return fail("无此修炼侧重");
+  if (s.aptitude === aptitude) return fail("已是该修炼侧重");
+  s.aptitude = aptitude;
+  s.recentLogs.push(`转修${APTITUDE_CFG[aptitude].name}侧重。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
 export function setTechnique(state: SaveState, nowMs: number, id: TechniqueId): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.technique === id) return fail("已是当前主修");

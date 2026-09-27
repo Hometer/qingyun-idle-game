@@ -22,7 +22,7 @@ function effectText(id: string, lv: Record<string, number>): string {
 }
 
 export default function DongfuPage() {
-  const { state, upgradeBuilding, buildLibrary, buildForge } = useGame();
+  const { state, upgradeBuilding, buildLibrary, buildForge, setAptitude } = useGame();
   if (!state) return null;
   const libCost = state.library < CONFIG.library.levels.length ? CONFIG.library.levels[state.library].cost : null;
   const libRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("zhuji1");
@@ -32,6 +32,27 @@ export default function DongfuPage() {
   const forgeAfford = !!forgeCost && forgeRealmOk && state.resources.spiritStone >= forgeCost.spiritStone && state.resources.page >= forgeCost.page;
 
   return (
+    <>
+      <Section title="修炼侧重">
+        <p className="mb-2 text-xs text-muted">切换修炼侧重，不收费、不随机；切换前先结算当前收益。</p>
+        {(["balanced", "focus", "spirit"] as const).map((a) => {
+          const cfg = CONFIG.aptitudes[a];
+          const active = state.aptitude === a;
+          return (
+            <div key={a} className="flex items-center justify-between border-b border-line/60 py-2 last:border-0">
+              <div className="text-sm">
+                {cfg.name}
+                <span className="ml-1 text-xs text-muted">修为 ×{cfg.cultivationMult}、灵气 ×{cfg.spiritMult}</span>
+                {active && <span className="ml-1 text-xs text-cinnabar">当前</span>}
+              </div>
+              {!active && (
+                <button onClick={() => setAptitude(a)} className="rounded-lg border border-line bg-paper px-3 py-1 text-xs">切换</button>
+              )}
+            </div>
+          );
+        })}
+      </Section>
+
     <Section title="洞府建筑">
       <p className="mb-2 text-sm text-muted">{WORLD_TEXT.dongfu}</p>
       {(Object.keys(BUILDINGS) as BuildingId[]).map((id) => {
@@ -130,5 +151,6 @@ export default function DongfuPage() {
         )}
       </div>
     </Section>
+    </>
   );
 }

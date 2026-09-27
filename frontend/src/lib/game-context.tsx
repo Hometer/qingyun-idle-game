@@ -51,6 +51,7 @@ interface GameContextValue {
   trialPreview: eng.JindanTrialPreview | null;
   create: (name: string, root: SpiritRoot, aptitude: AptitudeId) => void;
   createWithFortune: (name: string, fortune: { spiritRoots: string[]; meridians: string; comprehension: string }, aptitude: AptitudeId) => void;
+  setAptitude: (aptitude: AptitudeId) => void;
   settleNow: () => void;
   doBreakthrough: (method: BreakthroughMethod) => void;
   upgradeBuilding: (id: BuildingId) => void;
@@ -414,6 +415,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
       await apply(s, "角色已创建，踏上仙途");
     },
     [apply],
+  );
+
+  const setAptitude = useCallback(
+    async (aptitude: AptitudeId) => {
+      if (!state) return;
+      const r = eng.setAptitude(state, Date.now(), aptitude);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "已切换修炼侧重");
+    },
+    [state, apply],
   );
 
   const settleNow = useCallback(async () => {
@@ -929,6 +943,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     trialPreview,
     create,
     createWithFortune,
+    setAptitude,
     settleNow,
     doBreakthrough,
     upgradeBuilding,
