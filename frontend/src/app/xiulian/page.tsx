@@ -4,16 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtPct, fmtTime, fmtDuration } from "@/lib/labels";
-import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate, canBreakthrough, isTrialRealm, crossStageTrialInfo } from "@/engine/engine";
+import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate, canBreakthrough, isTrialRealm, crossStageTrialInfo, techniqueLockReason } from "@/engine/engine";
 import type { TechniqueId, BreakthroughLayer } from "@/engine/types";
 
 function eff(id: string, lvl: number, aux: boolean): string {
   if (lvl < 1) return "未研习";
-  const lv = TECHNIQUES[id].levels[lvl - 1];
+  const lv = TECHNIQUES[id].levels[lvl - 1] as Record<string, number>;
+  const P = (x: number) => `${fmtPct(x)}%`;
   if (id === "qingYun") return `修为产出 ${aux ? lv.auxCultivationMult : lv.cultivationMult}×`;
-  if (id === "xuanGui") return `护劫减伤 ${fmtPct(aux ? lv.auxTribulationReduction : lv.tribulationReduction)}%`;
+  if (id === "xuanGui") return `护劫减伤 ${P(aux ? lv.auxTribulationReduction : lv.tribulationReduction)}`;
   if (id === "poYue") return `攻击 ${aux ? lv.auxAttack : lv.attack}`;
-  return `灵气产出 ${aux ? lv.auxSpiritMult : lv.spiritMult}×`;
+  if (id === "juYuan") return `灵气产出 ${aux ? lv.auxSpiritMult : lv.spiritMult}×`;
+  if (id === "ningYing") return `气血 ${P(aux ? lv.auxHpMult : lv.hpMult)}、灵气产出 ${aux ? lv.auxSpiritMult : lv.spiritMult}×`;
+  if (id === "yunHai") return `攻击 ${aux ? lv.auxAttack : lv.attack}、防御 ${aux ? lv.auxDefense : lv.defense}`;
+  if (id === "buXiu") return `气血 ${P(aux ? lv.auxHpMult : lv.hpMult)}、护劫减伤 ${P(aux ? lv.auxTribulationReduction : lv.tribulationReduction)}`;
+  if (id === "hunYuanGuiYi") return `修为产出 ${aux ? lv.auxCultivationMult : lv.cultivationMult}×、灵气产出 ${aux ? lv.auxSpiritMult : lv.spiritMult}×`;
+  if (id === "taiChu") return `攻击 ${aux ? lv.auxAttack : lv.attack}、护劫减伤 ${P(aux ? lv.auxTribulationReduction : lv.tribulationReduction)}`;
+  return "";
 }
 
 function Bar({ label, value, max }: { label: string; value: number; max: number }) {
@@ -158,12 +165,12 @@ export default function XiulianPage() {
           )}
         </p>
         <div className="mt-2 space-y-2">
-          {(["qingYun", "xuanGui", "poYue", "juYuan"] as TechniqueId[]).map((id) => {
+          {(Object.keys(TECHNIQUES) as TechniqueId[]).map((id) => {
             const t = TECHNIQUES[id];
             const lvl = state.techniqueLevel[id];
             const nextLvl = lvl < t.levels.length ? t.levels[lvl] : null;
-            const isNew = id === "poYue" || id === "juYuan";
-            const locked = isNew && state.library < 1;
+            const lockReason = techniqueLockReason(state, id);
+            const locked = lockReason !== null;
             const isPrimary = state.technique === id;
             const isAux = state.auxiliaryTechnique === id;
             const canAux = state.library >= 2 && !!state.technique && !isAux;
@@ -191,7 +198,7 @@ export default function XiulianPage() {
                 </div>
                 <p className="mt-1 text-xs text-muted">
                   {locked ? (
-                    "需一级藏经阁解锁"
+                    lockReason
                   ) : (
                     <>
                       主修 {eff(id, lvl, false)}
@@ -204,7 +211,7 @@ export default function XiulianPage() {
             );
           })}
         </div>
-        {state.technique && state.techniqueLevel[state.technique] < 3 && (
+        {state.technique && state.techniqueLevel[state.technique] < TECHNIQUES[state.technique].levels.length && (
           <button onClick={upgradeTechnique} className="mt-2 rounded-lg bg-cinnabar px-4 py-2 text-white">
             升级功法
           </button>

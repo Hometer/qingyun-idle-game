@@ -346,6 +346,46 @@ export const CONFIG = {
         { pageCost: 80000, spiritMult: 1.9571, auxSpiritMult: 1.631 },
       ],
     },
+    ningYing: {
+      name: "凝婴心经",
+      levels: [
+        { pageCost: 0, hpMult: 0.06, spiritMult: 1.075, auxHpMult: 0.03, auxSpiritMult: 1.0375 },
+        { pageCost: 500, hpMult: 0.09, spiritMult: 1.1125, auxHpMult: 0.045, auxSpiritMult: 1.0562 },
+        { pageCost: 1000, hpMult: 0.12, spiritMult: 1.15, auxHpMult: 0.06, auxSpiritMult: 1.075 },
+      ],
+    },
+    yunHai: {
+      name: "云海问道经",
+      levels: [
+        { pageCost: 0, attack: 8.0, defense: 4.0, auxAttack: 4.0, auxDefense: 2.0 },
+        { pageCost: 1500, attack: 12.0, defense: 6.0, auxAttack: 6.0, auxDefense: 3.0 },
+        { pageCost: 3000, attack: 16.0, defense: 8.0, auxAttack: 8.0, auxDefense: 4.0 },
+      ],
+    },
+    buXiu: {
+      name: "不朽金身诀",
+      levels: [
+        { pageCost: 0, hpMult: 0.1, tribulationReduction: 0.04, auxHpMult: 0.05, auxTribulationReduction: 0.02 },
+        { pageCost: 3000, hpMult: 0.15, tribulationReduction: 0.06, auxHpMult: 0.075, auxTribulationReduction: 0.03 },
+        { pageCost: 6000, hpMult: 0.2, tribulationReduction: 0.08, auxHpMult: 0.1, auxTribulationReduction: 0.04 },
+      ],
+    },
+    hunYuanGuiYi: {
+      name: "混元归一诀",
+      levels: [
+        { pageCost: 0, cultivationMult: 1.225, spiritMult: 1.125, auxCultivationMult: 1.1125, auxSpiritMult: 1.0625 },
+        { pageCost: 6000, cultivationMult: 1.3375, spiritMult: 1.1875, auxCultivationMult: 1.1687, auxSpiritMult: 1.0938 },
+        { pageCost: 12000, cultivationMult: 1.45, spiritMult: 1.25, auxCultivationMult: 1.225, auxSpiritMult: 1.125 },
+      ],
+    },
+    taiChu: {
+      name: "太初道章",
+      levels: [
+        { pageCost: 0, attack: 13.0, tribulationReduction: 0.04, auxAttack: 6.5, auxTribulationReduction: 0.02 },
+        { pageCost: 8000, attack: 19.5, tribulationReduction: 0.06, auxAttack: 9.75, auxTribulationReduction: 0.03 },
+        { pageCost: 16000, attack: 26.0, tribulationReduction: 0.08, auxAttack: 13.0, auxTribulationReduction: 0.04 },
+      ],
+    },
   } as const,
 
   library: {

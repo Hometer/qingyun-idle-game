@@ -527,7 +527,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     realm: "qi1",
     buildings: { cultivationRoom: 0, spiritArray: 0, spiritField: 0, alchemyFurnace: 0 },
     technique: null,
-    techniqueLevel: { qingYun: 0, xuanGui: 0, poYue: 0, juYuan: 0 },
+    techniqueLevel: { qingYun: 0, xuanGui: 0, poYue: 0, juYuan: 0, ningYing: 0, yunHai: 0, buXiu: 0, hunYuanGuiYi: 0, taiChu: 0 },
     equipment: { weapon: CONFIG.initialEquipment, armor: null, accessory: null },
     inventory: { [CONFIG.initialEquipment]: 1, tribulationPill: 0 },
     preparedPill: false,
@@ -574,29 +574,42 @@ function spiritFieldRate(s: SaveState): number {
 }
 function techniqueCultivationMult(s: SaveState): number {
   const lvl = s.techniqueLevel.qingYun;
-  if (lvl < 1) return 1;
-  const lv = CONFIG.techniques.qingYun.levels[lvl - 1];
-  if (s.technique === "qingYun") return lv.cultivationMult;
-  if (s.auxiliaryTechnique === "qingYun") return lv.auxCultivationMult;
-  return 1;
+  let m = 1;
+  if (lvl >= 1) {
+    const lv = CONFIG.techniques.qingYun.levels[lvl - 1];
+    if (s.technique === "qingYun") m = lv.cultivationMult;
+    else if (s.auxiliaryTechnique === "qingYun") m = lv.auxCultivationMult;
+  }
+  const hy = newTechEffect(s, "hunYuanGuiYi", "cultivationMult");
+  if (hy > 0) m *= hy;
+  return m;
 }
 
 function techniqueSpiritMult(s: SaveState): number {
   const lvl = s.techniqueLevel.juYuan;
-  if (lvl < 1) return 1;
-  const lv = CONFIG.techniques.juYuan.levels[lvl - 1];
-  if (s.technique === "juYuan") return lv.spiritMult;
-  if (s.auxiliaryTechnique === "juYuan") return lv.auxSpiritMult;
-  return 1;
+  let m = 1;
+  if (lvl >= 1) {
+    const lv = CONFIG.techniques.juYuan.levels[lvl - 1];
+    if (s.technique === "juYuan") m = lv.spiritMult;
+    else if (s.auxiliaryTechnique === "juYuan") m = lv.auxSpiritMult;
+  }
+  for (const id of ["ningYing", "hunYuanGuiYi"] as TechniqueId[]) {
+    const v = newTechEffect(s, id, "spiritMult");
+    if (v > 0) m *= v;
+  }
+  return m;
 }
 
 function techniqueAttackBonus(s: SaveState): number {
   const lvl = s.techniqueLevel.poYue;
-  if (lvl < 1) return 0;
-  const lv = CONFIG.techniques.poYue.levels[lvl - 1];
-  if (s.technique === "poYue") return lv.attack;
-  if (s.auxiliaryTechnique === "poYue") return lv.auxAttack;
-  return 0;
+  let a = 0;
+  if (lvl >= 1) {
+    const lv = CONFIG.techniques.poYue.levels[lvl - 1];
+    if (s.technique === "poYue") a = lv.attack;
+    else if (s.auxiliaryTechnique === "poYue") a = lv.auxAttack;
+  }
+  a += newTechEffect(s, "yunHai", "attack") + newTechEffect(s, "taiChu", "attack");
+  return a;
 }
 
 function xuanGuiReduction(s: SaveState): number {
@@ -606,6 +619,23 @@ function xuanGuiReduction(s: SaveState): number {
   if (s.technique === "xuanGui") return lv.tribulationReduction;
   if (s.auxiliaryTechnique === "xuanGui") return lv.auxTribulationReduction;
   return 0;
+}
+
+// 新功法效果：按主/辅取主修或辅修值
+function newTechEffect(s: SaveState, id: TechniqueId, key: string): number {
+  const lvl = s.techniqueLevel[id] ?? 0;
+  if (lvl < 1) return 0;
+  const lv = CONFIG.techniques[id].levels[lvl - 1] as unknown as Record<string, number>;
+  if (s.technique === id) return lv[key] ?? 0;
+  if (s.auxiliaryTechnique === id) return lv["aux" + key[0].toUpperCase() + key.slice(1)] ?? 0;
+  return 0;
+}
+
+function techniqueDefenseBonus(s: SaveState): number {
+  return newTechEffect(s, "yunHai", "defense");
+}
+function techniqueHpMult(s: SaveState): number {
+  return 1 + newTechEffect(s, "ningYing", "hpMult") + newTechEffect(s, "buXiu", "hpMult");
 }
 
 function aptitudeCultivationMult(s: SaveState): number {
@@ -636,9 +666,9 @@ export function realmStatBonus(realm: RealmId): { attack: number; defense: numbe
 }
 
 export function playerStats(s: SaveState): { attack: number; defense: number; hp: number } {
-  let attack = CONFIG.baseAttack;
-  let defense = CONFIG.baseDefense;
-  let hp = CONFIG.baseHp;
+  let attack: number = CONFIG.baseAttack;
+  let defense: number = CONFIG.baseDefense;
+  let hp: number = CONFIG.baseHp;
   for (const slot of ["weapon", "armor", "accessory"] as const) {
     const eqId = s.equipment[slot];
     if (eqId && EQUIP_CFG[eqId]) {
@@ -653,6 +683,8 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
   defense += bonus.defense;
   hp += bonus.hp;
   attack += techniqueAttackBonus(s);
+  defense += techniqueDefenseBonus(s);
+  hp = Math.floor(hp * techniqueHpMult(s));
   return { attack, defense, hp };
 }
 
@@ -873,10 +905,33 @@ export function upgradeBuilding(state: SaveState, nowMs: number, id: BuildingId)
 
 // ---- 功法与装备 ----
 
+// 新功法解锁要求（藏经阁等级 + 境界）；「首通本境首节点获得」的领取流程后续补
+const NEW_TECH_REQUIREMENT: Record<string, { library: number; realm: RealmId }> = {
+  ningYing: { library: 3, realm: "yuanying1" },
+  yunHai: { library: 4, realm: "dacheng1" },
+  buXiu: { library: 5, realm: "jinxian1" },
+  hunYuanGuiYi: { library: 6, realm: "hunyuan_daluo1" },
+  taiChu: { library: 7, realm: "dadao1" },
+};
+
+function newTechUnlocked(s: SaveState, id: TechniqueId): string | null {
+  const req = NEW_TECH_REQUIREMENT[id];
+  if (!req) return null;
+  if (s.library < req.library) return `需${req.library}级藏经阁方可研习该功法`;
+  if (realmIndex(s.realm) < realmIndex(req.realm)) return `需${realmName(req.realm)}方可研习该功法`;
+  return null;
+}
+
+export function techniqueLockReason(s: SaveState, id: TechniqueId): string | null {
+  if ((id === "poYue" || id === "juYuan") && s.library < 1) return "需一级藏经阁解锁";
+  return newTechUnlocked(s, id);
+}
+
 export function setTechnique(state: SaveState, nowMs: number, id: TechniqueId): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.technique === id) return fail("已是当前主修");
-  if ((id === "poYue" || id === "juYuan") && s.library < 1) return fail("需先建一级藏经阁");
+  const unlockFail = techniqueLockReason(s, id);
+  if (unlockFail) return fail(unlockFail);
   const oldPrimary = s.technique;
   const oldAux = s.auxiliaryTechnique;
   if (oldAux === id) {
@@ -897,6 +952,8 @@ export function setTechnique(state: SaveState, nowMs: number, id: TechniqueId): 
 export function setAuxiliaryTechnique(state: SaveState, nowMs: number, id: TechniqueId): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.library < 2) return fail("需先建二级藏经阁");
+  const unlockFail = techniqueLockReason(s, id);
+  if (unlockFail) return fail(unlockFail);
   if (!s.technique) return fail("需先主修功法");
   if (s.auxiliaryTechnique === id) return fail("已是当前辅修");
   const wasNull = s.auxiliaryTechnique === null;
@@ -1282,6 +1339,10 @@ export function tribulationReductionInfo(state: SaveState): { reduction: number;
   if (xg > 0) {
     sources.push({ name: CONFIG.techniques.xuanGui.name, pct: xg });
   }
+  const bx = newTechEffect(state, "buXiu", "tribulationReduction");
+  if (bx > 0) sources.push({ name: CONFIG.techniques.buXiu.name, pct: bx });
+  const tc = newTechEffect(state, "taiChu", "tribulationReduction");
+  if (tc > 0) sources.push({ name: CONFIG.techniques.taiChu.name, pct: tc });
   for (const slot of ["weapon", "armor", "accessory"] as const) {
     const eqId = state.equipment[slot];
     if (eqId && EQUIP_CFG[eqId]?.tribulationReduction) {
@@ -1765,7 +1826,7 @@ export function migrateSave(raw: SaveState): SaveState {
   if (!Array.isArray(s.secretRealmLog)) s.secretRealmLog = [];
   if (s.aptitude === undefined) s.aptitude = "balanced";
   if (!s.techniqueLevel || typeof s.techniqueLevel !== "object") {
-    s.techniqueLevel = { qingYun: 0, xuanGui: 0, poYue: 0, juYuan: 0 };
+    s.techniqueLevel = { qingYun: 0, xuanGui: 0, poYue: 0, juYuan: 0, ningYing: 0, yunHai: 0, buXiu: 0, hunYuanGuiYi: 0, taiChu: 0 };
   } else {
     for (const k of ["poYue", "juYuan"]) {
       if ((s.techniqueLevel as Record<string, unknown>)[k] === undefined) (s.techniqueLevel as Record<string, unknown>)[k] = 0;
