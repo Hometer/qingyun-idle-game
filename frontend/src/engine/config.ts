@@ -1590,6 +1590,12 @@ const BASE_CONFIG = {
     maxByStage: [1, 2, 3, 4], // 筑基前1条 / 2~7境2条 / 8~15境3条 / 16~20境4条
   },
 
+  reforge: {
+    baseCost: { spiritStone: 500, iron: 20 },
+    lockedCostMult: 1.5,
+    lockCost: { spiritStone: 1000, iron: 50 },
+  },
+
   breakthrough: {
     riskyBaseRate: 0.8, // 冲关初次成功率
     riskyFailBoost: 0.1, // 每次失败 +10%

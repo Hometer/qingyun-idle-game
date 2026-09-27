@@ -17,7 +17,7 @@ function affixText(affixes: Array<{ id: string; value: number }> | undefined): s
 }
 
 export default function BeibaoPage() {
-  const { state, view, equip, craftPill, togglePill, craftGainPill, useGainPill: consumeGainPill, quenchEquipment, craftEquipment } = useGame();
+  const { state, view, equip, craftPill, togglePill, craftGainPill, useGainPill: consumeGainPill, quenchEquipment, craftEquipment, reforge, lockAffix, unlockAffix } = useGame();
   if (!state) return null;
   const current = view ?? state;
   const equippedStats = playerStats(current);
@@ -64,6 +64,11 @@ export default function BeibaoPage() {
                         淬炼
                       </button>
                     )}
+                    {state.equipmentAffixes[id]?.length ? (
+                      <button onClick={() => reforge(id)} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs">
+                        重铸
+                      </button>
+                    ) : null}
                     <button
                       onClick={() => equip(id)}
                       disabled={wearing}
@@ -78,6 +83,18 @@ export default function BeibaoPage() {
                 )}
                 {state.equipmentAffixes[id]?.length ? (
                   <p className="mt-0.5 text-xs text-gold">词条：{affixText(state.equipmentAffixes[id])}</p>
+                ) : null}
+                {state.equipmentAffixes[id]?.length ? (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {state.equipmentAffixes[id].map((a) => {
+                      const isLocked = state.lockedAffixes[id] === a.id;
+                      return (
+                        <button key={a.id} onClick={() => (isLocked ? unlockAffix(id) : lockAffix(id, a.id))} className={`rounded-lg border px-2 py-0.5 text-[10px] ${isLocked ? "border-cinnabar bg-[#f6e3de] text-cinnabar" : "border-line bg-paper"}`}>
+                          {isLocked ? "已锁" : "锁"}·{affixText([a])}
+                        </button>
+                      );
+                    })}
+                  </div>
                 ) : null}
               </div>
             );

@@ -54,6 +54,9 @@ interface GameContextValue {
   setAptitude: (aptitude: AptitudeId) => void;
   setResonance: (resonance: string | null) => void;
   marrow: (choice: "meridian" | "comprehension" | "removeRoot", removeRoot?: string) => void;
+  reforge: (baseId: string) => void;
+  lockAffix: (baseId: string, affixId: string) => void;
+  unlockAffix: (baseId: string) => void;
   settleNow: () => void;
   doBreakthrough: (method: BreakthroughMethod) => void;
   upgradeBuilding: (id: BuildingId) => void;
@@ -428,6 +431,45 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return;
       }
       await apply(r.state, "洗髓完成");
+    },
+    [state, apply],
+  );
+
+  const reforge = useCallback(
+    async (baseId: string) => {
+      if (!state) return;
+      const r = eng.reforgeEquipment(state, Date.now(), baseId);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "重铸装备词条");
+    },
+    [state, apply],
+  );
+
+  const lockAffix = useCallback(
+    async (baseId: string, affixId: string) => {
+      if (!state) return;
+      const r = eng.lockAffix(state, Date.now(), baseId, affixId);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "锁定词条");
+    },
+    [state, apply],
+  );
+
+  const unlockAffix = useCallback(
+    async (baseId: string) => {
+      if (!state) return;
+      const r = eng.unlockAffix(state, Date.now(), baseId);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "解锁词条");
     },
     [state, apply],
   );
@@ -974,6 +1016,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setAptitude,
     setResonance,
     marrow,
+    reforge,
+    lockAffix,
+    unlockAffix,
     settleNow,
     doBreakthrough,
     upgradeBuilding,

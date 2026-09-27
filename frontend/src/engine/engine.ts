@@ -394,6 +394,59 @@ function affixSum(s: SaveState, id: string): number {
   return equippedAffixes(s).filter((a) => a.id === id).reduce((sum, a) => sum + a.value, 0);
 }
 
+export function reforgeCost(s: SaveState, baseId: string): { spiritStone: number; iron: number } {
+  const mult = s.lockedAffixes[baseId] ? CONFIG.reforge.lockedCostMult : 1;
+  return {
+    spiritStone: Math.round(CONFIG.reforge.baseCost.spiritStone * mult),
+    iron: Math.round(CONFIG.reforge.baseCost.iron * mult),
+  };
+}
+
+export function reforgeEquipment(state: SaveState, nowMs: number, baseId: string): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const current = s.equipmentAffixes[baseId];
+  if (!current || current.length === 0) return fail("该装备暂无词条");
+  const cost = reforgeCost(s, baseId);
+  if (s.resources.spiritStone < cost.spiritStone || s.resources.iron < cost.iron) {
+    return fail(`重铸需灵石${cost.spiritStone}、玄铁${cost.iron}`);
+  }
+  const lockedId = s.lockedAffixes[baseId];
+  const locked = lockedId ? current.find((a) => a.id === lockedId) : undefined;
+  const seed = hashSeed(baseId) + s.revision + 1;
+  const newAffixes = randomAffixes(seededRng(seed));
+  const filtered = newAffixes.filter((a) => a.id !== lockedId);
+  s.equipmentAffixes[baseId] = locked ? [locked, ...filtered] : newAffixes;
+  s.resources.spiritStone -= cost.spiritStone;
+  s.resources.iron -= cost.iron;
+  s.recentLogs.push(`重铸${EQUIP_CFG[baseId]?.name ?? baseId}词条。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function lockAffix(state: SaveState, nowMs: number, baseId: string, affixId: string): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const current = s.equipmentAffixes[baseId];
+  if (!current || !current.some((a) => a.id === affixId)) return fail("该装备无此词条");
+  if (s.lockedAffixes[baseId]) return fail("已锁定过一条词条");
+  const cost = CONFIG.reforge.lockCost;
+  if (s.resources.spiritStone < cost.spiritStone || s.resources.iron < cost.iron) {
+    return fail(`锁定需灵石${cost.spiritStone}、玄铁${cost.iron}`);
+  }
+  s.lockedAffixes[baseId] = affixId;
+  s.resources.spiritStone -= cost.spiritStone;
+  s.resources.iron -= cost.iron;
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function unlockAffix(state: SaveState, nowMs: number, baseId: string): Result<SaveState> {
+  const s = settle(state, nowMs);
+  if (!s.lockedAffixes[baseId]) return fail("该装备未锁定词条");
+  delete s.lockedAffixes[baseId];
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
 export function recordDailySettle(state: SaveState, nowMs: number): SaveState {
   const s = structuredClone(state);
   ensureDaily(s, nowMs);
@@ -721,6 +774,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     resonance: null,
     marrowHistory: [],
     equipmentAffixes: {},
+    lockedAffixes: {},
     aptitude: apt,
     resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 },
     realm: "qi1",
@@ -2294,6 +2348,7 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.resonance === undefined) s.resonance = null;
   if (!Array.isArray(s.marrowHistory)) s.marrowHistory = [];
   if (!s.equipmentAffixes || typeof s.equipmentAffixes !== "object") s.equipmentAffixes = {};
+  if (!s.lockedAffixes || typeof s.lockedAffixes !== "object") s.lockedAffixes = {};
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -2803,6 +2858,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.resonance = typeof o.resonance === "string" ? (o.resonance as string) : null;
   base.marrowHistory = Array.isArray(o.marrowHistory) ? (o.marrowHistory as SaveState["marrowHistory"]) : [];
   base.equipmentAffixes = (o.equipmentAffixes && typeof o.equipmentAffixes === "object") ? (o.equipmentAffixes as Record<string, Affix[]>) : {};
+  base.lockedAffixes = (o.lockedAffixes && typeof o.lockedAffixes === "object") ? (o.lockedAffixes as Record<string, string>) : {};
   base.maps = { ...base.maps, ...((o.maps as Partial<SaveState["maps"]>) || {}) };
   base.suppression = { ...base.suppression, ...((o.suppression as Partial<SaveState["suppression"]>) || {}) };
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };
