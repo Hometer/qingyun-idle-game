@@ -162,6 +162,8 @@ export interface SaveState {
   equipment: Equipment;
   inventory: Record<string, number>;
   preparedPill: boolean;
+  preparedPillTier: number; // 预置护劫丹品阶 1~4（凡/灵/仙/道）
+  quenched: string[]; // 已淬炼装备 ID，每件最多一次
   maps: Record<MapId, Record<string, NodeState>>;
   suppression: Record<MapId, string | null>;
   encounter: EncounterState;

@@ -473,6 +473,10 @@ export const CONFIG = {
     gainStone: [150, 1200, 8000, 50000],
     gainPage: [0, 80, 600, 2500],
     gainFurnaceLevel: [1, 4, 5, 6],
+    tribulationHealPct: [0.30, 0.32, 0.34, 0.36],
+    tribulationHerb: [0, 150, 600, 2500],
+    tribulationStone: [0, 1500, 10000, 60000],
+    tribulationPage: [0, 100, 800, 3000],
   } as const,
 
   crafts: {

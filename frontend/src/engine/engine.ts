@@ -570,6 +570,8 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     equipment: { weapon: CONFIG.initialEquipment, armor: null, accessory: null },
     inventory: { [CONFIG.initialEquipment]: 1, tribulationPill: 0 },
     preparedPill: false,
+    preparedPillTier: 1,
+    quenched: [],
     maps,
     suppression: emptySuppression(),
     encounter: { pending: null, triggeredToday: 0, lastTriggerDate: todayStr(nowMs), guideDone: false },
@@ -712,9 +714,10 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
     const eqId = s.equipment[slot];
     if (eqId && EQUIP_CFG[eqId]) {
       const c = EQUIP_CFG[eqId];
-      attack += c.attack ?? 0;
-      defense += c.defense ?? 0;
-      hp += c.hp ?? 0;
+      const q = s.quenched?.includes(eqId) ? 1.05 : 1;
+      attack += Math.floor((c.attack ?? 0) * q);
+      defense += Math.floor((c.defense ?? 0) * q);
+      hp += Math.floor((c.hp ?? 0) * q);
     }
   }
   const bonus = realmStatBonus(s.realm);
@@ -1072,6 +1075,31 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
   return { state: s, ok: true };
 }
 
+export function quenchEquipment(state: SaveState, nowMs: number, equipId: string): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const eq = EQUIP_CFG[equipId];
+  if (!eq) return fail("无此装备");
+  const craft = CRAFT_CFG[equipId];
+  if (!craft) return fail("此装备不可淬炼");
+  if (s.quenched.includes(equipId)) return fail("已淬炼过该装备");
+  const owned = (s.inventory[equipId] || 0) > 0 || s.equipment.weapon === equipId || s.equipment.armor === equipId || s.equipment.accessory === equipId;
+  if (!owned) return fail("未拥有此装备");
+  const iron = Math.ceil((craft.cost.iron ?? 0) * 0.25);
+  const stone = Math.ceil((craft.cost.spiritStone ?? 0) * 0.25);
+  const mat = materialForStage(stageOfGate(craft.gate as string));
+  const res = s.resources as unknown as Record<string, number>;
+  if ((res.iron ?? 0) < iron || (res.spiritStone ?? 0) < stone || (mat && (res[mat] ?? 0) < 2)) {
+    return fail("淬炼材料不足");
+  }
+  res.iron -= iron;
+  res.spiritStone -= stone;
+  if (mat) res[mat] -= 2;
+  s.quenched = [...s.quenched, equipId];
+  s.recentLogs.push(`淬炼${eq.name}，属性提升。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
 export function upgradeTechnique(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
   const t = s.technique;
@@ -1102,18 +1130,34 @@ export function equipItem(state: SaveState, nowMs: number, equipId: string): Res
 
 // ---- 炼丹与护劫丹 ----
 
-export function craftPill(state: SaveState, nowMs: number): Result<SaveState> {
+export function craftPill(state: SaveState, nowMs: number, tier = 1): Result<SaveState> {
   const s = settle(state, nowMs);
   const lvl = s.buildings.alchemyFurnace;
   if (lvl < 1) return fail("需先建炼丹炉");
-  const c = CONFIG.buildings.alchemyFurnace.levels[lvl - 1];
-  if (s.resources.herb < c.pillHerbCost || s.resources.spiritStone < c.pillStoneCost) {
-    return fail("灵草或灵石不足");
+  if (tier === 1) {
+    const c = CONFIG.buildings.alchemyFurnace.levels[lvl - 1];
+    if (s.resources.herb < c.pillHerbCost || s.resources.spiritStone < c.pillStoneCost) {
+      return fail("灵草或灵石不足");
+    }
+    s.resources.herb -= c.pillHerbCost;
+    s.resources.spiritStone -= c.pillStoneCost;
+    s.inventory.tribulationPill = (s.inventory.tribulationPill || 0) + 1;
+  } else {
+    const needFurnace = tier === 2 ? 4 : tier === 3 ? 5 : 6;
+    if (lvl < needFurnace) return fail(`需${needFurnace}级炼丹炉方可炼制该品护劫丹`);
+    const herb = CONFIG.pills.tribulationHerb[tier - 1];
+    const stone = CONFIG.pills.tribulationStone[tier - 1];
+    const page = CONFIG.pills.tribulationPage[tier - 1];
+    if (s.resources.herb < herb || s.resources.spiritStone < stone || s.resources.page < page) {
+      return fail("灵草、灵石或残页不足");
+    }
+    s.resources.herb -= herb;
+    s.resources.spiritStone -= stone;
+    s.resources.page -= page;
+    s.inventory[`tribulationPill_${tier}`] = (s.inventory[`tribulationPill_${tier}`] || 0) + 1;
   }
-  s.resources.herb -= c.pillHerbCost;
-  s.resources.spiritStone -= c.pillStoneCost;
-  s.inventory.tribulationPill = (s.inventory.tribulationPill || 0) + 1;
-  s.recentLogs.push("开炉炼丹，得护劫丹一枚。");
+  const tierName = ["凡", "灵", "仙", "道"][tier - 1];
+  s.recentLogs.push(`开炉炼丹，得护劫丹（${tierName}品）一枚。`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1157,14 +1201,16 @@ export function useGainPill(state: SaveState, nowMs: number, type: "yangYuan" | 
   return { state: s, ok: true };
 }
 
-export function togglePreparePill(state: SaveState, nowMs: number): Result<SaveState> {
+export function togglePreparePill(state: SaveState, nowMs: number, tier = 1): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.preparedPill) {
     s.preparedPill = false;
     return { state: s, ok: true };
   }
-  if ((s.inventory.tribulationPill || 0) < 1) return fail("无护劫丹可预置");
+  const pillId = tier === 1 ? "tribulationPill" : `tribulationPill_${tier}`;
+  if ((s.inventory[pillId] || 0) < 1) return fail("无此品护劫丹可预置");
   s.preparedPill = true;
+  s.preparedPillTier = tier;
   return { state: s, ok: true };
 }
 
@@ -1461,7 +1507,7 @@ export function simulateTribulation(state: SaveState, wavesPct: readonly number[
     hp -= dmg;
     log.push(`第${i + 1}波${label}，伤${dmg}点，余${Math.max(0, hp)}气血。`);
     if (i + 1 === CONFIG.tribulation.pillWave && pill && hp > 0) {
-      const healed = Math.round(maxHp * CONFIG.tribulation.pillHealPct);
+      const healed = Math.round(maxHp * (CONFIG.pills.tribulationHealPct[(state.preparedPillTier ?? 1) - 1] ?? 0.30));
       hp = Math.min(maxHp, hp + healed);
       pillHealed = { wave: i + 1, amount: healed };
       log.push(`护劫丹生效，回复${healed}点气血。`);
@@ -1506,7 +1552,11 @@ export function startTribulation(state: SaveState, nowMs: number): Result<SaveSt
 
   const sim = simulateTribulation(s);
   const pill = s.preparedPill;
-  if (pill) s.inventory.tribulationPill = Math.max(0, (s.inventory.tribulationPill || 0) - 1);
+  if (pill) {
+    const tier = s.preparedPillTier ?? 1;
+    const pillId = tier === 1 ? "tribulationPill" : `tribulationPill_${tier}`;
+    s.inventory[pillId] = Math.max(0, (s.inventory[pillId] || 0) - 1);
+  }
   s.preparedPill = false;
 
   if (sim.success) {
@@ -1600,7 +1650,11 @@ export function startJindanTrial(state: SaveState, nowMs: number): Result<SaveSt
 
   const sim = simulateTribulation(s, TRIAL_CFG[2].wavesPct, "结丹试炼");
   const pill = s.preparedPill;
-  if (pill) s.inventory.tribulationPill = Math.max(0, (s.inventory.tribulationPill || 0) - 1);
+  if (pill) {
+    const tier = s.preparedPillTier ?? 1;
+    const pillId = tier === 1 ? "tribulationPill" : `tribulationPill_${tier}`;
+    s.inventory[pillId] = Math.max(0, (s.inventory[pillId] || 0) - 1);
+  }
   s.preparedPill = false;
 
   if (sim.success) {
@@ -1677,7 +1731,11 @@ export function startYuanyingTrial(state: SaveState, nowMs: number): Result<Save
 
   const sim = simulateTribulation(s, TRIAL_CFG[3].wavesPct, "元婴天劫");
   const pill = s.preparedPill;
-  if (pill) s.inventory.tribulationPill = Math.max(0, (s.inventory.tribulationPill || 0) - 1);
+  if (pill) {
+    const tier = s.preparedPillTier ?? 1;
+    const pillId = tier === 1 ? "tribulationPill" : `tribulationPill_${tier}`;
+    s.inventory[pillId] = Math.max(0, (s.inventory[pillId] || 0) - 1);
+  }
   s.preparedPill = false;
 
   if (sim.success) {
@@ -1778,7 +1836,11 @@ export function startCrossStageTrial(state: SaveState, nowMs: number): Result<Sa
   const to = REALMS[realmIndex(t.toRealm)];
   const sim = simulateTribulation(s, t.cfg.wavesPct, t.cfg.name);
   const pill = s.preparedPill;
-  if (pill) s.inventory.tribulationPill = Math.max(0, (s.inventory.tribulationPill || 0) - 1);
+  if (pill) {
+    const tier = s.preparedPillTier ?? 1;
+    const pillId = tier === 1 ? "tribulationPill" : `tribulationPill_${tier}`;
+    s.inventory[pillId] = Math.max(0, (s.inventory[pillId] || 0) - 1);
+  }
   s.preparedPill = false;
   if (sim.success) {
     s.realm = t.toRealm;
@@ -1901,6 +1963,8 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.lastLongTaskResult === undefined) s.lastLongTaskResult = null;
   if (s.jindanTrial === undefined) s.jindanTrial = null;
   if (s.yuanyingTrial === undefined) s.yuanyingTrial = null;
+  if (s.preparedPillTier === undefined) s.preparedPillTier = 1;
+  if (!Array.isArray(s.quenched)) s.quenched = [];
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -2390,6 +2454,8 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.equipment = { ...base.equipment, ...((o.equipment as Partial<SaveState["equipment"]>) || {}) };
   base.inventory = { ...base.inventory, ...((o.inventory as Record<string, number>) || {}) };
   base.preparedPill = !!o.preparedPill;
+  base.preparedPillTier = Number.isInteger(o.preparedPillTier) && (o.preparedPillTier as number) >= 1 && (o.preparedPillTier as number) <= 4 ? (o.preparedPillTier as number) : 1;
+  base.quenched = Array.isArray(o.quenched) ? (o.quenched as string[]) : [];
   base.maps = { ...base.maps, ...((o.maps as Partial<SaveState["maps"]>) || {}) };
   base.suppression = { ...base.suppression, ...((o.suppression as Partial<SaveState["suppression"]>) || {}) };
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };
