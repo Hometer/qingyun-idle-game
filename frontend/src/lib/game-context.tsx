@@ -66,8 +66,11 @@ interface GameContextValue {
   confirmSecretRealm: () => void;
   cancelSecretRealm: () => void;
   equip: (id: string) => void;
-  craftPill: () => void;
-  togglePill: () => void;
+  craftPill: (tier?: number) => void;
+  togglePill: (tier?: number) => void;
+  craftGainPill: (type: "yangYuan" | "juLing", tier: number) => void;
+  useGainPill: (type: "yangYuan" | "juLing", tier: number) => void;
+  quenchEquipment: (id: string) => void;
   fight: (mapId: MapId, nodeId: string) => void;
   suppress: (mapId: MapId, nodeId: string) => void;
   choose: (optionId: string) => void;
@@ -655,9 +658,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [state, apply],
   );
 
-  const craftPill = useCallback(async () => {
+  const craftPill = useCallback(async (tier = 1) => {
     if (!state) return;
-    const r = eng.craftPill(state, Date.now());
+    const r = eng.craftPill(state, Date.now(), tier);
     if (!r.ok || !r.state) {
       setNotice(r.reason);
       return;
@@ -665,14 +668,44 @@ export function GameProvider({ children }: { children: ReactNode }) {
     await apply(r.state, "炼得护劫丹一枚");
   }, [state, apply]);
 
-  const togglePill = useCallback(async () => {
+  const togglePill = useCallback(async (tier = 1) => {
     if (!state) return;
-    const r = eng.togglePreparePill(state, Date.now());
+    const r = eng.togglePreparePill(state, Date.now(), tier);
     if (!r.ok || !r.state) {
       setNotice(r.reason);
       return;
     }
     await apply(r.state, "已切换预置");
+  }, [state, apply]);
+
+  const craftGainPill = useCallback(async (type: "yangYuan" | "juLing", tier: number) => {
+    if (!state) return;
+    const r = eng.craftGainPill(state, Date.now(), type, tier);
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    await apply(r.state, "炼得收益丹一枚");
+  }, [state, apply]);
+
+  const useGainPill = useCallback(async (type: "yangYuan" | "juLing", tier: number) => {
+    if (!state) return;
+    const r = eng.useGainPill(state, Date.now(), type, tier);
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    await apply(r.state, "服下收益丹");
+  }, [state, apply]);
+
+  const quenchEquipment = useCallback(async (id: string) => {
+    if (!state) return;
+    const r = eng.quenchEquipment(state, Date.now(), id);
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    await apply(r.state, "淬炼装备");
   }, [state, apply]);
 
   const fight = useCallback(
@@ -900,6 +933,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     equip,
     craftPill,
     togglePill,
+    craftGainPill,
+    useGainPill,
+    quenchEquipment,
     fight,
     suppress,
     choose,

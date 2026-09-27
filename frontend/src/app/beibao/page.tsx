@@ -2,11 +2,11 @@
 
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { EQUIPMENT, BUILDINGS, REALM_NAMES, REALM_ORDER } from "@/lib/labels";
+import { EQUIPMENT, BUILDINGS, REALM_NAMES, REALM_ORDER, RESOURCE_LABELS } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
 
 export default function BeibaoPage() {
-  const { state, view, equip, craftPill, togglePill, craftEquipment } = useGame();
+  const { state, view, equip, craftPill, togglePill, craftGainPill, useGainPill, quenchEquipment, craftEquipment } = useGame();
   if (!state) return null;
   const current = view ?? state;
 
@@ -20,29 +20,71 @@ export default function BeibaoPage() {
 
   return (
     <>
-      <Section title="护劫丹">
-        <p className="text-sm">
-          持有 {state.inventory.tribulationPill || 0} 枚{state.preparedPill ? "（已预置）" : ""}
-        </p>
-        {recipe ? (
-          <p className="mt-1 text-xs text-muted">
-            配方：灵草 {recipe.pillHerbCost} + 灵石 {recipe.pillStoneCost}
-          </p>
-        ) : (
-          <p className="mt-1 text-xs text-muted">需先建造炼丹炉方可炼丹</p>
+      <Section title="丹药">
+        <div className="mb-2 text-xs text-muted">护劫丹：试炼第三波回血，手动预置不占收益丹次数。</div>
+        {[1, 2, 3, 4].map((tier) => {
+          const tierName = ["凡", "灵", "仙", "道"][tier - 1];
+          const pillId = tier === 1 ? "tribulationPill" : `tribulationPill_${tier}`;
+          const held = state.inventory[pillId] || 0;
+          const healPct = Math.round(CONFIG.pills.tribulationHealPct[tier - 1] * 100);
+          const herb = tier === 1 ? (recipe?.pillHerbCost ?? 0) : CONFIG.pills.tribulationHerb[tier - 1];
+          const stone = tier === 1 ? (recipe?.pillStoneCost ?? 0) : CONFIG.pills.tribulationStone[tier - 1];
+          const page = tier === 1 ? 0 : CONFIG.pills.tribulationPage[tier - 1];
+          const needFurnace = tier === 1 ? 1 : tier === 2 ? 4 : tier === 3 ? 5 : 6;
+          const canCraft = recipe !== null && furnaceLvl >= needFurnace && current.resources.herb >= herb && current.resources.spiritStone >= stone && current.resources.page >= page;
+          const isPrepared = state.preparedPill && state.preparedPillTier === tier;
+          return (
+            <div key={`t_${tier}`} className="border-b border-line/60 py-2 last:border-0">
+              <div className="flex items-center justify-between">
+                <div className="text-sm">
+                  护劫丹·{tierName}品（回血 {healPct}%）
+                  <span className="ml-1 text-xs text-muted">持有 {held} 枚{isPrepared ? " · 已预置" : ""}</span>
+                </div>
+                <div className="flex gap-1">
+                  <button onClick={() => craftPill(tier)} disabled={!canCraft} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs disabled:opacity-40">炼</button>
+                  <button onClick={() => togglePill(tier)} disabled={held < 1 && !isPrepared} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs disabled:opacity-40">{isPrepared ? "取消预置" : "预置"}</button>
+                </div>
+              </div>
+              <p className="mt-0.5 text-xs text-muted">
+                {furnaceLvl < needFurnace ? `需${needFurnace}级炼丹炉` : `配方：灵草 ${herb}、灵石 ${stone}${page ? `、残页 ${page}` : ""}`}
+              </p>
+            </div>
+          );
+        })}
+
+        <div className="mt-3 mb-2 text-xs text-muted">收益丹：服用一次性获得当前产速收益，每日合计一枚。</div>
+        {(["yangYuan", "juLing"] as const).map((type) =>
+          [1, 2, 3, 4].map((tier) => {
+            const tierName = ["凡", "灵", "仙", "道"][tier - 1];
+            const name = type === "yangYuan" ? "养元丹" : "聚灵丹";
+            const pillId = `${type === "yangYuan" ? "yangYuan" : "juLing"}Dan_${tier}`;
+            const held = state.inventory[pillId] || 0;
+            const herb = CONFIG.pills.gainHerb[tier - 1];
+            const stone = CONFIG.pills.gainStone[tier - 1];
+            const page = CONFIG.pills.gainPage[tier - 1];
+            const needFurnace = CONFIG.pills.gainFurnaceLevel[tier - 1];
+            const minutes = CONFIG.pills.gainMinutes[tier - 1];
+            const canCraft = furnaceLvl >= needFurnace && current.resources.herb >= herb && current.resources.spiritStone >= stone && current.resources.page >= page;
+            const danUsed = current.daily.rewardedDan >= 1;
+            return (
+              <div key={`g_${type}_${tier}`} className="border-b border-line/60 py-2 last:border-0">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm">
+                    {name}·{tierName}品（{minutes} 分钟）
+                    <span className="ml-1 text-xs text-muted">持有 {held} 枚</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => craftGainPill(type, tier)} disabled={!canCraft} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs disabled:opacity-40">炼</button>
+                    <button onClick={() => useGainPill(type, tier)} disabled={held < 1 || danUsed} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs disabled:opacity-40">{danUsed ? "今日已服" : "服用"}</button>
+                  </div>
+                </div>
+                <p className="mt-0.5 text-xs text-muted">
+                  {furnaceLvl < needFurnace ? `需${needFurnace}级炼丹炉` : `配方：灵草 ${herb}、灵石 ${stone}${page ? `、残页 ${page}` : ""}`}
+                </p>
+              </div>
+            );
+          })
         )}
-        <div className="mt-2 flex gap-2">
-          <button
-            onClick={craftPill}
-            disabled={!canCraft}
-            className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
-          >
-            炼丹
-          </button>
-          <button onClick={togglePill} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">
-            {state.preparedPill ? "取消预置" : "预置丹药"}
-          </button>
-        </div>
       </Section>
 
       <Section title="炼器">
@@ -54,11 +96,10 @@ export default function BeibaoPage() {
             const eq = CONFIG.equipment[id as keyof typeof CONFIG.equipment] as unknown as { name: string; attack?: number; defense?: number; hp?: number; tribulationReduction?: number };
             if (!cfg || !eq) return null;
             const gateOk = REALM_ORDER.indexOf(current.realm) >= REALM_ORDER.indexOf(cfg.gate);
+            const costObj = cfg.cost as Record<string, number>;
             const canCraft =
-              gateOk && current.resources.iron >= cfg.cost.iron &&
-              current.resources.spiritStone >= cfg.cost.spiritStone &&
-              current.resources.herb >= cfg.cost.herb &&
-              current.resources.page >= cfg.cost.page;
+              gateOk &&
+              Object.entries(costObj).every(([k, v]) => v <= 0 || (current.resources as unknown as Record<string, number>)[k] >= v);
             const attrs = [
               eq.attack ? `攻+${eq.attack}` : "",
               eq.defense ? `防+${eq.defense}` : "",
@@ -86,10 +127,8 @@ export default function BeibaoPage() {
                   </button>
                 </div>
                 <p className="mt-0.5 text-xs text-muted">
-                  材料：玄铁 {cfg.cost.iron}、灵石 {cfg.cost.spiritStone}
-                  {cfg.cost.herb ? `、灵草 ${cfg.cost.herb}` : ""}
-                  {cfg.cost.page ? `、残页 ${cfg.cost.page}` : ""}
-                  {!gateOk ? `（需${REALM_NAMES[cfg.gate]}）` : !canCraft && shortfall ? `（还差 ${shortfall}）` : ""}
+                  材料：{Object.entries(costObj).filter(([, v]) => v > 0).map(([k, v]) => `${RESOURCE_LABELS[k] ?? k} ${v}`).join("、") || "无"}
+                  {!gateOk ? `（需${REALM_NAMES[cfg.gate]}）` : !canCraft ? "（材料不足）" : ""}
                 </p>
               </div>
             );
@@ -126,13 +165,20 @@ export default function BeibaoPage() {
                     </span>
                     {wearing && <span className="text-muted">（穿戴中）</span>}
                   </div>
-                  <button
-                    onClick={() => equip(id)}
-                    disabled={wearing}
-                    className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
-                  >
-                    穿戴
-                  </button>
+                  <div className="flex gap-1">
+                    {CONFIG.crafts[id as keyof typeof CONFIG.crafts] && !state.quenched.includes(id) && (
+                      <button onClick={() => quenchEquipment(id)} className="rounded-lg border border-line bg-paper px-2.5 py-1 text-xs">
+                        淬炼
+                      </button>
+                    )}
+                    <button
+                      onClick={() => equip(id)}
+                      disabled={wearing}
+                      className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40"
+                    >
+                      穿戴
+                    </button>
+                  </div>
                 </div>
                 {!wearing && delta.length > 0 && (
                   <p className="mt-0.5 text-xs text-cinnabar">穿上后 {delta.join("，")}</p>
