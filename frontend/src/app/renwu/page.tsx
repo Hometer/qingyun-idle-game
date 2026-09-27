@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
-import { playerStats } from "@/engine/engine";
+import { playerStats, marrowTiersReached, marrowCost } from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
 import { REALM_NAMES, EQUIPMENT, BUILDINGS, TECHNIQUES, DAILY_GOALS, RESOURCE_LABELS, SECRET_REALMS, fmtTime } from "@/lib/labels";
 import { getTheme, setTheme, getReduceMotion, setReduceMotion, getCopyMode, setCopyMode, type Theme, type CopyMode } from "@/lib/prefs";
@@ -22,7 +22,7 @@ const MAPS_CFG = CONFIG.maps as unknown as Record<
 >;
 
 export default function RenwuPage() {
-  const { state, doExport, doImport, doReset, doRestoreBackup, claimGoal, setResonance } = useGame();
+  const { state, doExport, doImport, doReset, doRestoreBackup, claimGoal, setResonance, marrow } = useGame();
   const fileRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState(() =>
     typeof localStorage !== "undefined" ? localStorage.getItem("qingyun_access_code") || "" : "",
@@ -139,6 +139,47 @@ export default function RenwuPage() {
         {state.resonance && (
           <button onClick={() => setResonance(null)} className="mt-2 rounded-lg border border-line bg-paper px-3 py-1 text-xs">关闭共鸣</button>
         )}
+      </Section>
+
+      <Section title="洗髓">
+        {(() => {
+          const reached = marrowTiersReached(state);
+          const used = state.marrowHistory.length;
+          const available = Math.max(0, reached - used);
+          const cost = marrowCost(state);
+          return (
+            <>
+              <p className="text-sm">可用洗髓机会 {available}（已用 {used}）</p>
+              {cost && (
+                <p className="mt-1 text-xs text-muted">本次费用：灵石 {cost.spiritStone}、灵草 {cost.herb}</p>
+              )}
+              {available > 0 ? (
+                <div className="mt-2 flex flex-col gap-2">
+                  <button onClick={() => marrow("meridian")} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">经脉提升一档</button>
+                  <button onClick={() => marrow("comprehension")} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">悟性提升一档</button>
+                  {state.spiritRoots.length > 1 && !(state.spiritRoots.length === 1 && ["雷", "冰", "风"].includes(state.spiritRoots[0])) && (
+                    <div className="flex flex-wrap gap-2">
+                      {state.spiritRoots.map((r) => (
+                        <button key={r} onClick={() => marrow("removeRoot", r)} className="rounded-lg border border-line bg-paper px-3 py-1 text-xs">移除 {r}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-1 text-xs text-muted">继续修行到下一洗髓境界可再得机会。</p>
+              )}
+              {state.marrowHistory.length > 0 && (
+                <div className="mt-2 space-y-1 text-xs text-muted">
+                  {state.marrowHistory.map((h, i) => (
+                    <p key={i}>
+                      {fmtTime(h.at)}：{h.type === "meridian" ? "经脉" : h.type === "comprehension" ? "悟性" : "灵根"} {h.from} → {h.to}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </Section>
 
       <Section title="金丹篇章">

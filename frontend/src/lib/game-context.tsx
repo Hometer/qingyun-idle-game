@@ -53,6 +53,7 @@ interface GameContextValue {
   createWithFortune: (name: string, fortune: { spiritRoots: string[]; meridians: string; comprehension: string }, aptitude: AptitudeId) => void;
   setAptitude: (aptitude: AptitudeId) => void;
   setResonance: (resonance: string | null) => void;
+  marrow: (choice: "meridian" | "comprehension" | "removeRoot", removeRoot?: string) => void;
   settleNow: () => void;
   doBreakthrough: (method: BreakthroughMethod) => void;
   upgradeBuilding: (id: BuildingId) => void;
@@ -416,6 +417,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
       await apply(s, "角色已创建，踏上仙途");
     },
     [apply],
+  );
+
+  const marrow = useCallback(
+    async (choice: "meridian" | "comprehension" | "removeRoot", removeRoot?: string) => {
+      if (!state) return;
+      const r = eng.marrow(state, Date.now(), choice, removeRoot);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "洗髓完成");
+    },
+    [state, apply],
   );
 
   const setResonance = useCallback(
@@ -959,6 +973,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     createWithFortune,
     setAptitude,
     setResonance,
+    marrow,
     settleNow,
     doBreakthrough,
     upgradeBuilding,

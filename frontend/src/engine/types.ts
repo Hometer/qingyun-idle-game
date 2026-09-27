@@ -160,6 +160,7 @@ export interface SaveState {
   meridians: MeridianId; // 经脉档
   comprehension: ComprehensionId; // 悟性档
   resonance: string | null; // 当前启用共鸣（五行或变异），未启用为 null
+  marrowHistory: Array<{ type: string; from: string; to: string; spiritStone: number; herb: number; at: number }>; // 洗髓历史
   resources: Resources;
   realm: RealmId;
   buildings: Record<BuildingId, number>;

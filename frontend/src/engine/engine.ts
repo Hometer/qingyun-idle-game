@@ -642,6 +642,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     meridians: "normal",
     comprehension: "normal",
     resonance: null,
+    marrowHistory: [],
     aptitude: apt,
     resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 },
     realm: "qi1",
@@ -789,6 +790,61 @@ export function setResonance(state: SaveState, nowMs: number, resonance: string 
   const s = settle(state, nowMs);
   if (resonance !== null && !s.spiritRoots.includes(resonance)) return fail("该共鸣不属于当前灵根");
   s.resonance = resonance;
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+const MERIDIAN_ORDER: MeridianId[] = ["blocked", "sluggish", "normal", "smooth", "innate"];
+const COMPREHENSION_ORDER: ComprehensionId[] = ["dull", "slow", "normal", "clever", "genius"];
+
+export function marrowTiersReached(s: SaveState): number {
+  let count = 0;
+  for (const tier of CONFIG.marrow.tiers) {
+    if (realmIndex(s.realm) >= realmIndex(tier.realm as RealmId)) count++;
+  }
+  return count;
+}
+
+export function marrowCost(s: SaveState): { spiritStone: number; herb: number } | null {
+  const used = s.marrowHistory.length;
+  const reached = marrowTiersReached(s);
+  if (used >= reached) return null;
+  const tier = CONFIG.marrow.tiers[used];
+  return { spiritStone: tier.spiritStone, herb: tier.herb };
+}
+
+export function marrow(state: SaveState, nowMs: number, choice: "meridian" | "comprehension" | "removeRoot", removeRoot?: string): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const cost = marrowCost(s);
+  if (!cost) return fail("暂无可用洗髓机会");
+  if (s.resources.spiritStone < cost.spiritStone || s.resources.herb < cost.herb) {
+    return fail(`洗髓需灵石${cost.spiritStone}、灵草${cost.herb}`);
+  }
+  let from = "";
+  let to = "";
+  if (choice === "meridian") {
+    const idx = MERIDIAN_ORDER.indexOf(s.meridians);
+    if (idx >= MERIDIAN_ORDER.length - 1) return fail("经脉已至最高档");
+    from = s.meridians;
+    s.meridians = MERIDIAN_ORDER[idx + 1];
+    to = s.meridians;
+  } else if (choice === "comprehension") {
+    const idx = COMPREHENSION_ORDER.indexOf(s.comprehension);
+    if (idx >= COMPREHENSION_ORDER.length - 1) return fail("悟性已至最高档");
+    from = s.comprehension;
+    s.comprehension = COMPREHENSION_ORDER[idx + 1];
+    to = s.comprehension;
+  } else {
+    if (s.spiritRoots.length <= 1) return fail("单灵根不能再减");
+    if (s.spiritRoots.length === 1 && ["雷", "冰", "风"].includes(s.spiritRoots[0])) return fail("变异灵根不能移除");
+    if (!removeRoot || !s.spiritRoots.includes(removeRoot)) return fail("请指定要移除的灵根");
+    from = s.spiritRoots.join("、");
+    s.spiritRoots = s.spiritRoots.filter((r) => r !== removeRoot);
+    to = s.spiritRoots.join("、");
+  }
+  s.resources.spiritStone -= cost.spiritStone;
+  s.resources.herb -= cost.herb;
+  s.marrowHistory.push({ type: choice, from, to, spiritStone: cost.spiritStone, herb: cost.herb, at: nowMs });
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -2102,6 +2158,7 @@ export function migrateSave(raw: SaveState): SaveState {
   if (typeof s.meridians !== "string" || !MERIDIAN_CFG[s.meridians]) s.meridians = "normal";
   if (typeof s.comprehension !== "string" || !COMPREHENSION_CFG[s.comprehension]) s.comprehension = "normal";
   if (s.resonance === undefined) s.resonance = null;
+  if (!Array.isArray(s.marrowHistory)) s.marrowHistory = [];
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -2608,6 +2665,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.meridians = typeof o.meridians === "string" && (o.meridians as string) in MERIDIAN_CFG ? (o.meridians as MeridianId) : "normal";
   base.comprehension = typeof o.comprehension === "string" && (o.comprehension as string) in COMPREHENSION_CFG ? (o.comprehension as ComprehensionId) : "normal";
   base.resonance = typeof o.resonance === "string" ? (o.resonance as string) : null;
+  base.marrowHistory = Array.isArray(o.marrowHistory) ? (o.marrowHistory as SaveState["marrowHistory"]) : [];
   base.maps = { ...base.maps, ...((o.maps as Partial<SaveState["maps"]>) || {}) };
   base.suppression = { ...base.suppression, ...((o.suppression as Partial<SaveState["suppression"]>) || {}) };
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };

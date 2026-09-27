@@ -1562,6 +1562,16 @@ export const CONFIG = {
     windTimeMult: 0.96, // 风：任务耗时 ×0.96
   },
 
+  marrow: {
+    tiers: [
+      { realm: "zhuji1", spiritStone: 1000, herb: 50 },
+      { realm: "huashen1", spiritStone: 10000, herb: 200 },
+      { realm: "zhenxian1", spiritStone: 100000, herb: 1000 },
+      { realm: "hunyuan1", spiritStone: 500000, herb: 4000 },
+      { realm: "tiandao1", spiritStone: 2000000, herb: 10000 },
+    ],
+  },
+
   breakthrough: {
     riskyBaseRate: 0.8, // 冲关初次成功率
     riskyFailBoost: 0.1, // 每次失败 +10%
