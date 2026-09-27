@@ -1,6 +1,7 @@
 import { CONFIG, combatScaleForStage, scaleCombatStats } from "./config";
 import { MATERIAL_RESOURCES } from "./types";
 import type {
+  Affix,
   AptitudeId,
   BattleDifficulty,
   BreakthroughLayer,
@@ -152,6 +153,7 @@ const IRON_CFG = CONFIG.iron as unknown as { suppressionPerSec: number; realmDro
 const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { gate: RealmId; cost: Record<string, number> }>;
 const MERIDIAN_CFG = CONFIG.meridians as unknown as Record<string, { name: string; probability: number; productionMult: number }>;
 const COMPREHENSION_CFG = CONFIG.comprehensions as unknown as Record<string, { name: string; probability: number; pageMult: number }>;
+const AFFIX_CFG = CONFIG.affixes as unknown as Record<string, { name: string; min: number; max: number; type: string; bias: string }> & { maxByStage: number[] };
 const MATERIAL_CFG = CONFIG.materials as unknown as Record<
   string,
   { name: string; startStage: number; endStage: number; secretRealm: string }
@@ -324,11 +326,55 @@ function applyReward(s: SaveState, reward: Partial<Resources>): void {
 function battleDamageMult(s: SaveState): number {
   const war = !s.daily.astrology.used && s.daily.astrology.id === "war" ? 1.2 : 1;
   const gold = s.resonance === "金" ? 1 + resonanceStrength(s) : 1;
-  return war * gold;
+  const affix = 1 + affixSum(s, "damageMult");
+  return war * gold * affix;
 }
 
 function battleTakenMult(s: SaveState): number {
-  return s.resonance === "土" ? 1 - resonanceStrength(s) : 1;
+  const earth = s.resonance === "土" ? 1 - resonanceStrength(s) : 1;
+  const affix = Math.max(0.5, 1 - affixSum(s, "takenMult"));
+  return earth * affix;
+}
+
+function battleMods(s: SaveState): { critRate: number; regen: number; lowHpBoost: number } {
+  return { critRate: affixSum(s, "critRate"), regen: affixSum(s, "regen"), lowHpBoost: affixSum(s, "lowHpBoost") };
+}
+
+// ---- 装备词条（v1.6）----
+const AFFIX_IDS = Object.keys(CONFIG.affixes).filter((k) => k !== "maxByStage");
+
+function randomAffixes(rng: () => number = Math.random): Affix[] {
+  const count = 1 + Math.floor(rng() * 4); // 1~4 条
+  const out: Affix[] = [];
+  const used = new Set<string>();
+  for (let i = 0; i < count; i++) {
+    const id = AFFIX_IDS[Math.floor(rng() * AFFIX_IDS.length)];
+    if (used.has(id)) continue;
+    used.add(id);
+    const cfg = AFFIX_CFG[id];
+    const value = cfg.type === "flat"
+      ? Math.round(cfg.min + rng() * (cfg.max - cfg.min))
+      : Math.round((cfg.min + rng() * (cfg.max - cfg.min)) * 100) / 100;
+    out.push({ id, value });
+  }
+  return out;
+}
+
+function ensureAffixes(s: SaveState, baseId: string, rng: () => number = Math.random): void {
+  if (!s.equipmentAffixes[baseId]) s.equipmentAffixes[baseId] = randomAffixes(rng);
+}
+
+function equippedAffixes(s: SaveState): Affix[] {
+  const out: Affix[] = [];
+  for (const slot of ["weapon", "armor", "accessory"] as const) {
+    const id = s.equipment[slot];
+    if (id) out.push(...(s.equipmentAffixes[id] ?? []));
+  }
+  return out;
+}
+
+function affixSum(s: SaveState, id: string): number {
+  return equippedAffixes(s).filter((a) => a.id === id).reduce((sum, a) => sum + a.value, 0);
 }
 
 export function recordDailySettle(state: SaveState, nowMs: number): SaveState {
@@ -657,6 +703,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     comprehension: "normal",
     resonance: null,
     marrowHistory: [],
+    equipmentAffixes: {},
     aptitude: apt,
     resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 },
     realm: "qi1",
@@ -904,6 +951,9 @@ export function playerStats(s: SaveState): { attack: number; defense: number; hp
   attack += techniqueAttackBonus(s);
   defense += techniqueDefenseBonus(s);
   hp = Math.floor(hp * techniqueHpMult(s));
+  attack += affixSum(s, "attack");
+  defense += affixSum(s, "defense");
+  hp += affixSum(s, "hp");
   return scaleCombatStats({ attack, defense, hp }, REALMS[realmIndex(s.realm)]?.stage ?? 1);
 }
 
@@ -953,8 +1003,8 @@ export function productionBreakdown(state: SaveState): ProductionBreakdown {
   const herb = spiritFieldRate(state) * (state.resonance === "木" ? 1 + resonanceStrength(state) : 1);
   const stone = suppressionRate(state);
   const iron = suppressionRate(state) > 0 ? IRON_CFG.suppressionPerSec * Object.keys(state.suppression).filter((m) => state.suppression[m as MapId]).length : 0;
-  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt * realmMult * meridianProductionMult(state) * (state.resonance === "火" ? 1 + resonanceStrength(state) : 1);
-  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt * realmMult * meridianProductionMult(state) * (state.resonance === "水" ? 1 + resonanceStrength(state) : 1);
+  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt * realmMult * meridianProductionMult(state) * (state.resonance === "火" ? 1 + resonanceStrength(state) : 1) * (1 + affixSum(state, "cultivationRate"));
+  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt * realmMult * meridianProductionMult(state) * (state.resonance === "水" ? 1 + resonanceStrength(state) : 1) * (1 + affixSum(state, "spiritRate"));
   const w = CONFIG.weathers[state.daily.weather.id as keyof typeof CONFIG.weathers];
   const a = CONFIG.astrologies[state.daily.astrology.id as keyof typeof CONFIG.astrologies];
   const lines: string[] = [
@@ -1054,7 +1104,7 @@ export function breakthroughCosts(state: SaveState, method: BreakthroughMethod):
 export function breakthroughSuccessRate(state: SaveState): number {
   const layer = state.realm as BreakthroughLayer;
   if (!BREAKTHROUGH_LAYERS.includes(layer)) return 1;
-  return Math.min(1, BREAKTHROUGH_CFG.riskyBaseRate + BREAKTHROUGH_CFG.riskyFailBoost * (state.breakthroughFails?.[layer] ?? 0) + (state.resonance === "雷" ? CONFIG.resonance.thunderBoost : 0));
+  return Math.min(1, BREAKTHROUGH_CFG.riskyBaseRate + BREAKTHROUGH_CFG.riskyFailBoost * (state.breakthroughFails?.[layer] ?? 0) + (state.resonance === "雷" ? CONFIG.resonance.thunderBoost : 0) + affixSum(state, "breakthroughBonus"));
 }
 
 export function breakthrough(state: SaveState, nowMs: number, method: BreakthroughMethod = "steady", rng: () => number = Math.random): Result<SaveState> {
@@ -1486,6 +1536,8 @@ function runBattle(
   dmgMult = 1,
   takenMult = 1,
   maxRounds = 50,
+  mods: { critRate: number; regen: number; lowHpBoost: number } = { critRate: 0, regen: 0, lowHpBoost: 0 },
+  rng: () => number = Math.random,
 ): { won: boolean; log: string[] } {
   const log: string[] = [];
   let pHp = stats.hp;
@@ -1495,7 +1547,16 @@ function runBattle(
   let guard = 0;
   while (guard++ < maxRounds * 2) {
     if (playerTurn) {
-      const dmg = Math.max(1, Math.round((stats.attack - enemy.defense) * dmgMult));
+      if (mods.regen > 0 && pHp > 0) {
+        const healed = Math.min(stats.hp - pHp, mods.regen);
+        if (healed > 0) {
+          pHp += healed;
+          log.push(`回血${healed}点，你余${pHp}气血。`);
+        }
+      }
+      const crit = rng() < mods.critRate ? 1.5 : 1;
+      const lowHp = pHp < stats.hp * 0.3 ? 1 + mods.lowHpBoost : 1;
+      const dmg = Math.max(1, Math.round((stats.attack - enemy.defense) * dmgMult * crit * lowHp));
       eHp -= dmg;
       log.push(`你出手，伤敌${dmg}点，敌余${Math.max(0, eHp)}气血。`);
       if (eHp <= 0) {
@@ -1600,6 +1661,8 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
 
   const first = !nodeState.cleared;
   nodeState.cleared = true;
+  const battleCult = affixSum(s, "battleCultivation");
+  if (battleCult > 0) s.resources.cultivation += battleCult;
   if (first) {
     const fc = nodeCfg.firstClear;
     s.resources.cultivation += fc.cultivation;
@@ -2110,7 +2173,7 @@ export function predictSecretRealm(state: SaveState, realmId: SecretRealmId): { 
     return { ok: false, reason: `需${realmName(cfg.gate as RealmId)}方可进入`, won: false, enemy: { ...cfg.enemy }, player: playerStats(state) };
   }
   const stats = playerStats(state);
-  const battle = runBattle(stats, cfg.enemy, 1, battleTakenMult(state));
+  const battle = runBattle(stats, cfg.enemy, 1, battleTakenMult(state), 50, battleMods(state));
   return { ok: true, reason: "", won: battle.won, enemy: { ...cfg.enemy }, player: stats };
 }
 
@@ -2121,7 +2184,7 @@ export function enterSecretRealm(state: SaveState, nowMs: number, realmId: Secre
   if (realmIndex(s.realm) < realmIndex(cfg.gate as RealmId)) return fail(`需${realmName(cfg.gate as RealmId)}方可进入`);
   if (s.secretRealmUsed[realmId]) return fail("今日已挑战该秘境");
   const stats = playerStats(s);
-  const battle = runBattle(stats, cfg.enemy, 1, battleTakenMult(state));
+  const battle = runBattle(stats, cfg.enemy, 1, battleTakenMult(state), 50, battleMods(state));
   const reward = battle.won ? secretRealmReward(realmId) : emptyResources();
   if (battle.won) {
     applyReward(s, reward);
@@ -2211,6 +2274,7 @@ export function migrateSave(raw: SaveState): SaveState {
   if (typeof s.comprehension !== "string" || !COMPREHENSION_CFG[s.comprehension]) s.comprehension = "normal";
   if (s.resonance === undefined) s.resonance = null;
   if (!Array.isArray(s.marrowHistory)) s.marrowHistory = [];
+  if (!s.equipmentAffixes || typeof s.equipmentAffixes !== "object") s.equipmentAffixes = {};
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -2719,6 +2783,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.comprehension = typeof o.comprehension === "string" && (o.comprehension as string) in COMPREHENSION_CFG ? (o.comprehension as ComprehensionId) : "normal";
   base.resonance = typeof o.resonance === "string" ? (o.resonance as string) : null;
   base.marrowHistory = Array.isArray(o.marrowHistory) ? (o.marrowHistory as SaveState["marrowHistory"]) : [];
+  base.equipmentAffixes = (o.equipmentAffixes && typeof o.equipmentAffixes === "object") ? (o.equipmentAffixes as Record<string, Affix[]>) : {};
   base.maps = { ...base.maps, ...((o.maps as Partial<SaveState["maps"]>) || {}) };
   base.suppression = { ...base.suppression, ...((o.suppression as Partial<SaveState["suppression"]>) || {}) };
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };

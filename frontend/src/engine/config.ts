@@ -1572,6 +1572,24 @@ const BASE_CONFIG = {
     ],
   },
 
+  affixes: {
+    // 基础词条
+    attack: { name: "攻击", min: 2, max: 10, type: "flat", bias: "weapon" },
+    defense: { name: "防御", min: 1, max: 5, type: "flat", bias: "armor" },
+    hp: { name: "气血", min: 10, max: 50, type: "flat", bias: "armor" },
+    damageMult: { name: "战斗伤害", min: 0.02, max: 0.08, type: "percent", bias: "weapon" },
+    takenMult: { name: "受伤减免", min: 0.02, max: 0.08, type: "percent", bias: "armor" },
+    cultivationRate: { name: "修为产速", min: 0.02, max: 0.08, type: "percent", bias: "accessory" },
+    spiritRate: { name: "灵气产速", min: 0.02, max: 0.08, type: "percent", bias: "accessory" },
+    // 特殊词条
+    critRate: { name: "暴击率", min: 0.02, max: 0.10, type: "percent", bias: "weapon" },
+    breakthroughBonus: { name: "突破率", min: 0.01, max: 0.05, type: "percent", bias: "accessory" },
+    regen: { name: "每回合回血", min: 2, max: 10, type: "flat", bias: "armor" },
+    lowHpBoost: { name: "低血增伤", min: 0.05, max: 0.15, type: "percent", bias: "weapon" },
+    battleCultivation: { name: "战斗所得修为", min: 10, max: 50, type: "flat", bias: "accessory" },
+    maxByStage: [1, 2, 3, 4], // 筑基前1条 / 2~7境2条 / 8~15境3条 / 16~20境4条
+  },
+
   breakthrough: {
     riskyBaseRate: 0.8, // 冲关初次成功率
     riskyFailBoost: 0.1, // 每次失败 +10%

@@ -171,7 +171,8 @@ export interface SaveState {
   inventory: Record<string, number>;
   preparedPill: boolean;
   preparedPillTier: number; // 预置护劫丹品阶 1~4（凡/灵/仙/道）
-  quenched: string[]; // 已淬炼装备 ID，每件最多一次
+  quenched: string[]; // 已淬炼装备实例 ID，每件最多一次
+  equipmentAffixes: Record<string, Affix[]>; // 各装备基础 ID 的词条（同名装备暂时共享）
   learnedNewTechs: string[]; // 已首通获得的新功法 ID
   maps: Record<MapId, Record<string, NodeState>>;
   suppression: Record<MapId, string | null>;
@@ -202,3 +203,8 @@ export interface SaveState {
 export type Result<T> =
   | { state: T; ok: true }
   | { state?: undefined; ok: false; reason: string };
+
+export interface Affix {
+  id: string;
+  value: number;
+}
