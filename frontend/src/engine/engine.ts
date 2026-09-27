@@ -1,4 +1,5 @@
 import { CONFIG } from "./config";
+import { MATERIAL_RESOURCES } from "./types";
 import type {
   AptitudeId,
   BreakthroughLayer,
@@ -23,7 +24,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -137,7 +138,34 @@ function emptySecretRealmUsed(): Record<SecretRealmId, boolean> {
 
 const FORGE_CFG = CONFIG.forge as unknown as { levels: Array<{ cost: { spiritStone: number; page: number } }> };
 const IRON_CFG = CONFIG.iron as unknown as { suppressionPerSec: number; realmDrop: Record<SecretRealmId, number> };
-const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { gate: RealmId; cost: { iron: number; spiritStone: number; herb: number; page: number } }>;
+const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { gate: RealmId; cost: Record<string, number> }>;
+const MATERIAL_CFG = CONFIG.materials as unknown as Record<
+  string,
+  { name: string; startStage: number; endStage: number; secretRealm: string }
+>;
+const RESOURCE_NAMES: Record<string, string> = {
+  cultivation: "修为", spirit: "灵气", spiritStone: "灵石", herb: "灵草", page: "残页", iron: "玄铁",
+  ...Object.fromEntries(Object.entries(MATERIAL_CFG).map(([id, cfg]) => [id, cfg.name])),
+};
+
+function materialForStage(stage: number): string | null {
+  for (const [id, cfg] of Object.entries(MATERIAL_CFG)) {
+    if (stage >= cfg.startStage && stage <= cfg.endStage) return id;
+  }
+  return null;
+}
+
+function stageOfGate(gate: string): number {
+  const idx = realmIndex(gate as RealmId);
+  return REALMS[idx]?.stage ?? 1;
+}
+
+function materialForSecretRealm(realmId: string): string | null {
+  for (const [id, cfg] of Object.entries(MATERIAL_CFG)) {
+    if (cfg.secretRealm === realmId) return id;
+  }
+  return null;
+}
 
 const realmOrder: RealmId[] = REALMS.map((r) => r.id as RealmId);
 const BREAKTHROUGH_LAYERS: BreakthroughLayer[] = REALMS
@@ -314,7 +342,7 @@ export function claimDailyGoal(state: SaveState, nowMs: number, goalId: "battle"
 // ---- 长期任务（持续历练 / 闭关） ----
 
 function emptyResources(): Resources {
-  return { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0 };
+  return { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 };
 }
 
 function trainingReward(nodeCfg: { repeat: { cultivation: number; page: number } }, durationMinutes: number, difficulty: LongTaskDifficulty): Resources {
@@ -327,6 +355,11 @@ function trainingReward(nodeCfg: { repeat: { cultivation: number; page: number }
     herb: 0,
     page: Math.floor(nodeCfg.repeat.page * mult * risky),
     iron: 0,
+    lingTaiJing: 0,
+    yunHaiSui: 0,
+    buXiuJin: 0,
+    hunYuanYu: 0,
+    taiChuZiJing: 0,
   };
 }
 
@@ -340,6 +373,11 @@ function seclusionReward(cultivationPerSec: number, spiritPerSec: number, durati
     herb: 0,
     page: 0,
     iron: 0,
+    lingTaiJing: 0,
+    yunHaiSui: 0,
+    buXiuJin: 0,
+    hunYuanYu: 0,
+    taiChuZiJing: 0,
   };
 }
 
@@ -523,7 +561,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     name,
     spiritRoot: validSpiritRoot(spiritRoot),
     aptitude: apt,
-    resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0 },
+    resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 },
     realm: "qi1",
     buildings: { cultivationRoom: 0, spiritArray: 0, spiritField: 0, alchemyFurnace: 0 },
     technique: null,
@@ -1016,14 +1054,16 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
   if (!EQUIP_CFG[id]) return fail("无此装备");
   if (s.forge < 1) return fail("需先建炼器台");
   if (realmIndex(s.realm) < realmIndex(cfg.gate)) return fail(`需${realmName(cfg.gate)}方可炼制`);
-  if (s.resources.iron < cfg.cost.iron || s.resources.spiritStone < cfg.cost.spiritStone ||
-    s.resources.herb < cfg.cost.herb || s.resources.page < cfg.cost.page) {
-    return fail(`材料不足（需玄铁${cfg.cost.iron}、灵石${cfg.cost.spiritStone}、灵草${cfg.cost.herb}、残页${cfg.cost.page}）`);
+  const cost = cfg.cost;
+  const res = s.resources as unknown as Record<string, number>;
+  const short: string[] = [];
+  for (const [k, v] of Object.entries(cost)) {
+    if (v > 0 && res[k] < v) short.push(`${RESOURCE_NAMES[k] ?? k}${v}`);
   }
-  s.resources.iron -= cfg.cost.iron;
-  s.resources.spiritStone -= cfg.cost.spiritStone;
-  s.resources.herb -= cfg.cost.herb;
-  s.resources.page -= cfg.cost.page;
+  if (short.length > 0) return fail(`材料不足（需${short.join("、")}）`);
+  for (const [k, v] of Object.entries(cost)) {
+    if (v > 0) res[k] -= v;
+  }
   s.inventory[id] = (s.inventory[id] || 0) + 1;
   s.recentLogs.push(`炼得${EQUIP_CFG[id].name}。`);
   pushMilestone(s, "craft", nowMs, `炼得${EQUIP_CFG[id].name}`);
@@ -1251,6 +1291,8 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     s.resources.cultivation += fc.cultivation;
     s.resources.spiritStone += fc.spiritStone;
     s.resources.page += fc.page;
+    const mat = materialForStage(stageOfGate(nodeCfg.gate as string));
+    if (mat) (s.resources as unknown as Record<string, number>)[mat] += 4;
     if (fc.equipment) {
       s.inventory[fc.equipment] = 1;
       s.recentLogs.push(`得装备「${EQUIP_CFG[fc.equipment].name}」。`);
@@ -1264,6 +1306,8 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
       s.daily.rewardedRepeats += 1;
       s.resources.cultivation += rc.cultivation;
       s.resources.page += rc.page;
+      const mat = materialForStage(stageOfGate(nodeCfg.gate as string));
+      if (mat) (s.resources as unknown as Record<string, number>)[mat] += 1;
       s.recentLogs.push(`再胜${nodeCfg.name}，领取今日重复历练奖励。`);
     } else {
       s.recentLogs.push(`再胜${nodeCfg.name}，今日重复历练奖励已领尽。`);
@@ -1714,7 +1758,7 @@ export function startCrossStageTrial(state: SaveState, nowMs: number): Result<Sa
 
 export function secretRealmReward(realmId: SecretRealmId): Resources {
   const cfg = SECRET_REALM_CFG[realmId];
-  return { cultivation: 0, spirit: 0, spiritStone: cfg.reward.spiritStone ?? 0, herb: cfg.reward.herb ?? 0, page: cfg.reward.page ?? 0, iron: IRON_CFG.realmDrop[realmId] ?? 0 };
+  return { ...emptyResources(), spiritStone: cfg.reward.spiritStone ?? 0, herb: cfg.reward.herb ?? 0, page: cfg.reward.page ?? 0, iron: IRON_CFG.realmDrop[realmId] ?? 0 };
 }
 
 export function predictSecretRealm(state: SaveState, realmId: SecretRealmId): { ok: boolean; reason: string; won: boolean; enemy: { attack: number; defense: number; hp: number }; player: { attack: number; defense: number; hp: number } } {
@@ -1737,7 +1781,11 @@ export function enterSecretRealm(state: SaveState, nowMs: number, realmId: Secre
   const stats = playerStats(s);
   const battle = runBattle(stats, cfg.enemy);
   const reward = battle.won ? secretRealmReward(realmId) : emptyResources();
-  if (battle.won) applyReward(s, reward);
+  if (battle.won) {
+    applyReward(s, reward);
+    const mat = materialForSecretRealm(realmId);
+    if (mat) (s.resources as unknown as Record<string, number>)[mat] += 4;
+  }
   s.secretRealmUsed[realmId] = true;
   s.secretRealmLog.push({ realm: realmId, won: battle.won, reward: { ...reward }, at: nowMs });
   const rewardTxt = battle.won ? `得 ${fmtReward(reward)}` : "未获奖励";
@@ -1814,7 +1862,7 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
   if (!s.resources || typeof s.resources !== "object") {
-    s.resources = { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0 };
+    s.resources = { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 };
   } else if ((s.resources as Record<string, unknown>).iron === undefined) {
     (s.resources as Record<string, unknown>).iron = 0;
   }
@@ -1863,6 +1911,14 @@ function validateResources(v: unknown, schemaVersion: number): string | null {
     if (typeof iron !== "number" || !Number.isFinite(iron) || iron < 0) return "玄铁数据无效";
   } else if (iron !== undefined && (typeof iron !== "number" || !Number.isFinite(iron) || iron < 0)) {
     return "玄铁数据无效";
+  }
+  for (const k of MATERIAL_RESOURCES) {
+    const x = o[k];
+    if (schemaVersion >= 14) {
+      if (typeof x !== "number" || !Number.isFinite(x) || x < 0) return "资源数据无效";
+    } else if (x !== undefined && (typeof x !== "number" || !Number.isFinite(x) || x < 0)) {
+      return "资源数据无效";
+    }
   }
   return null;
 }

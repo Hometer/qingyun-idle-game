@@ -63,7 +63,7 @@ describe("创建角色", () => {
   it("初始状态正确", () => {
     const s = fresh();
     expect(s.realm).toBe("qi1");
-    expect(s.resources).toEqual({ cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0 });
+    expect(s.resources).toEqual({ cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 });
     expect(s.maps.map_qingyun.node_wolf.unlocked).toBe(true);
     expect(s.maps.map_qingyun.node_bandit.unlocked).toBe(false);
     expect(s.maps.map_nether.node_shade.unlocked).toBe(false);
@@ -1924,7 +1924,7 @@ describe("二十境内容与日常节奏", () => {
     const s = fresh();
     s.forge = 1;
     s.realm = "yuanying1";
-    s.resources = { cultivation: 0, spirit: 0, spiritStone: recipe.cost.spiritStone, herb: 0, page: recipe.cost.page, iron: recipe.cost.iron };
+    s.resources = { ...fresh().resources, spiritStone: recipe.cost.spiritStone, page: recipe.cost.page, iron: recipe.cost.iron };
     expect(craftEquipment(s, T0, "w_yuanying").ok).toBe(false);
     s.realm = "yuanying2";
     const crafted = craftEquipment(s, T0, "w_yuanying");

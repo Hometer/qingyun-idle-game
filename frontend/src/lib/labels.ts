@@ -19,6 +19,11 @@ export const RESOURCE_LABELS: Record<string, string> = {
   herb: "灵草",
   page: "残页",
   iron: "玄铁",
+  lingTaiJing: "灵胎晶",
+  yunHaiSui: "云海髓",
+  buXiuJin: "不朽金",
+  hunYuanYu: "混元玉",
+  taiChuZiJing: "太初紫晶",
 };
 
 export const BUILDINGS = CONFIG.buildings as unknown as Record<

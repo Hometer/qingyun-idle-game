@@ -15,6 +15,9 @@ export type ItemId = "tribulationPill";
 export type MapId = "map_qingyun" | "map_nether" | "map_yunling" | `map_${RealmStagePrefix}`;
 export type SecretRealmId = "realm_herb" | "realm_relic" | "realm_deep" | "realm_soul" | "realm_cloud" | "realm_lotus" | "realm_origin" | "realm_hongmeng";
 
+export const MATERIAL_RESOURCES = ["lingTaiJing", "yunHaiSui", "buXiuJin", "hunYuanYu", "taiChuZiJing"] as const;
+export type MaterialResource = typeof MATERIAL_RESOURCES[number];
+
 export interface Resources {
   cultivation: number;
   spirit: number;
@@ -22,6 +25,11 @@ export interface Resources {
   herb: number;
   page: number;
   iron: number;
+  lingTaiJing: number;
+  yunHaiSui: number;
+  buXiuJin: number;
+  hunYuanYu: number;
+  taiChuZiJing: number;
 }
 
 export interface Equipment {
