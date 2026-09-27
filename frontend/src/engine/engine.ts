@@ -572,6 +572,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     preparedPill: false,
     preparedPillTier: 1,
     quenched: [],
+    learnedNewTechs: [],
     maps,
     suppression: emptySuppression(),
     encounter: { pending: null, triggeredToday: 0, lastTriggerDate: todayStr(nowMs), guideDone: false },
@@ -947,18 +948,19 @@ export function upgradeBuilding(state: SaveState, nowMs: number, id: BuildingId)
 
 // ---- 功法与装备 ----
 
-// 新功法解锁要求（藏经阁等级 + 境界）；「首通本境首节点获得」的领取流程后续补
-const NEW_TECH_REQUIREMENT: Record<string, { library: number; realm: RealmId }> = {
-  ningYing: { library: 3, realm: "yuanying1" },
-  yunHai: { library: 4, realm: "dacheng1" },
-  buXiu: { library: 5, realm: "jinxian1" },
-  hunYuanGuiYi: { library: 6, realm: "hunyuan_daluo1" },
-  taiChu: { library: 7, realm: "dadao1" },
+// 新功法解锁要求（藏经阁等级 + 境界 + 首通本境首节点）
+const NEW_TECH_REQUIREMENT: Record<string, { library: number; realm: RealmId; grantMap: MapId }> = {
+  ningYing: { library: 3, realm: "yuanying1", grantMap: "map_yuanying" },
+  yunHai: { library: 4, realm: "dacheng1", grantMap: "map_dacheng" },
+  buXiu: { library: 5, realm: "jinxian1", grantMap: "map_jinxian" },
+  hunYuanGuiYi: { library: 6, realm: "hunyuan_daluo1", grantMap: "map_hunyuan_daluo" },
+  taiChu: { library: 7, realm: "dadao1", grantMap: "map_dadao" },
 };
 
 function newTechUnlocked(s: SaveState, id: TechniqueId): string | null {
   const req = NEW_TECH_REQUIREMENT[id];
   if (!req) return null;
+  if (!s.learnedNewTechs.includes(id)) return "需首通本境首节点方可获得该功法";
   if (s.library < req.library) return `需${req.library}级藏经阁方可研习该功法`;
   if (realmIndex(s.realm) < realmIndex(req.realm)) return `需${realmName(req.realm)}方可研习该功法`;
   return null;
@@ -1385,6 +1387,19 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     }
     s.recentLogs.push(`首通${mapCfg.name}·${nodeCfg.name}。`);
     pushMilestone(s, "firstClear", nowMs, `首通${mapCfg.name}·${nodeCfg.name}`);
+    // 首通授予：新功法按本境首节点，鸿蒙印按终点守关
+    for (const [techId, req] of Object.entries(NEW_TECH_REQUIREMENT)) {
+      const firstNode = Object.keys(MAP_CFG[req.grantMap].nodes)[0];
+      if (mapId === req.grantMap && nodeId === firstNode && !s.learnedNewTechs.includes(techId)) {
+        s.learnedNewTechs.push(techId);
+        s.recentLogs.push(`得新功法《${CONFIG.techniques[techId as TechniqueId].name}》。`);
+      }
+    }
+    const hmLast = Object.keys(MAP_CFG.map_hongmeng.nodes).slice(-1)[0];
+    if (mapId === "map_hongmeng" && nodeId === hmLast) {
+      s.inventory.c_hongmeng = 1;
+      s.recentLogs.push("通关鸿蒙守关，得纪念佩饰「鸿蒙印」。");
+    }
     unlockNext(s, mapId, nodeId);
   } else {
     const rc = nodeCfg.repeat;
@@ -1965,6 +1980,7 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.yuanyingTrial === undefined) s.yuanyingTrial = null;
   if (s.preparedPillTier === undefined) s.preparedPillTier = 1;
   if (!Array.isArray(s.quenched)) s.quenched = [];
+  if (!Array.isArray(s.learnedNewTechs)) s.learnedNewTechs = [];
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -1997,6 +2013,16 @@ export function migrateSave(raw: SaveState): SaveState {
   s.schemaVersion = SCHEMA_VERSION;
   const migrated = s as unknown as SaveState;
   syncRealmMaps(migrated);
+  // 补记已首通的新功法（旧档）与鸿蒙印
+  for (const [techId, req] of Object.entries(NEW_TECH_REQUIREMENT)) {
+    const firstNode = Object.keys(MAP_CFG[req.grantMap].nodes)[0];
+    const cleared = (migrated.maps[req.grantMap] as Record<string, { cleared: boolean }>)?.[firstNode]?.cleared;
+    if (cleared && !migrated.learnedNewTechs.includes(techId)) migrated.learnedNewTechs.push(techId);
+  }
+  const hmLast = Object.keys(MAP_CFG.map_hongmeng.nodes).slice(-1)[0];
+  if ((migrated.maps.map_hongmeng as Record<string, { cleared: boolean }>)?.[hmLast]?.cleared) {
+    migrated.inventory.c_hongmeng = 1;
+  }
   return migrated;
 }
 
@@ -2456,6 +2482,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.preparedPill = !!o.preparedPill;
   base.preparedPillTier = Number.isInteger(o.preparedPillTier) && (o.preparedPillTier as number) >= 1 && (o.preparedPillTier as number) <= 4 ? (o.preparedPillTier as number) : 1;
   base.quenched = Array.isArray(o.quenched) ? (o.quenched as string[]) : [];
+  base.learnedNewTechs = Array.isArray(o.learnedNewTechs) ? (o.learnedNewTechs as string[]) : [];
   base.maps = { ...base.maps, ...((o.maps as Partial<SaveState["maps"]>) || {}) };
   base.suppression = { ...base.suppression, ...((o.suppression as Partial<SaveState["suppression"]>) || {}) };
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };
