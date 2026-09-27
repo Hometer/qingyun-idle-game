@@ -256,14 +256,14 @@ export default function XiulianPage() {
       )}
 
       {state.tribulationLog && (
-        <Section title="渡劫战报">
+        <Section title="试炼战报">
           {state.tribulationLog.log.map((l, i) => (
             <p key={i} className="py-0.5 text-sm text-ink/80">
               {l}
             </p>
           ))}
           <p className="mt-1 text-sm font-medium">
-            {state.tribulationLog.success ? <span className="text-cinnabar">渡劫成功</span> : <span className="text-muted">渡劫失败</span>}
+            {state.tribulationLog.success ? <span className="text-cinnabar">跨境成功</span> : <span className="text-muted">跨境失败</span>}
           </p>
           {!state.tribulationLog.success && (
             <p className="mt-1 text-xs text-muted">重新积累门槛，建议提升减伤与气血后再试。</p>

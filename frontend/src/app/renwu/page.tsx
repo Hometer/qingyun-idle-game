@@ -119,7 +119,7 @@ export default function RenwuPage() {
       </Section>
 
       <Section title="金丹篇章">
-        {state.realm === "jindan1" ? (
+        {CONFIG.realms.findIndex((r) => r.id === state.realm) >= CONFIG.realms.findIndex((r) => r.id === "jindan1") ? (
           <div className="flex items-center justify-between">
             <p className="text-sm">已达金丹，可回看这段修行经历。</p>
             <Link href="/pianzhang" className="shrink-0 text-sm text-cinnabar">查看篇章 →</Link>

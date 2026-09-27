@@ -23,7 +23,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -67,6 +67,12 @@ function emptySuppressionSince(): Record<MapId, number> {
 // map_yunling 在 schema v6 引入；v1~v5 旧档可缺失，v6 及以后缺失即坏档
 const MAP_YUNLING_INTRO_VERSION = 6;
 const MAP_JINDAN_INTRO_VERSION = 10; // v1.2 引入
+// v10 的旧地图可能尚未包含 v1.2 扩展的中间节点。
+const MAP_EXPANDED_VERSION = 11;
+const LEGACY_MISSING_NODES: Record<string, ReadonlySet<string>> = {
+  map_nether: new Set(["node_wraith", "node_zombie", "node_specter"]),
+  map_yunling: new Set(["node_stoneking", "node_lingyuan", "node_shanxiaowang"]),
+};
 // secretRealm 三字段在 schema v8 引入；v1~v7 旧档可缺失，v8 及以后缺失即坏档
 const SECRET_REALM_INTRO_VERSION = 8;
 
@@ -140,7 +146,7 @@ const OLD_REALM_TO_NEW: Record<string, string> = {
 
 // 旧 schema（v≤9）境界相关字段 → 新体系；新版（v10+）不再映射。
 function migrateRealmRefs(o: Record<string, unknown>, ver: number): void {
-  if (ver >= SCHEMA_VERSION) return;
+  if (ver >= 10) return;
   const mapId = (id: unknown): string => {
     const str = typeof id === "string" ? id : "";
     return OLD_REALM_TO_NEW[str] ?? str;
@@ -1690,14 +1696,17 @@ export function migrateSave(raw: SaveState): SaveState {
     if (suppression["map_qingyun"]) (s.suppressionSince as Record<string, unknown>)["map_qingyun"] = lastSettled;
     if (suppression["map_nether"]) (s.suppressionSince as Record<string, unknown>)["map_nether"] = lastSettled;
   }
-  // 补齐缺失地图与镇压位（老图必在，新图按 MAP_ORDER 补默认）
+  // 补齐缺失地图、旧地图新增节点与镇压位。
   const maps = (s.maps ?? {}) as Record<string, Record<string, unknown>>;
   for (const mid of MAP_ORDER) {
-    if (!maps[mid]) {
-      maps[mid] = {};
-      for (const nid of Object.keys(MAP_CFG[mid].nodes)) {
-        maps[mid][nid] = { unlocked: false, cleared: false };
-      }
+    if (!maps[mid]) maps[mid] = {};
+    const nodeIds = Object.keys(MAP_CFG[mid].nodes);
+    for (const nid of nodeIds) {
+      if (!maps[mid][nid]) maps[mid][nid] = { unlocked: false, cleared: false };
+    }
+    for (let i = 1; i < nodeIds.length; i++) {
+      const previous = maps[mid][nodeIds[i - 1]] as { cleared: boolean };
+      if (previous.cleared) (maps[mid][nodeIds[i]] as { unlocked: boolean }).unlocked = true;
     }
     if (!suppression[mid]) {
       (s.suppression as Record<string, unknown>)[mid] = null;
@@ -1905,7 +1914,11 @@ function validateMaps(maps: unknown, suppression: unknown, schemaVersion: number
     const rec = nodes as Record<string, unknown>;
     for (const nid of Object.keys(MAP_CFG[mid].nodes)) {
       const ns = rec[nid] as Record<string, unknown> | undefined;
-      if (!ns || typeof ns.unlocked !== "boolean" || typeof ns.cleared !== "boolean") return "节点数据无效";
+      if (!ns) {
+        if (schemaVersion < MAP_EXPANDED_VERSION && LEGACY_MISSING_NODES[mid]?.has(nid)) continue;
+        return "节点数据无效";
+      }
+      if (typeof ns.unlocked !== "boolean" || typeof ns.cleared !== "boolean") return "节点数据无效";
     }
   }
   const sup = (suppression ?? {}) as Record<string, unknown>;
@@ -2198,6 +2211,5 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.breakthroughRecords = Array.isArray(o.breakthroughRecords) ? (o.breakthroughRecords as BreakthroughRecord[]) : [];
   base.lastSettledAt = o.lastSettledAt as number;
   base.revision = ((o.revision as number) || 0) + 1;
-  syncRealmMaps(base);
-  return base;
+  return migrateSave(base);
 }

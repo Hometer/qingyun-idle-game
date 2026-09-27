@@ -32,6 +32,16 @@ describe("v1.1 金丹篇章计算", () => {
     expect(v.goals.find((g) => g.id === "jindan")!.done).toBe(true);
   });
 
+  it("金丹后续境界仍保留结丹成果", () => {
+    for (const realm of ["jindan2", "yuanying1", "hongmeng10"] as const) {
+      const s = fresh();
+      s.realm = realm;
+      const v = computeChapter(s);
+      expect(v.atJindan).toBe(true);
+      expect(v.goals.find((g) => g.id === "jindan")!.done).toBe(true);
+    }
+  });
+
   it("秘境成功计入成果与回顾，未成功不计", () => {
     const s = fresh();
     s.realm = "zhuji1";

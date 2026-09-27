@@ -40,7 +40,8 @@ function realmName(id: string): string {
  * 不写 state、不发奖励、不重置次数、不改里程碑。
  */
 export function computeChapter(state: SaveState): ChapterView {
-  const atJindan = state.realm === "jindan1";
+  const atJindan = REALM_CFG.findIndex((r) => r.id === state.realm) >=
+    REALM_CFG.findIndex((r) => r.id === "jindan1");
 
   const realmSuccessCount = SECRET_REALM_IDS.filter((rid) =>
     state.secretRealmLog.some((l) => l.realm === rid && l.won),

@@ -36,7 +36,7 @@ export function CreateCharacter() {
     <div className="flex min-h-screen items-center justify-center px-4 py-6">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-6 shadow-sm">
         <h1 className="text-center text-2xl font-semibold">青云修仙录</h1>
-        <p className="mt-1 text-center text-sm text-muted">踏入仙途，从炼气一层到筑基</p>
+        <p className="mt-1 text-center text-sm text-muted">踏入仙途，从炼气一层开启修行</p>
 
         <div className="mt-4 rounded-lg border border-line/60 bg-paper p-3 text-xs text-ink/70 leading-relaxed">
           游戏进度保存在当前浏览器本地，清理浏览器数据或换设备会丢失，请定期导出存档。

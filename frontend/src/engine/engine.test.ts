@@ -69,6 +69,35 @@ describe("创建角色", () => {
   });
 });
 
+describe("v10 扩展地图迁移", () => {
+  it("已有地图缺新增节点时补齐，保留旧首通与镇压", () => {
+    const s = fresh();
+    s.schemaVersion = 10;
+    s.maps.map_nether.node_shade = { unlocked: true, cleared: true };
+    s.maps.map_nether.node_ghost = { unlocked: true, cleared: true };
+    s.suppression.map_nether = "node_ghost";
+    for (const id of ["node_wraith", "node_zombie", "node_specter"]) delete s.maps.map_nether[id];
+    for (const id of ["node_stoneking", "node_lingyuan", "node_shanxiaowang"]) delete s.maps.map_yunling[id];
+    const imported = importSave(JSON.stringify(s));
+    expect(imported.ok).toBe(true);
+    const migrated = imported.state as SaveState;
+    expect(migrated.maps.map_nether.node_shade.cleared).toBe(true);
+    expect(migrated.suppression.map_nether).toBe("node_ghost");
+    expect(migrated.maps.map_nether.node_wraith).toEqual({ unlocked: true, cleared: false });
+    expect(migrated.maps.map_yunling.node_stoneking).toEqual({ unlocked: false, cleared: false });
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
+  it("新版缺节点与旧节点损坏仍拒绝导入", () => {
+    const s = fresh();
+    delete s.maps.map_nether.node_wraith;
+    expect(importSave(JSON.stringify(s)).ok).toBe(false);
+    s.schemaVersion = 10;
+    delete s.maps.map_nether.node_shade;
+    expect(importSave(JSON.stringify(s)).ok).toBe(false);
+  });
+});
+
 describe("时间结算", () => {
   it("按实际时间累积基础产出", () => {
     const s = settle(fresh(), T0 + 2 * H);
