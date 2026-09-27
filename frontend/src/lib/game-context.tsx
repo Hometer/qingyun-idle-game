@@ -50,6 +50,7 @@ interface GameContextValue {
   encounterLoading: boolean;
   tribPreview: eng.TribulationPreview | null;
   jindanPreview: eng.JindanTrialPreview | null;
+  yuanyingPreview: eng.JindanTrialPreview | null;
   create: (name: string, root: SpiritRoot, aptitude: AptitudeId) => void;
   settleNow: () => void;
   doBreakthrough: (method: BreakthroughMethod) => void;
@@ -74,6 +75,7 @@ interface GameContextValue {
   choose: (optionId: string) => void;
   startTrib: () => void;
   startJindanTrial: () => void;
+  startYuanyingTrial: () => void;
   doExport: () => void;
   doImport: (file: File) => void;
   doReset: () => void;
@@ -270,6 +272,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const jindanPreview = useMemo(
     () => (view && view.realm === "zhuji10" ? eng.previewJindanTrial(view) : null),
+    [view],
+  );
+
+  const yuanyingPreview = useMemo(
+    () => (view && view.realm === "jindan10" ? eng.previewYuanyingTrial(view) : null),
     [view],
   );
 
@@ -801,6 +808,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [state, apply]);
 
+  const startYuanyingTrial = useCallback(async () => {
+    if (!state) return;
+    const p = eng.previewYuanyingTrial(state);
+    const costTxt = p.ok
+      ? `消耗修为 ${p.cost.cultivation}、灵气 ${p.cost.spirit}、灵石 ${p.cost.spiritStone}${p.pillPrepared ? "、护劫丹 1 枚" : ""}`
+      : "";
+    const failWarn = p.ok && !p.success ? "；本次预计失败，仍会消耗上述资源" : "";
+    if (!window.confirm(`确定元婴天劫？${costTxt}，失败境界不退${failWarn}。`)) return;
+    const nowMs = Date.now();
+    const settled = eng.settle(state, nowMs);
+    const r = eng.startYuanyingTrial(settled, nowMs);
+    if (!r.ok || !r.state) {
+      setNotice(r.reason);
+      return;
+    }
+    const ok = await apply(
+      r.state,
+      r.state.realm === "yuanying1" ? "元婴成功，晋入元婴一层" : "元婴天劫失败，可准备后重试",
+    );
+    if (ok) {
+      setLastResult({
+        title: r.state.realm === "yuanying1" ? "元婴成功" : "元婴失败",
+        lines: [...deltaLines(settled, r.state), ...(r.state.yuanyingTrial?.log ?? [])],
+      });
+    }
+  }, [state, apply]);
+
   const doExport = useCallback(() => {
     if (!state) return;
     const blob = new Blob([eng.exportSave(state)], { type: "application/json" });
@@ -913,6 +947,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     encounterLoading,
     tribPreview,
     jindanPreview,
+    yuanyingPreview,
     create,
     settleNow,
     doBreakthrough,
@@ -937,6 +972,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     choose,
     startTrib,
     startJindanTrial,
+    startYuanyingTrial,
     doExport,
     doImport,
     doReset,

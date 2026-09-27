@@ -34,7 +34,7 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 }
 
 export default function XiulianPage() {
-  const { state, view, now, doBreakthrough, startTrib, tribPreview, jindanPreview, startJindanTrial, setTechnique, setAuxiliaryTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
+  const { state, view, now, doBreakthrough, startTrib, tribPreview, jindanPreview, startJindanTrial, yuanyingPreview, startYuanyingTrial, setTechnique, setAuxiliaryTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
   const [seclusionDuration, setSeclusionDuration] = useState(30);
 
   const isQi10 = state?.realm === "qi10";
@@ -54,7 +54,8 @@ export default function XiulianPage() {
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
   const next = REALM_LIST[idx + 1];
   const isZhuji10 = state.realm === "zhuji10";
-  const isMax = state.realm === "jindan1";
+  const isJindan10 = state.realm === "jindan10";
+  const isMax = state.realm === "yuanying1";
   const prod = productionBreakdown(state);
   const enough = !isMax && !!next && view.resources.cultivation >= next.cultivationCost && view.resources.spirit >= next.spiritCost;
   const riskyFails = isBreakthroughLayer ? (state.breakthroughFails?.[state.realm as BreakthroughLayer] ?? 0) : 0;
@@ -73,12 +74,14 @@ export default function XiulianPage() {
               <p className="mt-1 text-xs text-muted">炼气十层圆满，需渡天劫方可筑基。</p>
             ) : isZhuji10 ? (
               <p className="mt-1 text-xs text-muted">筑基十层圆满，需首通云岭古道·护丹灵并结丹试炼方可金丹。</p>
+            ) : isJindan10 ? (
+              <p className="mt-1 text-xs text-muted">金丹十层圆满，需首通金丹秘境·元婴裂隙并渡元婴天劫方可元婴。</p>
             ) : (
               <p className="mt-1 text-xs text-muted">下一境 {next.name}：需修为 {fmt(next.cultivationCost)}、灵气 {fmt(next.spiritCost)}</p>
             )}
           </>
         )}
-        {!isMax && !isQi10 && !isZhuji10 && (
+        {!isMax && !isQi10 && !isZhuji10 && !isJindan10 && (
           <>
             {!enough && next && (
               <p className="mt-1 text-xs text-cinnabar">
@@ -250,48 +253,48 @@ export default function XiulianPage() {
         </Section>
       )}
 
-      {isZhuji10 && jindanPreview && (
-        <Section title="结丹试炼">
-          {jindanPreview.ok ? (
+      {isJindan10 && yuanyingPreview && (
+        <Section title="元婴天劫">
+          {yuanyingPreview.ok ? (
             <>
-              <p className="text-sm">当前气血 {jindanPreview.maxHp}</p>
+              <p className="text-sm">当前气血 {yuanyingPreview.maxHp}</p>
               <p className="mt-1 text-sm">
-                减伤 {fmtPct(jindanPreview.reduction)}%
-                {jindanPreview.sources.length > 0
-                  ? `（${jindanPreview.sources.map((s) => `${s.name} ${fmtPct(s.pct)}%`).join(" + ")}）`
+                减伤 {fmtPct(yuanyingPreview.reduction)}%
+                {yuanyingPreview.sources.length > 0
+                  ? `（${yuanyingPreview.sources.map((s) => `${s.name} ${fmtPct(s.pct)}%`).join(" + ")}）`
                   : "（无减伤来源）"}
               </p>
               <p className="mt-1 text-sm">
-                消耗修为 {jindanPreview.cost.cultivation}、灵气 {jindanPreview.cost.spirit}、灵石 {jindanPreview.cost.spiritStone}
+                消耗修为 {yuanyingPreview.cost.cultivation}、灵气 {yuanyingPreview.cost.spirit}、灵石 {yuanyingPreview.cost.spiritStone}
               </p>
               <div className="mt-2 space-y-0.5 text-sm">
-                {jindanPreview.waves.map((w, i) => (
+                {yuanyingPreview.waves.map((w, i) => (
                   <p key={i}>
                     第{i + 1}波：伤 {w.damage}，余 {w.hpAfter}
-                    {jindanPreview.pillHealed?.wave === i + 1 && (
-                      <span className="text-cinnabar">（丹药回 {jindanPreview.pillHealed.amount}）</span>
+                    {yuanyingPreview.pillHealed?.wave === i + 1 && (
+                      <span className="text-cinnabar">（丹药回 {yuanyingPreview.pillHealed.amount}）</span>
                     )}
                   </p>
                 ))}
               </div>
               <p className="mt-2 text-sm">
-                丹药{jindanPreview.pillPrepared ? "已预置" : "未预置"} ｜ 预计
-                {jindanPreview.success ? <span className="text-cinnabar">成功</span> : <span className="text-muted">失败</span>}
+                丹药{yuanyingPreview.pillPrepared ? "已预置" : "未预置"} ｜ 预计
+                {yuanyingPreview.success ? <span className="text-cinnabar">成功</span> : <span className="text-muted">失败</span>}
               </p>
-              {!jindanPreview.success && (
+              {!yuanyingPreview.success && (
                 <p className="mt-1 text-xs text-muted">建议：主修玄龟诀提升减伤、穿戴减伤装备、预置护劫丹。</p>
               )}
-              {!jindanPreview.canAfford && (
+              {!yuanyingPreview.canAfford && (
                 <p className="mt-1 text-xs text-cinnabar">
-                  还差 {fmt(jindanPreview.shortfall.cultivation)} 修为、{fmt(jindanPreview.shortfall.spirit)} 灵气、{fmt(jindanPreview.shortfall.spiritStone)} 灵石
+                  还差 {fmt(yuanyingPreview.shortfall.cultivation)} 修为、{fmt(yuanyingPreview.shortfall.spirit)} 灵气、{fmt(yuanyingPreview.shortfall.spiritStone)} 灵石
                 </p>
               )}
-              <button onClick={startJindanTrial} disabled={!jindanPreview.canAfford} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white disabled:opacity-40">
-                开始结丹试炼
+              <button onClick={startYuanyingTrial} disabled={!yuanyingPreview.canAfford} className="mt-3 rounded-lg bg-cinnabar px-4 py-2 text-white disabled:opacity-40">
+                开始元婴天劫
               </button>
             </>
           ) : (
-            <p className="text-sm">{jindanPreview.reason}</p>
+            <p className="text-sm">{yuanyingPreview.reason}</p>
           )}
         </Section>
       )}

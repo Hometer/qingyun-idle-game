@@ -35,8 +35,19 @@ export const CONFIG = {
     { id: "zhuji8", stage: 2, layer: 8, name: "筑基八层", cultivationCost: 5400, spiritCost: 700, attack: 6, defense: 4, hp: 38 },
     { id: "zhuji9", stage: 2, layer: 9, name: "筑基九层", cultivationCost: 5700, spiritCost: 750, attack: 6, defense: 4, hp: 40 },
     { id: "zhuji10", stage: 2, layer: 10, name: "筑基十层（圆满）", cultivationCost: 6000, spiritCost: 800, attack: 6, defense: 4, hp: 40 },
-    // 金丹（第 3 境，当前仅一层开放）
+    // 金丹（第 3 境）
     { id: "jindan1", stage: 3, layer: 1, name: "金丹一层", cultivationCost: 12000, spiritCost: 1600, attack: 10, defense: 7, hp: 60 },
+    { id: "jindan2", stage: 3, layer: 2, name: "金丹二层", cultivationCost: 13300, spiritCost: 1780, attack: 11, defense: 7, hp: 64 },
+    { id: "jindan3", stage: 3, layer: 3, name: "金丹三层", cultivationCost: 14700, spiritCost: 1960, attack: 11, defense: 8, hp: 69 },
+    { id: "jindan4", stage: 3, layer: 4, name: "金丹四层", cultivationCost: 16000, spiritCost: 2130, attack: 12, defense: 8, hp: 73 },
+    { id: "jindan5", stage: 3, layer: 5, name: "金丹五层", cultivationCost: 17300, spiritCost: 2310, attack: 13, defense: 9, hp: 78 },
+    { id: "jindan6", stage: 3, layer: 6, name: "金丹六层", cultivationCost: 18700, spiritCost: 2490, attack: 13, defense: 9, hp: 82 },
+    { id: "jindan7", stage: 3, layer: 7, name: "金丹七层", cultivationCost: 20000, spiritCost: 2670, attack: 14, defense: 10, hp: 87 },
+    { id: "jindan8", stage: 3, layer: 8, name: "金丹八层", cultivationCost: 21300, spiritCost: 2840, attack: 15, defense: 10, hp: 91 },
+    { id: "jindan9", stage: 3, layer: 9, name: "金丹九层", cultivationCost: 22700, spiritCost: 3020, attack: 15, defense: 11, hp: 96 },
+    { id: "jindan10", stage: 3, layer: 10, name: "金丹十层（圆满）", cultivationCost: 24000, spiritCost: 3200, attack: 16, defense: 11, hp: 100 },
+    // 元婴（第 4 境，当前仅一层开放）
+    { id: "yuanying1", stage: 4, layer: 1, name: "元婴一层", cultivationCost: 30000, spiritCost: 4000, attack: 18, defense: 13, hp: 120 },
   ] as const,
 
   spiritRoots: ["金", "木", "水", "火", "土"] as const,
@@ -200,6 +211,27 @@ export const CONFIG = {
           repeat: { cultivation: 30, page: 5 },
           suppressRate: 0.4,
         },
+        node_wraith: {
+          name: "幽狼", gate: "qi5",
+          enemy: { attack: 17, defense: 11, hp: 110 },
+          firstClear: { cultivation: 200, spiritStone: 360, page: 18, equipment: null },
+          repeat: { cultivation: 40, page: 6 },
+          suppressRate: 0.45,
+        },
+        node_zombie: {
+          name: "尸傀", gate: "qi7",
+          enemy: { attack: 18, defense: 12, hp: 125 },
+          firstClear: { cultivation: 260, spiritStone: 420, page: 20, equipment: null },
+          repeat: { cultivation: 52, page: 7 },
+          suppressRate: 0.5,
+        },
+        node_specter: {
+          name: "幽魂", gate: "qi9",
+          enemy: { attack: 20, defense: 12, hp: 140 },
+          firstClear: { cultivation: 320, spiritStone: 480, page: 22, equipment: null },
+          repeat: { cultivation: 64, page: 8 },
+          suppressRate: 0.55,
+        },
         node_ghost: {
           name: "厉鬼", gate: "qi10",
           enemy: { attack: 21, defense: 13, hp: 150 },
@@ -233,12 +265,73 @@ export const CONFIG = {
           repeat: { cultivation: 120, page: 0 },
           suppressRate: 1.0,
         },
+        node_stoneking: {
+          name: "石傀王", gate: "zhuji4",
+          enemy: { attack: 25, defense: 17, hp: 210 },
+          firstClear: { cultivation: 700, spiritStone: 300, page: 0, equipment: null },
+          repeat: { cultivation: 140, page: 0 },
+          suppressRate: 1.05,
+        },
+        node_lingyuan: {
+          name: "灵猿", gate: "zhuji6",
+          enemy: { attack: 26, defense: 18, hp: 220 },
+          firstClear: { cultivation: 780, spiritStone: 340, page: 0, equipment: null },
+          repeat: { cultivation: 156, page: 0 },
+          suppressRate: 1.1,
+        },
+        node_shanxiaowang: {
+          name: "山魈王", gate: "zhuji8",
+          enemy: { attack: 27, defense: 18, hp: 230 },
+          firstClear: { cultivation: 850, spiritStone: 370, page: 0, equipment: null },
+          repeat: { cultivation: 170, page: 0 },
+          suppressRate: 1.15,
+        },
         node_guardian: {
           name: "护丹灵", gate: "zhuji10",
           enemy: { attack: 27, defense: 19, hp: 240 },
           firstClear: { cultivation: 900, spiritStone: 400, page: 0, equipment: null },
           repeat: { cultivation: 180, page: 0 },
           suppressRate: 1.2,
+        },
+      },
+    },
+    map_jindan: {
+      name: "金丹秘境",
+      nodes: {
+        node_danfang: {
+          name: "丹房遗影", gate: "jindan2",
+          enemy: { attack: 28, defense: 20, hp: 260 },
+          firstClear: { cultivation: 1500, spiritStone: 600, page: 20, equipment: null },
+          repeat: { cultivation: 300, page: 4 },
+          suppressRate: 1.3,
+        },
+        node_danlu: {
+          name: "丹炉火灵", gate: "jindan4",
+          enemy: { attack: 30, defense: 21, hp: 290 },
+          firstClear: { cultivation: 2000, spiritStone: 750, page: 22, equipment: null },
+          repeat: { cultivation: 400, page: 5 },
+          suppressRate: 1.4,
+        },
+        node_danjie: {
+          name: "丹劫幻象", gate: "jindan6",
+          enemy: { attack: 32, defense: 22, hp: 320 },
+          firstClear: { cultivation: 2600, spiritStone: 900, page: 24, equipment: null },
+          repeat: { cultivation: 520, page: 6 },
+          suppressRate: 1.5,
+        },
+        node_dansha: {
+          name: "丹煞", gate: "jindan8",
+          enemy: { attack: 34, defense: 23, hp: 350 },
+          firstClear: { cultivation: 3300, spiritStone: 1050, page: 26, equipment: null },
+          repeat: { cultivation: 660, page: 7 },
+          suppressRate: 1.6,
+        },
+        node_yuanying: {
+          name: "元婴裂隙", gate: "jindan10",
+          enemy: { attack: 36, defense: 24, hp: 380 },
+          firstClear: { cultivation: 4000, spiritStone: 1200, page: 30, equipment: null },
+          repeat: { cultivation: 800, page: 8 },
+          suppressRate: 1.7,
         },
       },
     },
@@ -286,6 +379,10 @@ export const CONFIG = {
   jindanTrial: {
     wavesPct: [0.22, 0.27, 0.32, 0.37, 0.42],
     spiritStoneCost: 3000,
+  },
+  yuanyingTrial: {
+    wavesPct: [0.24, 0.29, 0.34, 0.39, 0.44],
+    spiritStoneCost: 5000,
   },
 
   suppressionDurationHours: 24,

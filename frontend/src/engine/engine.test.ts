@@ -36,7 +36,10 @@ import {
   startJindanTrial,
   jindanTrialGateOk,
   previewJindanTrial,
+  startYuanyingTrial,
+  yuanyingTrialGateOk,
 } from "./engine";
+import { CONFIG } from "./config";
 import type { SaveState, RealmId, MapId, SecretRealmId } from "./types";
 
 const H = 3600_000;
@@ -354,12 +357,15 @@ describe("坏档导入", () => {
 });
 
 describe("数值可达性", () => {
-  it("两图六节点可逐节点首通", () => {
+  it("两图九节点可逐节点首通", () => {
     const order: Array<{ map: MapId; node: string; gate: RealmId; drop: string | null }> = [
       { map: "map_qingyun", node: "node_wolf", gate: "qi1", drop: "a_cloth" },
       { map: "map_qingyun", node: "node_bandit", gate: "qi2", drop: "w_azure" },
       { map: "map_qingyun", node: "node_demon", gate: "qi3", drop: "c_wood" },
       { map: "map_nether", node: "node_shade", gate: "qi3", drop: "a_iron" },
+      { map: "map_nether", node: "node_wraith", gate: "qi5", drop: null },
+      { map: "map_nether", node: "node_zombie", gate: "qi7", drop: null },
+      { map: "map_nether", node: "node_specter", gate: "qi9", drop: null },
       { map: "map_nether", node: "node_ghost", gate: "qi10", drop: "c_jade" },
       { map: "map_nether", node: "node_king", gate: "qi10", drop: null },
     ];
@@ -1569,8 +1575,8 @@ describe("v1.0 炼器", () => {
   it("镇压产玄铁、秘境成功掉玄铁", () => {
     const s = fresh();
     s.realm = "zhuji1";
-    s.suppression = { map_qingyun: "node_wolf", map_nether: null, map_yunling: null };
-    s.suppressionSince = { map_qingyun: 0, map_nether: 0, map_yunling: 0 };
+    s.suppression = { map_qingyun: "node_wolf", map_nether: null, map_yunling: null, map_jindan: null };
+    s.suppressionSince = { map_qingyun: 0, map_nether: 0, map_yunling: 0, map_jindan: 0 };
     const settled = settle(s, T0 + 1000);
     expect(settled.resources.iron).toBeCloseTo(0.02, 5); // 0.02/秒 × 1 秒
     // 秘境成功掉玄铁
@@ -1720,5 +1726,42 @@ describe("v1.2 境界迁移", () => {
     const r = importSave(JSON.stringify(v10));
     expect(r.ok).toBe(true);
     expect((r.state as SaveState).realm).toBe("zhuji1");
+  });
+});
+
+describe("v1.2 金丹与元婴", () => {
+  it("金丹十层未首通元婴裂隙不可元婴", () => {
+    const s = fresh();
+    s.realm = "jindan10";
+    expect(yuanyingTrialGateOk(s).ok).toBe(false);
+  });
+
+  it("首通元婴裂隙且资源足够可渡元婴天劫", () => {
+    const s = fresh();
+    s.realm = "jindan10";
+    s.resources.cultivation = 30000;
+    s.resources.spirit = 4000;
+    s.resources.spiritStone = 5000;
+    s.preparedPill = true;
+    s.inventory.tribulationPill = 1;
+    s.technique = "xuanGui";
+    s.techniqueLevel.xuanGui = 3;
+    s.equipment = { weapon: "w_steel", armor: "a_steel", accessory: "c_jade" };
+    const nodeIds = Object.keys(CONFIG.maps.map_jindan.nodes);
+    const guardian = nodeIds[nodeIds.length - 1];
+    s.maps.map_jindan[guardian].cleared = true;
+    s.maps.map_jindan[guardian].unlocked = true;
+    expect(yuanyingTrialGateOk(s).ok).toBe(true);
+    const r = startYuanyingTrial(s, T0);
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).realm).toBe("yuanying1");
+  });
+
+  it("金丹一层迁移解锁金丹秘境首节点", () => {
+    const s = fresh();
+    s.realm = "jindan1";
+    const m = migrateSave(s);
+    const first = Object.keys(CONFIG.maps.map_jindan.nodes)[0];
+    expect(m.maps.map_jindan[first].unlocked).toBe(true);
   });
 });

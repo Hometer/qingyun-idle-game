@@ -12,7 +12,7 @@ export type BuildingId = "cultivationRoom" | "spiritArray" | "spiritField" | "al
 export type TechniqueId = "qingYun" | "xuanGui" | "poYue" | "juYuan";
 export type EquipSlot = "weapon" | "armor" | "accessory";
 export type ItemId = "tribulationPill";
-export type MapId = "map_qingyun" | "map_nether" | "map_yunling";
+export type MapId = "map_qingyun" | "map_nether" | "map_yunling" | "map_jindan";
 export type SecretRealmId = "realm_herb" | "realm_relic" | "realm_deep";
 
 export interface Resources {
@@ -169,6 +169,7 @@ export interface SaveState {
   breakthroughFails: Partial<Record<BreakthroughLayer, number>>; // 每层保底计数 0~2
   breakthroughRecords: BreakthroughRecord[];
   jindanTrial: TribulationLog | null;
+  yuanyingTrial: TribulationLog | null;
   library: number; // 藏经阁等级 0/1/2
   auxiliaryTechnique: TechniqueId | null; // 辅修功法，与主修不能相同
   secretRealmDate: string;

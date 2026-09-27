@@ -57,9 +57,10 @@ const MAP_CFG = CONFIG.maps as unknown as Record<
   }
 >;
 
-const MAP_ORDER: MapId[] = ["map_qingyun", "map_nether", "map_yunling"];
+const MAP_ORDER: MapId[] = ["map_qingyun", "map_nether", "map_yunling", "map_jindan"];
 // map_yunling 在 schema v6 引入；v1~v5 旧档可缺失，v6 及以后缺失即坏档
 const MAP_YUNLING_INTRO_VERSION = 6;
+const MAP_JINDAN_INTRO_VERSION = 10; // v1.2 引入
 // secretRealm 三字段在 schema v8 引入；v1~v7 旧档可缺失，v8 及以后缺失即坏档
 const SECRET_REALM_INTRO_VERSION = 8;
 
@@ -104,6 +105,11 @@ const BREAKTHROUGH_CFG = CONFIG.breakthrough as unknown as {
 };
 
 const JINDAN_TRIAL_CFG = CONFIG.jindanTrial as unknown as {
+  wavesPct: readonly number[];
+  spiritStoneCost: number;
+};
+
+const YUANYING_TRIAL_CFG = CONFIG.yuanyingTrial as unknown as {
   wavesPct: readonly number[];
   spiritStoneCost: number;
 };
@@ -505,10 +511,11 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     inventory: { [CONFIG.initialEquipment]: 1, tribulationPill: 0 },
     preparedPill: false,
     maps,
-    suppression: { map_qingyun: null, map_nether: null, map_yunling: null },
+    suppression: { map_qingyun: null, map_nether: null, map_yunling: null, map_jindan: null },
     encounter: { pending: null, triggeredToday: 0, lastTriggerDate: todayStr(nowMs), guideDone: false },
     tribulationLog: null,
     jindanTrial: null,
+    yuanyingTrial: null,
     library: 0,
     auxiliaryTechnique: null,
     secretRealmDate: todayStr(nowMs),
@@ -519,7 +526,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}` }],
     firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
     daily: emptyDaily(todayStr(nowMs)),
-    suppressionSince: { map_qingyun: 0, map_nether: 0, map_yunling: 0 },
+    suppressionSince: { map_qingyun: 0, map_nether: 0, map_yunling: 0, map_jindan: 0 },
     longTask: null,
     lastLongTaskResult: null,
     breakthroughFails: Object.fromEntries(BREAKTHROUGH_LAYERS.map((l) => [l, 0])) as Partial<Record<BreakthroughLayer, number>>,
@@ -1037,6 +1044,13 @@ function syncYunlingUnlock(s: SaveState): void {
   }
 }
 
+function syncJindanUnlock(s: SaveState): void {
+  const first = Object.keys(MAP_CFG.map_jindan.nodes)[0];
+  if (realmIndex(s.realm) >= realmIndex("jindan1") && s.maps.map_jindan?.[first]) {
+    s.maps.map_jindan[first].unlocked = true;
+  }
+}
+
 function rollEncounter(s: SaveState, nowMs: number): boolean {
   const today = todayStr(nowMs);
   if (s.encounter.lastTriggerDate !== today) {
@@ -1413,6 +1427,7 @@ export function startJindanTrial(state: SaveState, nowMs: number): Result<SaveSt
 
   if (sim.success) {
     s.realm = "jindan1";
+    syncJindanUnlock(s);
     s.recentLogs.push("结丹试炼五波尽数扛下，凝气成丹，晋入金丹一层。");
     pushMilestone(s, "jindan", nowMs, "结丹试炼成功，晋入金丹一层");
   } else {
@@ -1420,6 +1435,82 @@ export function startJindanTrial(state: SaveState, nowMs: number): Result<SaveSt
     pushMilestone(s, "jindan", nowMs, "结丹试炼失败");
   }
   s.jindanTrial = { maxHp: sim.maxHp, reduction: sim.reduction, pillUsed: pill, waves: sim.waves, success: sim.success, log: sim.log };
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function yuanyingTrialCost(): { cultivation: number; spirit: number; spiritStone: number } {
+  const next = REALMS[realmIndex("jindan10") + 1];
+  if (!next) return { cultivation: 0, spirit: 0, spiritStone: 0 };
+  return { cultivation: next.cultivationCost, spirit: next.spiritCost, spiritStone: YUANYING_TRIAL_CFG.spiritStoneCost };
+}
+
+export function yuanyingTrialGateOk(state: SaveState): { ok: boolean; reason: string } {
+  if (state.realm !== "jindan10") return { ok: false, reason: "仅金丹十层可冲击元婴" };
+  const nodeIds = Object.keys(MAP_CFG.map_jindan.nodes);
+  const guardian = nodeIds[nodeIds.length - 1]; // 元婴裂隙（末节点）
+  if (!state.maps.map_jindan?.[guardian]?.cleared) return { ok: false, reason: "需先首通金丹秘境·元婴裂隙" };
+  return { ok: true, reason: "" };
+}
+
+export function previewYuanyingTrial(state: SaveState): JindanTrialPreview {
+  const gate = yuanyingTrialGateOk(state);
+  const empty: JindanTrialPreview = {
+    ok: false, reason: gate.reason, canAfford: false,
+    shortfall: { cultivation: 0, spirit: 0, spiritStone: 0 },
+    maxHp: 0, reduction: 0, sources: [], waves: [], pillHealed: null, success: false, pillPrepared: false,
+    cost: { cultivation: 0, spirit: 0, spiritStone: 0 },
+  };
+  if (!gate.ok) return empty;
+  const sim = simulateTribulation(state, YUANYING_TRIAL_CFG.wavesPct, "元婴天劫");
+  const cost = yuanyingTrialCost();
+  const canAfford =
+    state.resources.cultivation >= cost.cultivation &&
+    state.resources.spirit >= cost.spirit &&
+    state.resources.spiritStone >= cost.spiritStone;
+  const shortfall = {
+    cultivation: Math.max(0, cost.cultivation - state.resources.cultivation),
+    spirit: Math.max(0, cost.spirit - state.resources.spirit),
+    spiritStone: Math.max(0, cost.spiritStone - state.resources.spiritStone),
+  };
+  return {
+    ok: true, reason: "", canAfford, shortfall,
+    maxHp: sim.maxHp, reduction: sim.reduction, sources: sim.sources,
+    waves: sim.waves, pillHealed: sim.pillHealed, success: sim.success, pillPrepared: state.preparedPill,
+    cost,
+  };
+}
+
+export function startYuanyingTrial(state: SaveState, nowMs: number): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const gate = yuanyingTrialGateOk(s);
+  if (!gate.ok) return fail(gate.reason);
+  const cost = yuanyingTrialCost();
+  if (
+    s.resources.cultivation < cost.cultivation ||
+    s.resources.spirit < cost.spirit ||
+    s.resources.spiritStone < cost.spiritStone
+  ) {
+    return fail(`元婴门槛未足（需修为${cost.cultivation}、灵气${cost.spirit}、灵石${cost.spiritStone}）`);
+  }
+  s.resources.cultivation -= cost.cultivation;
+  s.resources.spirit -= cost.spirit;
+  s.resources.spiritStone -= cost.spiritStone;
+
+  const sim = simulateTribulation(s, YUANYING_TRIAL_CFG.wavesPct, "元婴天劫");
+  const pill = s.preparedPill;
+  if (pill) s.inventory.tribulationPill = Math.max(0, (s.inventory.tribulationPill || 0) - 1);
+  s.preparedPill = false;
+
+  if (sim.success) {
+    s.realm = "yuanying1";
+    s.recentLogs.push("元婴天劫五波尽数扛下，神魂凝婴，晋入元婴一层。");
+    pushMilestone(s, "yuanying", nowMs, "元婴天劫成功，晋入元婴一层");
+  } else {
+    s.recentLogs.push("元婴天劫失败，境界不动，可按短板准备后重试。");
+    pushMilestone(s, "yuanying", nowMs, "元婴天劫失败");
+  }
+  s.yuanyingTrial = { maxHp: sim.maxHp, reduction: sim.reduction, pillUsed: pill, waves: sim.waves, success: sim.success, log: sim.log };
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1514,9 +1605,23 @@ export function migrateSave(raw: SaveState): SaveState {
   if ((s.suppressionSince as Record<string, unknown>)["map_yunling"] === undefined) {
     (s.suppressionSince as Record<string, unknown>)["map_yunling"] = 0;
   }
+  // 补齐第四地图 map_jindan 及镇压位（v1.2 新增）
+  if (!maps.map_jindan) {
+    maps.map_jindan = {};
+    for (const nid of Object.keys(MAP_CFG.map_jindan.nodes)) {
+      maps.map_jindan[nid] = { unlocked: false, cleared: false };
+    }
+  }
+  if (!suppression["map_jindan"]) {
+    (s.suppression as Record<string, unknown>)["map_jindan"] = null;
+  }
+  if ((s.suppressionSince as Record<string, unknown>)["map_jindan"] === undefined) {
+    (s.suppressionSince as Record<string, unknown>)["map_jindan"] = 0;
+  }
   if (s.longTask === undefined) s.longTask = null;
   if (s.lastLongTaskResult === undefined) s.lastLongTaskResult = null;
   if (s.jindanTrial === undefined) s.jindanTrial = null;
+  if (s.yuanyingTrial === undefined) s.yuanyingTrial = null;
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -1546,6 +1651,7 @@ export function migrateSave(raw: SaveState): SaveState {
   s.schemaVersion = SCHEMA_VERSION;
   const migrated = s as unknown as SaveState;
   syncYunlingUnlock(migrated);
+  syncJindanUnlock(migrated);
   return migrated;
 }
 
@@ -1700,8 +1806,9 @@ function validateMaps(maps: unknown, suppression: unknown, schemaVersion: number
   const m = (maps ?? {}) as Record<string, unknown>;
   for (const mid of Object.keys(MAP_CFG) as MapId[]) {
     const nodes = m[mid];
-    const isNewMap = mid === "map_yunling";
-    const allowMissing = isNewMap && schemaVersion < MAP_YUNLING_INTRO_VERSION; // 旧档缺新地图，迁移补默认
+    const allowMissing =
+      (mid === "map_yunling" && schemaVersion < MAP_YUNLING_INTRO_VERSION) ||
+      (mid === "map_jindan" && schemaVersion < MAP_JINDAN_INTRO_VERSION); // 旧档缺新地图，迁移补默认
     if (nodes === undefined) {
       if (allowMissing) continue;
       return "地图数据无效";
@@ -1995,7 +2102,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   const rawDaily = o.daily as Record<string, unknown> | undefined;
   const hasNewDaily = !!rawDaily && typeof rawDaily.weather === "object" && typeof rawDaily.astrology === "object";
   base.daily = hasNewDaily ? (rawDaily as unknown as DailyState) : emptyDaily(todayStr(Date.now()));
-  base.suppressionSince = { map_qingyun: 0, map_nether: 0, map_yunling: 0, ...((o.suppressionSince as Partial<SaveState["suppressionSince"]>) || {}) };
+  base.suppressionSince = { map_qingyun: 0, map_nether: 0, map_yunling: 0, map_jindan: 0, ...((o.suppressionSince as Partial<SaveState["suppressionSince"]>) || {}) };
   base.longTask = (o.longTask as LongTask | null) ?? null;
   base.lastLongTaskResult = (o.lastLongTaskResult as LongTaskResult | null) ?? null;
   base.aptitude = validAptitude(o.aptitude);
@@ -2004,5 +2111,6 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.lastSettledAt = o.lastSettledAt as number;
   base.revision = ((o.revision as number) || 0) + 1;
   syncYunlingUnlock(base);
+  syncJindanUnlock(base);
   return base;
 }
