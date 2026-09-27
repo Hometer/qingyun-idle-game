@@ -52,6 +52,7 @@ interface GameContextValue {
   create: (name: string, root: SpiritRoot, aptitude: AptitudeId) => void;
   createWithFortune: (name: string, fortune: { spiritRoots: string[]; meridians: string; comprehension: string }, aptitude: AptitudeId) => void;
   setAptitude: (aptitude: AptitudeId) => void;
+  setResonance: (resonance: string | null) => void;
   settleNow: () => void;
   doBreakthrough: (method: BreakthroughMethod) => void;
   upgradeBuilding: (id: BuildingId) => void;
@@ -415,6 +416,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
       await apply(s, "角色已创建，踏上仙途");
     },
     [apply],
+  );
+
+  const setResonance = useCallback(
+    async (resonance: string | null) => {
+      if (!state) return;
+      const r = eng.setResonance(state, Date.now(), resonance);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "已切换共鸣");
+    },
+    [state, apply],
   );
 
   const setAptitude = useCallback(
@@ -944,6 +958,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     create,
     createWithFortune,
     setAptitude,
+    setResonance,
     settleNow,
     doBreakthrough,
     upgradeBuilding,

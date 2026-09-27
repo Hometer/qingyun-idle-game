@@ -22,7 +22,7 @@ const MAPS_CFG = CONFIG.maps as unknown as Record<
 >;
 
 export default function RenwuPage() {
-  const { state, doExport, doImport, doReset, doRestoreBackup, claimGoal } = useGame();
+  const { state, doExport, doImport, doReset, doRestoreBackup, claimGoal, setResonance } = useGame();
   const fileRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState(() =>
     typeof localStorage !== "undefined" ? localStorage.getItem("qingyun_access_code") || "" : "",
@@ -120,6 +120,24 @@ export default function RenwuPage() {
         <p className="mt-1 text-sm text-muted">修行进度：第 {currentStage}/20 境 · 历练首通 {clearedNodes.length}/{totalEnemies}</p>
         {wearing.length > 0 && (
           <p className="mt-1 text-sm text-muted">穿戴：{wearing.map((id) => EQUIPMENT[id].name).join("、")}</p>
+        )}
+      </Section>
+
+      <Section title="灵根共鸣">
+        <p className="mb-2 text-xs text-muted">同一时刻只启用一项；强度：单灵根 5%、双 4%、三 3%、四 2%、五 1%、变异 5%。</p>
+        {state.spiritRoots.map((r) => (
+          <div key={r} className="flex items-center justify-between border-b border-line/60 py-2 last:border-0">
+            <div className="text-sm">
+              {r}
+              {state.resonance === r && <span className="ml-1 text-xs text-cinnabar">当前</span>}
+            </div>
+            {state.resonance !== r && (
+              <button onClick={() => setResonance(r)} className="rounded-lg border border-line bg-paper px-3 py-1 text-xs">启用</button>
+            )}
+          </div>
+        ))}
+        {state.resonance && (
+          <button onClick={() => setResonance(null)} className="mt-2 rounded-lg border border-line bg-paper px-3 py-1 text-xs">关闭共鸣</button>
         )}
       </Section>
 

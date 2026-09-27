@@ -313,7 +313,13 @@ function applyReward(s: SaveState, reward: Partial<Resources>): void {
 }
 
 function battleDamageMult(s: SaveState): number {
-  return !s.daily.astrology.used && s.daily.astrology.id === "war" ? 1.2 : 1;
+  const war = !s.daily.astrology.used && s.daily.astrology.id === "war" ? 1.2 : 1;
+  const gold = s.resonance === "金" ? 1 + resonanceStrength(s) : 1;
+  return war * gold;
+}
+
+function battleTakenMult(s: SaveState): number {
+  return s.resonance === "土" ? 1 - resonanceStrength(s) : 1;
 }
 
 export function recordDailySettle(state: SaveState, nowMs: number): SaveState {
@@ -479,6 +485,7 @@ export function startLongTask(state: SaveState, nowMs: number, params: StartLong
   if (cost > 0 && s.resources.spiritStone < cost) return fail(`灵石不足（需 ${cost}）`);
   if (cost > 0) s.resources.spiritStone -= cost;
   const prod = productionBreakdown(s);
+  const effectiveMinutes = s.resonance === "风" ? Math.max(1, Math.ceil(duration * CONFIG.resonance.windTimeMult)) : duration;
   s.longTask = {
     id: randomId(),
     type: params.type,
@@ -488,7 +495,7 @@ export function startLongTask(state: SaveState, nowMs: number, params: StartLong
     protectionUsed: params.protection,
     durationMinutes: duration,
     startAt: nowMs,
-    endAt: nowMs + duration * 60 * 1000,
+    endAt: nowMs + effectiveMinutes * 60 * 1000,
     ruleVersion: LONG_TASK_CFG.ruleVersion,
     snapshot: {
       playerAttack: pred.playerAttack,
@@ -634,6 +641,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     spiritRoots: [validSpiritRoot(spiritRoot)],
     meridians: "normal",
     comprehension: "normal",
+    resonance: null,
     aptitude: apt,
     resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 },
     realm: "qi1",
@@ -765,6 +773,25 @@ function meridianProductionMult(s: SaveState): number {
 function comprehensionPageMult(s: SaveState): number {
   return COMPREHENSION_CFG[s.comprehension]?.pageMult ?? 1;
 }
+
+function resonanceStrength(s: SaveState): number {
+  if (!s.resonance) return 0;
+  const n = s.spiritRoots.length;
+  if (n === 1 && ["雷", "冰", "风"].includes(s.spiritRoots[0])) return CONFIG.resonance.variantStrength;
+  return (CONFIG.resonance.strengths as unknown as Record<number, number>)[n] ?? 0;
+}
+
+export function availableResonances(s: SaveState): string[] {
+  return s.spiritRoots;
+}
+
+export function setResonance(state: SaveState, nowMs: number, resonance: string | null): Result<SaveState> {
+  const s = settle(state, nowMs);
+  if (resonance !== null && !s.spiritRoots.includes(resonance)) return fail("该共鸣不属于当前灵根");
+  s.resonance = resonance;
+  s.revision += 1;
+  return { state: s, ok: true };
+}
 function realmProductionMult(s: SaveState): number {
   const stage = REALMS[realmIndex(s.realm)]?.stage ?? 1;
   const cfg = CONFIG.realmProduction;
@@ -853,11 +880,11 @@ export function productionBreakdown(state: SaveState): ProductionBreakdown {
   const spiritApt = aptitudeSpiritMult(state);
   const realmMult = realmProductionMult(state);
   const aptName = APTITUDE_CFG[state.aptitude]?.name ?? "均衡";
-  const herb = spiritFieldRate(state);
+  const herb = spiritFieldRate(state) * (state.resonance === "木" ? 1 + resonanceStrength(state) : 1);
   const stone = suppressionRate(state);
   const iron = suppressionRate(state) > 0 ? IRON_CFG.suppressionPerSec * Object.keys(state.suppression).filter((m) => state.suppression[m as MapId]).length : 0;
-  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt * realmMult * meridianProductionMult(state);
-  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt * realmMult * meridianProductionMult(state);
+  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt * realmMult * meridianProductionMult(state) * (state.resonance === "火" ? 1 + resonanceStrength(state) : 1);
+  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt * realmMult * meridianProductionMult(state) * (state.resonance === "水" ? 1 + resonanceStrength(state) : 1);
   const w = CONFIG.weathers[state.daily.weather.id as keyof typeof CONFIG.weathers];
   const a = CONFIG.astrologies[state.daily.astrology.id as keyof typeof CONFIG.astrologies];
   const lines: string[] = [
@@ -957,7 +984,7 @@ export function breakthroughCosts(state: SaveState, method: BreakthroughMethod):
 export function breakthroughSuccessRate(state: SaveState): number {
   const layer = state.realm as BreakthroughLayer;
   if (!BREAKTHROUGH_LAYERS.includes(layer)) return 1;
-  return Math.min(1, BREAKTHROUGH_CFG.riskyBaseRate + BREAKTHROUGH_CFG.riskyFailBoost * (state.breakthroughFails?.[layer] ?? 0));
+  return Math.min(1, BREAKTHROUGH_CFG.riskyBaseRate + BREAKTHROUGH_CFG.riskyFailBoost * (state.breakthroughFails?.[layer] ?? 0) + (state.resonance === "雷" ? CONFIG.resonance.thunderBoost : 0));
 }
 
 export function breakthrough(state: SaveState, nowMs: number, method: BreakthroughMethod = "steady", rng: () => number = Math.random): Result<SaveState> {
@@ -1377,6 +1404,7 @@ function runBattle(
   stats: { attack: number; defense: number; hp: number },
   enemy: { attack: number; defense: number; hp: number },
   dmgMult = 1,
+  takenMult = 1,
 ): { won: boolean; log: string[] } {
   const log: string[] = [];
   let pHp = stats.hp;
@@ -1394,7 +1422,7 @@ function runBattle(
         break;
       }
     } else {
-      const dmg = Math.max(1, enemy.attack - stats.defense);
+      const dmg = Math.max(1, Math.round((enemy.attack - stats.defense) * takenMult));
       pHp -= dmg;
       log.push(`敌反击，伤你${dmg}点，你余${Math.max(0, pHp)}气血。`);
       if (pHp <= 0) break;
@@ -1424,7 +1452,7 @@ export function predictFight(state: SaveState, mapId: MapId, nodeId: string): Fi
     return { ok: false, reason: `需${realmName(nodeCfg.gate as RealmId)}方可挑战`, won: false, log: [], enemy: empty, player: empty };
   }
   const stats = playerStats(state);
-  const battle = runBattle(stats, nodeCfg.enemy, battleDamageMult(state));
+  const battle = runBattle(stats, nodeCfg.enemy, battleDamageMult(state), battleTakenMult(state));
   return { ok: true, reason: "", won: battle.won, log: battle.log, enemy: { ...nodeCfg.enemy }, player: stats };
 }
 
@@ -1441,7 +1469,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
 
   const stats = playerStats(s);
   const dmgMult = battleDamageMult(s);
-  const battle = runBattle(stats, nodeCfg.enemy, dmgMult);
+  const battle = runBattle(stats, nodeCfg.enemy, dmgMult, battleTakenMult(state));
   const log = battle.log;
   const won = battle.won;
   s.daily.goals.battle.progress = Math.min(s.daily.goals.battle.progress + 1, CONFIG.dailyGoals.battle.target);
@@ -1607,7 +1635,7 @@ export function simulateTribulation(state: SaveState, wavesPct: readonly number[
   const log: string[] = [];
   let pillHealed: { wave: number; amount: number } | null = null;
   wavesPct.forEach((pct, i) => {
-    const dmg = Math.ceil(maxHp * pct * (1 - info.reduction));
+    const dmg = Math.ceil(maxHp * pct * (1 - info.reduction) * (state.resonance === "冰" ? CONFIG.resonance.iceDamageMult : 1));
     hp -= dmg;
     log.push(`第${i + 1}波${label}，伤${dmg}点，余${Math.max(0, hp)}气血。`);
     if (i + 1 === CONFIG.tribulation.pillWave && pill && hp > 0) {
@@ -1974,7 +2002,7 @@ export function predictSecretRealm(state: SaveState, realmId: SecretRealmId): { 
     return { ok: false, reason: `需${realmName(cfg.gate as RealmId)}方可进入`, won: false, enemy: { ...cfg.enemy }, player: playerStats(state) };
   }
   const stats = playerStats(state);
-  const battle = runBattle(stats, cfg.enemy);
+  const battle = runBattle(stats, cfg.enemy, 1, battleTakenMult(state));
   return { ok: true, reason: "", won: battle.won, enemy: { ...cfg.enemy }, player: stats };
 }
 
@@ -1985,7 +2013,7 @@ export function enterSecretRealm(state: SaveState, nowMs: number, realmId: Secre
   if (realmIndex(s.realm) < realmIndex(cfg.gate as RealmId)) return fail(`需${realmName(cfg.gate as RealmId)}方可进入`);
   if (s.secretRealmUsed[realmId]) return fail("今日已挑战该秘境");
   const stats = playerStats(s);
-  const battle = runBattle(stats, cfg.enemy);
+  const battle = runBattle(stats, cfg.enemy, 1, battleTakenMult(state));
   const reward = battle.won ? secretRealmReward(realmId) : emptyResources();
   if (battle.won) {
     applyReward(s, reward);
@@ -2073,6 +2101,7 @@ export function migrateSave(raw: SaveState): SaveState {
   if (!Array.isArray(s.spiritRoots) || s.spiritRoots.length === 0) s.spiritRoots = [validSpiritRoot(s.spiritRoot)];
   if (typeof s.meridians !== "string" || !MERIDIAN_CFG[s.meridians]) s.meridians = "normal";
   if (typeof s.comprehension !== "string" || !COMPREHENSION_CFG[s.comprehension]) s.comprehension = "normal";
+  if (s.resonance === undefined) s.resonance = null;
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -2578,6 +2607,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.spiritRoots = Array.isArray(o.spiritRoots) && o.spiritRoots.length > 0 ? (o.spiritRoots as string[]) : [base.spiritRoot];
   base.meridians = typeof o.meridians === "string" && (o.meridians as string) in MERIDIAN_CFG ? (o.meridians as MeridianId) : "normal";
   base.comprehension = typeof o.comprehension === "string" && (o.comprehension as string) in COMPREHENSION_CFG ? (o.comprehension as ComprehensionId) : "normal";
+  base.resonance = typeof o.resonance === "string" ? (o.resonance as string) : null;
   base.maps = { ...base.maps, ...((o.maps as Partial<SaveState["maps"]>) || {}) };
   base.suppression = { ...base.suppression, ...((o.suppression as Partial<SaveState["suppression"]>) || {}) };
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };

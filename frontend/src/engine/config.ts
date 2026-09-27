@@ -1554,6 +1554,14 @@ export const CONFIG = {
     genius: { name: "通明", probability: 0.08, pageMult: 0.94 },
   },
 
+  resonance: {
+    strengths: { 5: 0.05, 4: 0.04, 3: 0.03, 2: 0.02, 1: 0.01 }, // 五/四/三/二/一灵根强度
+    variantStrength: 0.05,
+    thunderBoost: 0.04, // 雷：冲关成功率 +4 个百分点
+    iceDamageMult: 0.97, // 冰：试炼每波伤害 ×0.97
+    windTimeMult: 0.96, // 风：任务耗时 ×0.96
+  },
+
   breakthrough: {
     riskyBaseRate: 0.8, // 冲关初次成功率
     riskyFailBoost: 0.1, // 每次失败 +10%

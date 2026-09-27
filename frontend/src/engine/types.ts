@@ -159,6 +159,7 @@ export interface SaveState {
   spiritRoots: string[]; // 灵根组合（五行不重复；变异单元素）
   meridians: MeridianId; // 经脉档
   comprehension: ComprehensionId; // 悟性档
+  resonance: string | null; // 当前启用共鸣（五行或变异），未启用为 null
   resources: Resources;
   realm: RealmId;
   buildings: Record<BuildingId, number>;
