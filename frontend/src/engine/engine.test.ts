@@ -44,6 +44,7 @@ import {
   crossStageTrialInfo,
   previewCrossStageTrial,
   startCrossStageTrial,
+  randomFortune,
 } from "./engine";
 import { CONFIG } from "./config";
 import type { SaveState, RealmId, MapId, SecretRealmId } from "./types";
@@ -2000,5 +2001,28 @@ describe("二十境内容与日常节奏", () => {
       expect(weapon.cost.page).toBeGreaterThan(0);
       expect(armor.cost.herb).toBeGreaterThan(0);
     }
+  });
+});
+
+
+describe("v1.4 命盘与资质", () => {
+  it("随机鉴灵：五行组合不重复、变异合法", () => {
+    const variants = ["雷", "冰", "风"];
+    for (let i = 0; i < 300; i++) {
+      const f = randomFortune(() => Math.random());
+      expect(f.spiritRoots.length).toBeGreaterThan(0);
+      if (f.spiritRoots.length === 1 && variants.includes(f.spiritRoots[0])) continue; // 变异
+      expect(new Set(f.spiritRoots).size).toBe(f.spiritRoots.length);
+      expect(f.spiritRoots.length).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("经脉影响产速、悟性影响功法费用", () => {
+    const base = fresh();
+    base.meridians = "normal";
+    const normalCult = productionBreakdown(base).cultivationPerSec;
+    const innate = fresh();
+    innate.meridians = "innate"; // 天成 ×1.06
+    expect(productionBreakdown(innate).cultivationPerSec).toBeCloseTo(normalCult * 1.06, 3);
   });
 });

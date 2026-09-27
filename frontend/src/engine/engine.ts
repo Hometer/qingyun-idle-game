@@ -12,6 +12,8 @@ import type {
   LongTaskResult,
   LongTaskType,
   MapId,
+  MeridianId,
+  ComprehensionId,
   Milestone,
   RealmId,
   Resources,
@@ -139,6 +141,8 @@ function emptySecretRealmUsed(): Record<SecretRealmId, boolean> {
 const FORGE_CFG = CONFIG.forge as unknown as { levels: Array<{ cost: { spiritStone: number; page: number } }> };
 const IRON_CFG = CONFIG.iron as unknown as { suppressionPerSec: number; realmDrop: Record<SecretRealmId, number> };
 const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { gate: RealmId; cost: Record<string, number> }>;
+const MERIDIAN_CFG = CONFIG.meridians as unknown as Record<string, { name: string; probability: number; productionMult: number }>;
+const COMPREHENSION_CFG = CONFIG.comprehensions as unknown as Record<string, { name: string; probability: number; pageMult: number }>;
 const MATERIAL_CFG = CONFIG.materials as unknown as Record<
   string,
   { name: string; startStage: number; endStage: number; secretRealm: string }
@@ -544,6 +548,72 @@ export function abortLongTask(state: SaveState, nowMs: number): Result<SaveState
 
 // ---- 新建 / 重置 ----
 
+export interface Fortune {
+  spiritRoots: string[];
+  meridians: MeridianId;
+  comprehension: ComprehensionId;
+}
+
+function weightedPick(cfg: Record<string, { probability: number }>, rng: () => number): string {
+  const r = rng();
+  let acc = 0;
+  for (const [id, c] of Object.entries(cfg)) {
+    acc += c.probability;
+    if (r < acc) return id;
+  }
+  return Object.keys(cfg)[0];
+}
+
+function randomCombination(elements: readonly string[], count: number, rng: () => number): string[] {
+  const n = elements.length;
+  const idx = Array.from({ length: count }, (_, i) => i);
+  const combos: string[][] = [idx.map((i) => elements[i])];
+  while (true) {
+    let i = count - 1;
+    while (i >= 0 && idx[i] === n - count + i) i--;
+    if (i < 0) break;
+    idx[i]++;
+    for (let j = i + 1; j < count; j++) idx[j] = idx[j - 1] + 1;
+    combos.push(idx.map((x) => elements[x]));
+  }
+  return combos[Math.floor(rng() * combos.length)];
+}
+
+export function randomFortune(rng: () => number = Math.random): Fortune {
+  const pool = CONFIG.spiritRootPool;
+  const elements = pool.elements as readonly string[];
+  let spiritRoots: string[];
+  if (rng() < pool.variantProbability) {
+    const variants = pool.variants as readonly string[];
+    spiritRoots = [variants[Math.floor(rng() * variants.length)]];
+  } else {
+    const r = rng();
+    let acc = 0;
+    let count = 1;
+    for (let i = 0; i < pool.formProbability.length; i++) {
+      acc += pool.formProbability[i];
+      if (r < acc) { count = 5 - i; break; }
+    }
+    spiritRoots = randomCombination(elements, count, rng);
+  }
+  const meridians = weightedPick(CONFIG.meridians as unknown as Record<string, { probability: number }>, rng) as MeridianId;
+  const comprehension = weightedPick(CONFIG.comprehensions as unknown as Record<string, { probability: number }>, rng) as ComprehensionId;
+  return { spiritRoots, meridians, comprehension };
+}
+
+export function createGameWithFortune(name: string, fortune: Fortune, aptitude: AptitudeId = "balanced", nowMs = Date.now()): SaveState {
+  const first = fortune.spiritRoots[0] ?? "金";
+  const legacyRoot = (CONFIG.spiritRoots as readonly string[]).includes(first) ? (first as SpiritRoot) : "金";
+  const s = createGame(name, legacyRoot, aptitude, nowMs);
+  s.spiritRoots = [...fortune.spiritRoots];
+  s.meridians = fortune.meridians;
+  s.comprehension = fortune.comprehension;
+  const label = fortune.spiritRoots.join("、");
+  s.recentLogs[0] = `入道青云，名「${name}」，灵根属${label}，${APTITUDE_CFG[aptitude].name}。`;
+  s.milestones[0].text = s.recentLogs[0];
+  return s;
+}
+
 export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: AptitudeId = "balanced", nowMs = Date.now()): SaveState {
   const maps = {} as SaveState["maps"];
   for (const [mid, m] of Object.entries(CONFIG.maps)) {
@@ -561,6 +631,9 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     id: randomId(),
     name,
     spiritRoot: validSpiritRoot(spiritRoot),
+    spiritRoots: [validSpiritRoot(spiritRoot)],
+    meridians: "normal",
+    comprehension: "normal",
     aptitude: apt,
     resources: { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 },
     realm: "qi1",
@@ -686,6 +759,12 @@ function aptitudeCultivationMult(s: SaveState): number {
 function aptitudeSpiritMult(s: SaveState): number {
   return APTITUDE_CFG[s.aptitude]?.spiritMult ?? 1;
 }
+function meridianProductionMult(s: SaveState): number {
+  return MERIDIAN_CFG[s.meridians]?.productionMult ?? 1;
+}
+function comprehensionPageMult(s: SaveState): number {
+  return COMPREHENSION_CFG[s.comprehension]?.pageMult ?? 1;
+}
 function realmProductionMult(s: SaveState): number {
   const stage = REALMS[realmIndex(s.realm)]?.stage ?? 1;
   const cfg = CONFIG.realmProduction;
@@ -777,8 +856,8 @@ export function productionBreakdown(state: SaveState): ProductionBreakdown {
   const herb = spiritFieldRate(state);
   const stone = suppressionRate(state);
   const iron = suppressionRate(state) > 0 ? IRON_CFG.suppressionPerSec * Object.keys(state.suppression).filter((m) => state.suppression[m as MapId]).length : 0;
-  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt * realmMult;
-  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt * realmMult;
+  const cultivationPerSec = CONFIG.baseCultivationPerSecond * cultBuilding * cultTech * cultApt * realmMult * meridianProductionMult(state);
+  const spiritPerSec = CONFIG.baseSpiritPerSecond * spiritBuilding * spiritTech * spiritApt * realmMult * meridianProductionMult(state);
   const w = CONFIG.weathers[state.daily.weather.id as keyof typeof CONFIG.weathers];
   const a = CONFIG.astrologies[state.daily.astrology.id as keyof typeof CONFIG.astrologies];
   const lines: string[] = [
@@ -1109,7 +1188,7 @@ export function upgradeTechnique(state: SaveState, nowMs: number): Result<SaveSt
   if ((t === "poYue" || t === "juYuan") && s.library < 1) return fail("需先建一级藏经阁");
   const lvl = s.techniqueLevel[t];
   if (lvl >= CONFIG.techniques[t].levels.length) return fail("功法已满级");
-  const cost = CONFIG.techniques[t].levels[lvl].pageCost;
+  const cost = Math.floor(CONFIG.techniques[t].levels[lvl].pageCost * comprehensionPageMult(s) + 0.5);
   if (s.resources.page < cost) return fail("残页不足");
   s.resources.page -= cost;
   s.techniqueLevel[t] = lvl + 1;
@@ -1981,6 +2060,9 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.preparedPillTier === undefined) s.preparedPillTier = 1;
   if (!Array.isArray(s.quenched)) s.quenched = [];
   if (!Array.isArray(s.learnedNewTechs)) s.learnedNewTechs = [];
+  if (!Array.isArray(s.spiritRoots) || s.spiritRoots.length === 0) s.spiritRoots = [validSpiritRoot(s.spiritRoot)];
+  if (typeof s.meridians !== "string" || !MERIDIAN_CFG[s.meridians]) s.meridians = "normal";
+  if (typeof s.comprehension !== "string" || !COMPREHENSION_CFG[s.comprehension]) s.comprehension = "normal";
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
   if (s.forge === undefined) s.forge = 0;
@@ -2483,6 +2565,9 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.preparedPillTier = Number.isInteger(o.preparedPillTier) && (o.preparedPillTier as number) >= 1 && (o.preparedPillTier as number) <= 4 ? (o.preparedPillTier as number) : 1;
   base.quenched = Array.isArray(o.quenched) ? (o.quenched as string[]) : [];
   base.learnedNewTechs = Array.isArray(o.learnedNewTechs) ? (o.learnedNewTechs as string[]) : [];
+  base.spiritRoots = Array.isArray(o.spiritRoots) && o.spiritRoots.length > 0 ? (o.spiritRoots as string[]) : [base.spiritRoot];
+  base.meridians = typeof o.meridians === "string" && (o.meridians as string) in MERIDIAN_CFG ? (o.meridians as MeridianId) : "normal";
+  base.comprehension = typeof o.comprehension === "string" && (o.comprehension as string) in COMPREHENSION_CFG ? (o.comprehension as ComprehensionId) : "normal";
   base.maps = { ...base.maps, ...((o.maps as Partial<SaveState["maps"]>) || {}) };
   base.suppression = { ...base.suppression, ...((o.suppression as Partial<SaveState["suppression"]>) || {}) };
   base.encounter = { ...base.encounter, ...((o.encounter as Partial<SaveState["encounter"]>) || {}) };

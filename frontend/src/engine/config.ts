@@ -1531,6 +1531,29 @@ export const CONFIG = {
     spirit: { name: "聚灵", cultivationMult: 0.95, spiritMult: 1.05 },
   },
 
+  spiritRootPool: {
+    elements: ["金", "木", "水", "火", "土"],
+    formProbability: [0.12, 0.18, 0.30, 0.25, 0.10], // 五/四/三/二/一灵根
+    variantProbability: 0.05,
+    variants: ["雷", "冰", "风"],
+  },
+
+  meridians: {
+    blocked: { name: "闭塞", probability: 0.08, productionMult: 0.94 },
+    sluggish: { name: "滞涩", probability: 0.22, productionMult: 0.97 },
+    normal: { name: "平通", probability: 0.40, productionMult: 1.00 },
+    smooth: { name: "通达", probability: 0.22, productionMult: 1.03 },
+    innate: { name: "天成", probability: 0.08, productionMult: 1.06 },
+  },
+
+  comprehensions: {
+    dull: { name: "迟钝", probability: 0.08, pageMult: 1.06 },
+    slow: { name: "偏慢", probability: 0.22, pageMult: 1.03 },
+    normal: { name: "平常", probability: 0.40, pageMult: 1.00 },
+    clever: { name: "聪慧", probability: 0.22, pageMult: 0.97 },
+    genius: { name: "通明", probability: 0.08, pageMult: 0.94 },
+  },
+
   breakthrough: {
     riskyBaseRate: 0.8, // 冲关初次成功率
     riskyFailBoost: 0.1, // 每次失败 +10%

@@ -5,6 +5,8 @@ export type RealmStagePrefix =
 export type RealmLayerNum = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
 export type RealmId = `${RealmStagePrefix}${RealmLayerNum}`;
 export type SpiritRoot = "金" | "木" | "水" | "火" | "土";
+export type MeridianId = "blocked" | "sluggish" | "normal" | "smooth" | "innate"; // 经脉：闭塞/滞涩/平通/通达/天成
+export type ComprehensionId = "dull" | "slow" | "normal" | "clever" | "genius"; // 悟性：迟钝/偏慢/平常/聪慧/通明
 export type AptitudeId = "balanced" | "focus" | "spirit"; // 均衡 / 凝神 / 聚灵
 export type BreakthroughLayer = `${RealmStagePrefix}${Exclude<RealmLayerNum, "10">}`;
 export type BreakthroughMethod = "steady" | "risky"; // 稳妥 / 冲关
@@ -154,6 +156,9 @@ export interface SaveState {
   id: string;
   name: string;
   spiritRoot: SpiritRoot;
+  spiritRoots: string[]; // 灵根组合（五行不重复；变异单元素）
+  meridians: MeridianId; // 经脉档
+  comprehension: ComprehensionId; // 悟性档
   resources: Resources;
   realm: RealmId;
   buildings: Record<BuildingId, number>;
