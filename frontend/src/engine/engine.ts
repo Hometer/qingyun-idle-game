@@ -281,6 +281,7 @@ function emptyDaily(dateStr: string): DailyState {
       suppress: { progress: 0, claimed: false },
     },
     rewardedRepeats: 0,
+    rewardedDan: 0,
   };
 }
 
@@ -1117,6 +1118,45 @@ export function craftPill(state: SaveState, nowMs: number): Result<SaveState> {
   return { state: s, ok: true };
 }
 
+export function craftGainPill(state: SaveState, nowMs: number, type: "yangYuan" | "juLing", tier: number): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const needFurnace = CONFIG.pills.gainFurnaceLevel[tier - 1];
+  if (s.buildings.alchemyFurnace < needFurnace) return fail(`需${needFurnace}级炼丹炉方可炼制该品丹药`);
+  const herb = CONFIG.pills.gainHerb[tier - 1];
+  const stone = CONFIG.pills.gainStone[tier - 1];
+  const page = CONFIG.pills.gainPage[tier - 1];
+  if (s.resources.herb < herb || s.resources.spiritStone < stone || s.resources.page < page) {
+    return fail("灵草、灵石或残页不足");
+  }
+  s.resources.herb -= herb;
+  s.resources.spiritStone -= stone;
+  s.resources.page -= page;
+  const pillId = type === "yangYuan" ? `yangYuanDan_${tier}` : `juLingDan_${tier}`;
+  s.inventory[pillId] = (s.inventory[pillId] || 0) + 1;
+  const tierName = ["凡", "灵", "仙", "道"][tier - 1];
+  s.recentLogs.push(`开炉炼丹，得${type === "yangYuan" ? "养元丹" : "聚灵丹"}（${tierName}品）一枚。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function useGainPill(state: SaveState, nowMs: number, type: "yangYuan" | "juLing", tier: number): Result<SaveState> {
+  const s = settle(state, nowMs);
+  if (s.daily.rewardedDan >= 1) return fail("今日收益丹已服用，明日再来");
+  const pillId = type === "yangYuan" ? `yangYuanDan_${tier}` : `juLingDan_${tier}`;
+  if ((s.inventory[pillId] || 0) < 1) return fail("无此丹药");
+  const minutes = CONFIG.pills.gainMinutes[tier - 1];
+  const prod = productionBreakdown(s);
+  const perSec = type === "yangYuan" ? prod.cultivationPerSec : prod.spiritPerSec;
+  const amount = Math.floor(perSec * minutes * 60);
+  if (type === "yangYuan") s.resources.cultivation += amount;
+  else s.resources.spirit += amount;
+  s.inventory[pillId] -= 1;
+  s.daily.rewardedDan += 1;
+  s.recentLogs.push(`服下${type === "yangYuan" ? "养元丹" : "聚灵丹"}，得${type === "yangYuan" ? "修为" : "灵气"}${amount}。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
 export function togglePreparePill(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.preparedPill) {
@@ -1827,6 +1867,9 @@ export function migrateSave(raw: SaveState): SaveState {
     s.daily = emptyDaily(todayStr(Date.now()));
   } else if (rawDaily.rewardedRepeats === undefined) {
     rawDaily.rewardedRepeats = 0;
+  }
+  if (s.daily && (s.daily as unknown as Record<string, unknown>).rewardedDan === undefined) {
+    (s.daily as unknown as Record<string, unknown>).rewardedDan = 0;
   }
   const lastSettled = (s.lastSettledAt as number) || Date.now();
   if (!s.suppressionSince || typeof s.suppressionSince !== "object") {

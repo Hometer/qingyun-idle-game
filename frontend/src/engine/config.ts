@@ -467,6 +467,14 @@ export const CONFIG = {
     taiChuZiJing: { name: "太初紫晶", startStage: 19, endStage: 20, secretRealm: "realm_hongmeng" },
   } as const,
 
+  pills: {
+    gainMinutes: [15, 30, 45, 60],
+    gainHerb: [30, 120, 500, 2000],
+    gainStone: [150, 1200, 8000, 50000],
+    gainPage: [0, 80, 600, 2500],
+    gainFurnaceLevel: [1, 4, 5, 6],
+  } as const,
+
   crafts: {
     w_steel: { gate: "zhuji1", cost: { iron: 8, spiritStone: 800, herb: 0, page: 0 } },
     a_steel: { gate: "zhuji1", cost: { iron: 12, spiritStone: 1200, herb: 30, page: 0 } },

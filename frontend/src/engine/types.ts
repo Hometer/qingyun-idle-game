@@ -92,6 +92,7 @@ export interface DailyState {
   astrology: { id: string; used: boolean };
   goals: DailyGoals;
   rewardedRepeats: number;
+  rewardedDan: number;
 }
 
 export type LongTaskType = "training" | "seclusion";
