@@ -23,12 +23,14 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
 const REALMS = CONFIG.realms as unknown as ReadonlyArray<{
   id: string;
+  stage: number;
+  layer: number;
   name: string;
   cultivationCost: number;
   spiritCost: number;
@@ -117,9 +119,44 @@ const FORGE_CFG = CONFIG.forge as unknown as { cost: { spiritStone: number; page
 const IRON_CFG = CONFIG.iron as unknown as { suppressionPerSec: number; realmDrop: Record<SecretRealmId, number> };
 const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { cost: { iron: number; spiritStone: number; herb: number } }>;
 
-const BREAKTHROUGH_LAYERS: BreakthroughLayer[] = ["qi1", "qi2", "qi3", "foundation1", "foundation2"];
+const realmOrder: RealmId[] = REALMS.map((r) => r.id as RealmId);
+const BREAKTHROUGH_LAYERS: BreakthroughLayer[] = REALMS
+  .filter((r, i) => r.layer < 10 && i + 1 < REALMS.length && REALMS[i + 1].stage === r.stage)
+  .map((r) => r.id as BreakthroughLayer);
+// 旧 schema（v≤9）境界 ID → 新体系。旧“圆满”对应新“十层”，旧筑基前缀 foundation→zhuji。
+const OLD_REALM_TO_NEW: Record<string, string> = {
+  qi4: "qi10",
+  foundation1: "zhuji1",
+  foundation2: "zhuji2",
+  foundation3: "zhuji10",
+};
 
-const realmOrder: RealmId[] = ["qi1", "qi2", "qi3", "qi4", "foundation1", "foundation2", "foundation3", "jindan1"];
+// 旧 schema（v≤9）境界相关字段 → 新体系；新版（v10+）不再映射。
+function migrateRealmRefs(o: Record<string, unknown>, ver: number): void {
+  if (ver >= SCHEMA_VERSION) return;
+  const mapId = (id: unknown): string => {
+    const str = typeof id === "string" ? id : "";
+    return OLD_REALM_TO_NEW[str] ?? str;
+  };
+  if (typeof o.realm === "string") o.realm = mapId(o.realm);
+  const fails = o.breakthroughFails;
+  if (fails && typeof fails === "object" && !Array.isArray(fails)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fails as Record<string, unknown>)) out[mapId(k)] = v;
+    o.breakthroughFails = out;
+  }
+  if (Array.isArray(o.breakthroughRecords)) {
+    for (const r of o.breakthroughRecords as Array<Record<string, unknown>>) {
+      if (r && typeof r === "object" && typeof r.layer === "string") r.layer = mapId(r.layer);
+    }
+  }
+}
+
+// 当前境界是否可小进阶（非本境圆满、非本版最高）
+export function canBreakthrough(state: SaveState): boolean {
+  const idx = realmIndex(state.realm);
+  return idx >= 0 && idx < realmOrder.length - 1 && REALMS[idx].layer < 10;
+}
 
 function realmIndex(realm: RealmId): number {
   return realmOrder.indexOf(realm);
@@ -485,7 +522,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     suppressionSince: { map_qingyun: 0, map_nether: 0, map_yunling: 0 },
     longTask: null,
     lastLongTaskResult: null,
-    breakthroughFails: { qi1: 0, qi2: 0, qi3: 0, foundation1: 0, foundation2: 0 },
+    breakthroughFails: Object.fromEntries(BREAKTHROUGH_LAYERS.map((l) => [l, 0])) as Partial<Record<BreakthroughLayer, number>>,
     breakthroughRecords: [],
     lastSettledAt: nowMs,
     revision: 0,
@@ -739,12 +776,13 @@ export function breakthroughSuccessRate(state: SaveState): number {
 
 export function breakthrough(state: SaveState, nowMs: number, method: BreakthroughMethod = "steady", rng: () => number = Math.random): Result<SaveState> {
   const s = settle(state, nowMs);
-  if (s.realm === "jindan1") return fail("已至本版最高境界");
-  if (s.realm === "qi4") return fail("炼气圆满需渡劫方可筑基，请先查看劫势");
-  if (s.realm === "foundation3") return fail("筑基圆满需结丹试炼方可金丹，请先查看试炼预览");
+  const realmIdx = realmIndex(s.realm);
+  const realmCfg = REALMS[realmIdx];
+  if (realmIdx >= realmOrder.length - 1) return fail("已至本版最高境界");
+  if (realmCfg.layer === 10) return fail("已至本境圆满，需挑战跨境试炼方可晋入下一境");
   const layer = s.realm as BreakthroughLayer;
   if (!BREAKTHROUGH_LAYERS.includes(layer)) return fail("当前境界不可小进阶");
-  const next = REALMS[realmIndex(layer) + 1];
+  const next = REALMS[realmIdx + 1];
   if (!next) return fail("已至本版最高境界");
 
   const costs = breakthroughCosts(s, method);
@@ -848,7 +886,7 @@ export function setAuxiliaryTechnique(state: SaveState, nowMs: number, id: Techn
 export function buildLibrary(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.library >= 2) return fail("藏经阁已满级");
-  if (realmIndex(s.realm) < realmIndex("foundation1")) return fail("需筑基一层方可建藏经阁");
+  if (realmIndex(s.realm) < realmIndex("zhuji1")) return fail("需筑基一层方可建藏经阁");
   const cfg = CONFIG.library.levels[s.library];
   if (s.resources.spiritStone < cfg.cost.spiritStone || s.resources.page < cfg.cost.page) {
     return fail(`藏经阁升级需灵石${cfg.cost.spiritStone}、残页${cfg.cost.page}`);
@@ -867,7 +905,7 @@ export function buildLibrary(state: SaveState, nowMs: number): Result<SaveState>
 export function buildForge(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.forge >= 1) return fail("炼器台已建");
-  if (realmIndex(s.realm) < realmIndex("foundation1")) return fail("需筑基一层方可建炼器台");
+  if (realmIndex(s.realm) < realmIndex("zhuji1")) return fail("需筑基一层方可建炼器台");
   if (s.resources.spiritStone < FORGE_CFG.cost.spiritStone || s.resources.page < FORGE_CFG.cost.page) {
     return fail(`炼器台需灵石${FORGE_CFG.cost.spiritStone}、残页${FORGE_CFG.cost.page}`);
   }
@@ -994,7 +1032,7 @@ function unlockNext(s: SaveState, mapId: MapId, nodeId: string): void {
 
 function syncYunlingUnlock(s: SaveState): void {
   const first = Object.keys(MAP_CFG.map_yunling.nodes)[0];
-  if (realmIndex(s.realm) >= realmIndex("foundation1") && s.maps.map_yunling?.[first]) {
+  if (realmIndex(s.realm) >= realmIndex("zhuji1") && s.maps.map_yunling?.[first]) {
     s.maps.map_yunling[first].unlocked = true;
   }
 }
@@ -1255,8 +1293,8 @@ export interface TribulationPreview {
 }
 
 export function previewTribulation(state: SaveState): TribulationPreview {
-  if (state.realm !== "qi4") {
-    return { ok: false, reason: "仅炼气圆满可渡劫", maxHp: 0, reduction: 0, sources: [], waves: [], pillHealed: null, success: false, pillPrepared: false };
+  if (state.realm !== "qi10") {
+    return { ok: false, reason: "仅炼气十层可渡劫", maxHp: 0, reduction: 0, sources: [], waves: [], pillHealed: null, success: false, pillPrepared: false };
   }
   const sim = simulateTribulation(state);
   return { ok: true, reason: "", maxHp: sim.maxHp, reduction: sim.reduction, sources: sim.sources, waves: sim.waves, pillHealed: sim.pillHealed, success: sim.success, pillPrepared: state.preparedPill };
@@ -1264,8 +1302,8 @@ export function previewTribulation(state: SaveState): TribulationPreview {
 
 export function startTribulation(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
-  if (s.realm !== "qi4") return fail("仅炼气圆满可渡劫");
-  const idx = realmIndex("qi4");
+  if (s.realm !== "qi10") return fail("仅炼气十层可渡劫");
+  const idx = realmIndex("qi10");
   const next = REALMS[idx + 1];
   if (!next) return fail("渡劫门槛未配置");
   if (s.resources.cultivation < next.cultivationCost || s.resources.spirit < next.spiritCost) {
@@ -1280,7 +1318,7 @@ export function startTribulation(state: SaveState, nowMs: number): Result<SaveSt
   s.preparedPill = false;
 
   if (sim.success) {
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     syncYunlingUnlock(s);
     s.recentLogs.push("五波天劫尽数扛下，于雷霆中筑基，晋入筑基一层。");
     pushMilestone(s, "tribulation", nowMs, "渡劫成功，晋入筑基一层");
@@ -1311,13 +1349,13 @@ export interface JindanTrialPreview {
 }
 
 export function jindanTrialCost(): { cultivation: number; spirit: number; spiritStone: number } {
-  const next = REALMS[realmIndex("foundation3") + 1];
+  const next = REALMS[realmIndex("zhuji10") + 1];
   if (!next) return { cultivation: 0, spirit: 0, spiritStone: 0 };
   return { cultivation: next.cultivationCost, spirit: next.spiritCost, spiritStone: JINDAN_TRIAL_CFG.spiritStoneCost };
 }
 
 export function jindanTrialGateOk(state: SaveState): { ok: boolean; reason: string } {
-  if (state.realm !== "foundation3") return { ok: false, reason: "仅筑基圆满可结丹" };
+  if (state.realm !== "zhuji10") return { ok: false, reason: "仅筑基十层可结丹" };
   const nodeIds = Object.keys(MAP_CFG.map_yunling.nodes);
   const guardian = nodeIds[nodeIds.length - 1]; // 护丹灵（第三节点）
   if (!state.maps.map_yunling?.[guardian]?.cleared) return { ok: false, reason: "需先首通云岭古道·护丹灵" };
@@ -1438,6 +1476,7 @@ function fmtReward(r: Resources): string {
 
 export function migrateSave(raw: SaveState): SaveState {
   const s = structuredClone(raw) as unknown as Record<string, unknown>;
+  migrateRealmRefs(s, (s.schemaVersion as number) ?? 0);
   const firstNode = Object.keys(MAP_CFG.map_qingyun.nodes)[0];
   const suppression = (s.suppression ?? {}) as Record<string, unknown>;
   if (!Array.isArray(s.milestones)) s.milestones = [];
@@ -1498,11 +1537,10 @@ export function migrateSave(raw: SaveState): SaveState {
     }
   }
   if (!s.breakthroughFails || typeof s.breakthroughFails !== "object") {
-    s.breakthroughFails = { qi1: 0, qi2: 0, qi3: 0, foundation1: 0, foundation2: 0 };
-  } else {
-    for (const k of ["foundation1", "foundation2"]) {
-      if ((s.breakthroughFails as Record<string, unknown>)[k] === undefined) (s.breakthroughFails as Record<string, unknown>)[k] = 0;
-    }
+    s.breakthroughFails = {};
+  }
+  for (const l of BREAKTHROUGH_LAYERS) {
+    if ((s.breakthroughFails as Record<string, unknown>)[l] === undefined) (s.breakthroughFails as Record<string, unknown>)[l] = 0;
   }
   if (!Array.isArray(s.breakthroughRecords)) s.breakthroughRecords = [];
   s.schemaVersion = SCHEMA_VERSION;
@@ -1896,6 +1934,7 @@ export function importSave(json: string): Result<SaveState> {
   if (typeof ver !== "number" || ver < 1 || ver > SCHEMA_VERSION) {
     return fail(`存档版本不兼容（支持版本 1～${SCHEMA_VERSION}）`);
   }
+  migrateRealmRefs(o, ver);
   if (typeof o.name !== "string" || !o.name.trim()) return fail("存档缺少姓名");
   if (!realmOrder.includes(o.realm as RealmId)) return fail("境界无效");
   if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt)) return fail("时间数据无效");
@@ -1960,7 +1999,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.longTask = (o.longTask as LongTask | null) ?? null;
   base.lastLongTaskResult = (o.lastLongTaskResult as LongTaskResult | null) ?? null;
   base.aptitude = validAptitude(o.aptitude);
-  base.breakthroughFails = { qi1: 0, qi2: 0, qi3: 0, foundation1: 0, foundation2: 0, ...((o.breakthroughFails as Partial<SaveState["breakthroughFails"]>) || {}) };
+  base.breakthroughFails = { ...base.breakthroughFails, ...((o.breakthroughFails as Record<string, number>) || {}) };
   base.breakthroughRecords = Array.isArray(o.breakthroughRecords) ? (o.breakthroughRecords as BreakthroughRecord[]) : [];
   base.lastSettledAt = o.lastSettledAt as number;
   base.revision = ((o.revision as number) || 0) + 1;

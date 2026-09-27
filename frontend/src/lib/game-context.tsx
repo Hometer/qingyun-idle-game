@@ -264,12 +264,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const view = useMemo(() => (state ? eng.settle(state, now) : null), [state, now]);
 
   const tribPreview = useMemo(
-    () => (state && state.realm === "qi4" ? eng.previewTribulation(state) : null),
+    () => (state && state.realm === "qi10" ? eng.previewTribulation(state) : null),
     [state],
   );
 
   const jindanPreview = useMemo(
-    () => (view && view.realm === "foundation3" ? eng.previewJindanTrial(view) : null),
+    () => (view && view.realm === "zhuji10" ? eng.previewJindanTrial(view) : null),
     [view],
   );
 
@@ -314,7 +314,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const markTribPreviewViewed = useCallback(async () => {
-    if (!state || state.realm !== "qi4" || state.firsts.viewedTribPreviewOnce) return;
+    if (!state || state.realm !== "qi10" || state.firsts.viewedTribPreviewOnce) return;
     const next = structuredClone(state);
     next.firsts.viewedTribPreviewOnce = true;
     next.revision += 1;
@@ -764,11 +764,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     const ok = await apply(
       r.state,
-      r.state.realm === "foundation1" ? "渡劫成功，晋入筑基一层" : "渡劫失败，可重新积累再试",
+      r.state.realm === "zhuji1" ? "渡劫成功，晋入筑基一层" : "渡劫失败，可重新积累再试",
     );
     if (ok) {
       setLastResult({
-        title: r.state.realm === "foundation1" ? "渡劫成功" : "渡劫失败",
+        title: r.state.realm === "zhuji1" ? "渡劫成功" : "渡劫失败",
         lines: [...deltaLines(settled, r.state), ...(r.state.tribulationLog?.log ?? [])],
       });
     }

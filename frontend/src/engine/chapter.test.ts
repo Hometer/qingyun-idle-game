@@ -34,7 +34,7 @@ describe("v1.1 金丹篇章计算", () => {
 
   it("秘境成功计入成果与回顾，未成功不计", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "poYue";
     s.techniqueLevel.poYue = 3;

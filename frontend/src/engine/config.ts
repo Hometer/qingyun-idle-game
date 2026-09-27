@@ -13,14 +13,30 @@ export const CONFIG = {
   baseHp: 100,
 
   realms: [
-    { id: "qi1", name: "炼气一层", cultivationCost: 0, spiritCost: 0, attack: 0, defense: 0, hp: 0 },
-    { id: "qi2", name: "炼气二层", cultivationCost: 120, spiritCost: 20, attack: 0, defense: 0, hp: 0 },
-    { id: "qi3", name: "炼气三层", cultivationCost: 300, spiritCost: 50, attack: 0, defense: 0, hp: 0 },
-    { id: "qi4", name: "炼气圆满", cultivationCost: 700, spiritCost: 100, attack: 0, defense: 0, hp: 0 },
-    { id: "foundation1", name: "筑基一层", cultivationCost: 1500, spiritCost: 200, attack: 0, defense: 0, hp: 0 },
-    { id: "foundation2", name: "筑基二层", cultivationCost: 3000, spiritCost: 400, attack: 3, defense: 2, hp: 20 },
-    { id: "foundation3", name: "筑基圆满", cultivationCost: 6000, spiritCost: 800, attack: 6, defense: 4, hp: 40 },
-    { id: "jindan1", name: "金丹一层", cultivationCost: 12000, spiritCost: 1600, attack: 10, defense: 7, hp: 60 },
+    // 炼气（第 1 境）
+    { id: "qi1", stage: 1, layer: 1, name: "炼气一层", cultivationCost: 0, spiritCost: 0, attack: 0, defense: 0, hp: 0 },
+    { id: "qi2", stage: 1, layer: 2, name: "炼气二层", cultivationCost: 120, spiritCost: 20, attack: 0, defense: 0, hp: 0 },
+    { id: "qi3", stage: 1, layer: 3, name: "炼气三层", cultivationCost: 300, spiritCost: 50, attack: 0, defense: 0, hp: 0 },
+    { id: "qi4", stage: 1, layer: 4, name: "炼气四层", cultivationCost: 360, spiritCost: 57, attack: 0, defense: 0, hp: 0 },
+    { id: "qi5", stage: 1, layer: 5, name: "炼气五层", cultivationCost: 420, spiritCost: 64, attack: 0, defense: 0, hp: 0 },
+    { id: "qi6", stage: 1, layer: 6, name: "炼气六层", cultivationCost: 470, spiritCost: 71, attack: 0, defense: 0, hp: 0 },
+    { id: "qi7", stage: 1, layer: 7, name: "炼气七层", cultivationCost: 530, spiritCost: 79, attack: 0, defense: 0, hp: 0 },
+    { id: "qi8", stage: 1, layer: 8, name: "炼气八层", cultivationCost: 590, spiritCost: 86, attack: 0, defense: 0, hp: 0 },
+    { id: "qi9", stage: 1, layer: 9, name: "炼气九层", cultivationCost: 640, spiritCost: 93, attack: 0, defense: 0, hp: 0 },
+    { id: "qi10", stage: 1, layer: 10, name: "炼气十层（圆满）", cultivationCost: 700, spiritCost: 100, attack: 0, defense: 0, hp: 0 },
+    // 筑基（第 2 境）
+    { id: "zhuji1", stage: 2, layer: 1, name: "筑基一层", cultivationCost: 1500, spiritCost: 200, attack: 0, defense: 0, hp: 0 },
+    { id: "zhuji2", stage: 2, layer: 2, name: "筑基二层", cultivationCost: 3000, spiritCost: 400, attack: 3, defense: 2, hp: 20 },
+    { id: "zhuji3", stage: 2, layer: 3, name: "筑基三层", cultivationCost: 3400, spiritCost: 450, attack: 3, defense: 2, hp: 22 },
+    { id: "zhuji4", stage: 2, layer: 4, name: "筑基四层", cultivationCost: 3800, spiritCost: 500, attack: 4, defense: 2, hp: 24 },
+    { id: "zhuji5", stage: 2, layer: 5, name: "筑基五层", cultivationCost: 4200, spiritCost: 550, attack: 4, defense: 3, hp: 28 },
+    { id: "zhuji6", stage: 2, layer: 6, name: "筑基六层", cultivationCost: 4600, spiritCost: 600, attack: 5, defense: 3, hp: 32 },
+    { id: "zhuji7", stage: 2, layer: 7, name: "筑基七层", cultivationCost: 5000, spiritCost: 650, attack: 5, defense: 3, hp: 34 },
+    { id: "zhuji8", stage: 2, layer: 8, name: "筑基八层", cultivationCost: 5400, spiritCost: 700, attack: 6, defense: 4, hp: 38 },
+    { id: "zhuji9", stage: 2, layer: 9, name: "筑基九层", cultivationCost: 5700, spiritCost: 750, attack: 6, defense: 4, hp: 40 },
+    { id: "zhuji10", stage: 2, layer: 10, name: "筑基十层（圆满）", cultivationCost: 6000, spiritCost: 800, attack: 6, defense: 4, hp: 40 },
+    // 金丹（第 3 境，当前仅一层开放）
+    { id: "jindan1", stage: 3, layer: 1, name: "金丹一层", cultivationCost: 12000, spiritCost: 1600, attack: 10, defense: 7, hp: 60 },
   ] as const,
 
   spiritRoots: ["金", "木", "水", "火", "土"] as const,
@@ -104,17 +120,17 @@ export const CONFIG = {
 
   secretRealms: {
     realm_herb: {
-      name: "灵药谷", gate: "foundation1",
+      name: "灵药谷", gate: "zhuji1",
       enemy: { attack: 25, defense: 16, hp: 200 },
       reward: { herb: 30, spiritStone: 100 },
     },
     realm_relic: {
-      name: "古修遗迹", gate: "foundation2",
+      name: "古修遗迹", gate: "zhuji2",
       enemy: { attack: 28, defense: 18, hp: 240 },
       reward: { page: 8, spiritStone: 200 },
     },
     realm_deep: {
-      name: "幽窟险境", gate: "foundation3",
+      name: "幽窟险境", gate: "zhuji10",
       enemy: { attack: 32, defense: 21, hp: 300 },
       reward: { spiritStone: 500, herb: 50 },
     },
@@ -185,14 +201,14 @@ export const CONFIG = {
           suppressRate: 0.4,
         },
         node_ghost: {
-          name: "厉鬼", gate: "qi4",
+          name: "厉鬼", gate: "qi10",
           enemy: { attack: 21, defense: 13, hp: 150 },
           firstClear: { cultivation: 300, spiritStone: 500, page: 0, equipment: "c_jade" },
           repeat: { cultivation: 60, page: 8 },
           suppressRate: 0.6,
         },
         node_king: {
-          name: "鬼王", gate: "qi4",
+          name: "鬼王", gate: "qi10",
           enemy: { attack: 22, defense: 14, hp: 190 },
           firstClear: { cultivation: 500, spiritStone: 800, page: 30, equipment: null },
           repeat: { cultivation: 100, page: 12 },
@@ -204,21 +220,21 @@ export const CONFIG = {
       name: "云岭古道",
       nodes: {
         node_ape: {
-          name: "断崖山魈", gate: "foundation1",
+          name: "断崖山魈", gate: "zhuji1",
           enemy: { attack: 23, defense: 15, hp: 160 },
           firstClear: { cultivation: 300, spiritStone: 150, page: 0, equipment: null },
           repeat: { cultivation: 80, page: 0 },
           suppressRate: 0.8,
         },
         node_golem: {
-          name: "古道石傀", gate: "foundation2",
+          name: "古道石傀", gate: "zhuji2",
           enemy: { attack: 25, defense: 17, hp: 200 },
           firstClear: { cultivation: 600, spiritStone: 250, page: 0, equipment: null },
           repeat: { cultivation: 120, page: 0 },
           suppressRate: 1.0,
         },
         node_guardian: {
-          name: "护丹灵", gate: "foundation3",
+          name: "护丹灵", gate: "zhuji10",
           enemy: { attack: 27, defense: 19, hp: 240 },
           firstClear: { cultivation: 900, spiritStone: 400, page: 0, equipment: null },
           repeat: { cultivation: 180, page: 0 },

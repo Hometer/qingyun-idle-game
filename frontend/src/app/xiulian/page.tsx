@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtPct, fmtTime, fmtDuration } from "@/lib/labels";
-import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate } from "@/engine/engine";
+import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate, canBreakthrough } from "@/engine/engine";
 import type { TechniqueId, BreakthroughLayer } from "@/engine/types";
 
 function eff(id: string, lvl: number, aux: boolean): string {
@@ -37,8 +37,8 @@ export default function XiulianPage() {
   const { state, view, now, doBreakthrough, startTrib, tribPreview, jindanPreview, startJindanTrial, setTechnique, setAuxiliaryTechnique, upgradeTechnique, markTribPreviewViewed, startLong } = useGame();
   const [seclusionDuration, setSeclusionDuration] = useState(30);
 
-  const isQi4 = state?.realm === "qi4";
-  const isBreakthroughLayer = !!state && (state.realm === "qi1" || state.realm === "qi2" || state.realm === "qi3" || state.realm === "foundation1" || state.realm === "foundation2");
+  const isQi10 = state?.realm === "qi10";
+  const isBreakthroughLayer = !!state && canBreakthrough(state);
 
   const seclusionPred = useMemo(() => (state ? predictLongTask(state, "seclusion", "map_qingyun", "", "steady", seclusionDuration, false) : null), [state, seclusionDuration]);
   const steadyCosts = useMemo(() => (state && isBreakthroughLayer ? breakthroughCosts(state, "steady") : null), [state, isBreakthroughLayer]);
@@ -46,14 +46,14 @@ export default function XiulianPage() {
   const riskyRate = useMemo(() => (state && isBreakthroughLayer ? breakthroughSuccessRate(state) : 1), [state, isBreakthroughLayer]);
 
   useEffect(() => {
-    if (isQi4 && tribPreview?.ok) markTribPreviewViewed();
-  }, [isQi4, tribPreview?.ok, markTribPreviewViewed]);
+    if (isQi10 && tribPreview?.ok) markTribPreviewViewed();
+  }, [isQi10, tribPreview?.ok, markTribPreviewViewed]);
 
   if (!state || !view) return null;
 
   const idx = REALM_LIST.findIndex((r) => r.id === state.realm);
   const next = REALM_LIST[idx + 1];
-  const isFoundation3 = state.realm === "foundation3";
+  const isZhuji10 = state.realm === "zhuji10";
   const isMax = state.realm === "jindan1";
   const prod = productionBreakdown(state);
   const enough = !isMax && !!next && view.resources.cultivation >= next.cultivationCost && view.resources.spirit >= next.spiritCost;
@@ -69,16 +69,16 @@ export default function XiulianPage() {
           <>
             <Bar label="修为" value={view.resources.cultivation} max={next.cultivationCost} />
             <Bar label="灵气" value={view.resources.spirit} max={next.spiritCost} />
-            {isQi4 ? (
-              <p className="mt-1 text-xs text-muted">圆满之境，需渡天劫方可筑基。</p>
-            ) : isFoundation3 ? (
-              <p className="mt-1 text-xs text-muted">筑基圆满，需首通云岭古道·护丹灵并结丹试炼方可金丹。</p>
+            {isQi10 ? (
+              <p className="mt-1 text-xs text-muted">炼气十层圆满，需渡天劫方可筑基。</p>
+            ) : isZhuji10 ? (
+              <p className="mt-1 text-xs text-muted">筑基十层圆满，需首通云岭古道·护丹灵并结丹试炼方可金丹。</p>
             ) : (
               <p className="mt-1 text-xs text-muted">下一境 {next.name}：需修为 {fmt(next.cultivationCost)}、灵气 {fmt(next.spiritCost)}</p>
             )}
           </>
         )}
-        {!isMax && !isQi4 && !isFoundation3 && (
+        {!isMax && !isQi10 && !isZhuji10 && (
           <>
             {!enough && next && (
               <p className="mt-1 text-xs text-cinnabar">
@@ -212,7 +212,7 @@ export default function XiulianPage() {
         )}
       </Section>
 
-      {isQi4 && tribPreview && (
+      {isQi10 && tribPreview && (
         <Section title="渡劫预览">
           {tribPreview.ok ? (
             <>
@@ -250,7 +250,7 @@ export default function XiulianPage() {
         </Section>
       )}
 
-      {isFoundation3 && jindanPreview && (
+      {isZhuji10 && jindanPreview && (
         <Section title="结丹试炼">
           {jindanPreview.ok ? (
             <>

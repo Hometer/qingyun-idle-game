@@ -111,7 +111,7 @@ describe("小进阶", () => {
 
   it("炼气圆满不能小进阶，需渡劫", () => {
     const s = fresh();
-    s.realm = "qi4";
+    s.realm = "qi10";
     s.resources.cultivation = 99999;
     s.resources.spirit = 99999;
     const r = breakthrough(s, T0);
@@ -151,12 +151,12 @@ describe("战斗", () => {
 
   it("战败不倒退境界、不给奖励", () => {
     const s = fresh();
-    s.realm = "qi4";
+    s.realm = "qi10";
     s.maps.map_nether.node_king.unlocked = true;
     const before = s.resources.cultivation;
     const r = fightNode(s, T0, "map_nether", "node_king");
     expect(r.won).toBe(false);
-    expect(r.state.realm).toBe("qi4");
+    expect(r.state.realm).toBe("qi10");
     expect(r.state.resources.cultivation).toBe(before);
   });
 });
@@ -224,7 +224,7 @@ describe("际遇", () => {
 describe("天劫", () => {
   it("预览值与实际五波一致（无减伤、无丹药→失败）", () => {
     const s = fresh();
-    s.realm = "qi4";
+    s.realm = "qi10";
     s.resources.cultivation = 1500;
     s.resources.spirit = 200;
     const p = previewTribulation(s);
@@ -234,13 +234,13 @@ describe("天劫", () => {
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
     expect(st.tribulationLog?.waves.map((w) => w.damage)).toEqual([20, 25, 30, 35, 40]);
-    expect(st.realm).toBe("qi4"); // 失败不动境界
+    expect(st.realm).toBe("qi10"); // 失败不动境界
     expect(st.resources.cultivation).toBe(0); // 门槛已扣不退
   });
 
   it("有减伤+护劫丹可成功筑基", () => {
     const s = fresh();
-    s.realm = "qi4";
+    s.realm = "qi10";
     s.resources.cultivation = 1500;
     s.resources.spirit = 200;
     s.technique = "xuanGui";
@@ -256,28 +256,28 @@ describe("天劫", () => {
     const r = startTribulation(s, T0);
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
-    expect(st.realm).toBe("foundation1");
+    expect(st.realm).toBe("zhuji1");
     expect(st.tribulationLog?.success).toBe(true);
     expect(st.inventory.tribulationPill).toBe(0); // 丹药已消耗
   });
 
   it("失败时预置丹药仍消耗", () => {
     const s = fresh();
-    s.realm = "qi4";
+    s.realm = "qi10";
     s.resources.cultivation = 1500;
     s.resources.spirit = 200;
     s.preparedPill = true;
     s.inventory.tribulationPill = 1;
     const r = startTribulation(s, T0);
     const st = r.state as SaveState;
-    expect(st.realm).toBe("qi4");
+    expect(st.realm).toBe("qi10");
     expect(st.inventory.tribulationPill).toBe(0);
     expect(st.preparedPill).toBe(false);
   });
 
   it("重复调用不重复扣门槛（纯函数幂等，基于已扣状态）", () => {
     const s = fresh();
-    s.realm = "qi4";
+    s.realm = "qi10";
     s.resources.cultivation = 1500;
     s.resources.spirit = 200;
     const r = startTribulation(s, T0);
@@ -360,8 +360,8 @@ describe("数值可达性", () => {
       { map: "map_qingyun", node: "node_bandit", gate: "qi2", drop: "w_azure" },
       { map: "map_qingyun", node: "node_demon", gate: "qi3", drop: "c_wood" },
       { map: "map_nether", node: "node_shade", gate: "qi3", drop: "a_iron" },
-      { map: "map_nether", node: "node_ghost", gate: "qi4", drop: "c_jade" },
-      { map: "map_nether", node: "node_king", gate: "qi4", drop: null },
+      { map: "map_nether", node: "node_ghost", gate: "qi10", drop: "c_jade" },
+      { map: "map_nether", node: "node_king", gate: "qi10", drop: null },
     ];
     let s = fresh();
     for (const step of order) {
@@ -798,7 +798,9 @@ describe("v0.6 迁移与导入校验", () => {
     v4.schemaVersion = 4;
     const m = migrateSave(v4 as unknown as SaveState);
     expect(m.aptitude).toBe("balanced");
-    expect(m.breakthroughFails).toEqual({ qi1: 0, qi2: 0, qi3: 0, foundation1: 0, foundation2: 0 });
+    expect(m.breakthroughFails.qi1).toBe(0);
+    expect(m.breakthroughFails.zhuji1).toBe(0);
+    expect(m.breakthroughFails.zhuji9).toBe(0);
     expect(m.breakthroughRecords).toEqual([]);
     expect(m.schemaVersion).toBe(SCHEMA_VERSION);
   });
@@ -828,14 +830,14 @@ describe("v0.6 迁移与导入校验", () => {
 describe("v0.7 境界与筑基主线", () => {
   it("筑基境界增加战斗属性（相对筑基一层累计）", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     const f1 = playerStats(s);
-    s.realm = "foundation2";
+    s.realm = "zhuji2";
     const f2 = playerStats(s);
     expect(f2.attack).toBe(f1.attack + 3);
     expect(f2.defense).toBe(f1.defense + 2);
     expect(f2.hp).toBe(f1.hp + 20);
-    s.realm = "foundation3";
+    s.realm = "zhuji10";
     const f3 = playerStats(s);
     expect(f3.attack).toBe(f1.attack + 6);
     expect(f3.hp).toBe(f1.hp + 40);
@@ -848,34 +850,34 @@ describe("v0.7 境界与筑基主线", () => {
 
   it("筑基一层稳妥进阶到筑基二层（成本 ×1.15）", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.resources.cultivation = 3450;
     s.resources.spirit = 460;
     const r = breakthrough(s, T0, "steady");
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
-    expect(st.realm).toBe("foundation2");
+    expect(st.realm).toBe("zhuji2");
     expect(st.resources.cultivation).toBe(0);
     expect(st.resources.spirit).toBe(0);
   });
 
   it("筑基二层冲关失败只扣 20% 且保底跨层不继承", () => {
     const s = fresh();
-    s.realm = "foundation2";
+    s.realm = "zhuji2";
     s.resources.cultivation = 6000;
     s.resources.spirit = 800;
     const r = breakthrough(s, T0, "risky", () => 0.9);
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
-    expect(st.realm).toBe("foundation2");
-    expect(st.breakthroughFails.foundation2).toBe(1);
-    expect(st.resources.cultivation).toBe(6000 - 1200); // 20% of 6000
-    expect(st.resources.spirit).toBe(800 - 160); // 20% of 800
+    expect(st.realm).toBe("zhuji2");
+    expect(st.breakthroughFails.zhuji2).toBe(1);
+    expect(st.resources.cultivation).toBe(6000 - 680); // 20% of zhuji3 修为门槛 3400
+    expect(st.resources.spirit).toBe(800 - 90); // 20% of zhuji3 灵气门槛 450
   });
 
   it("渡劫成功后解锁云岭古道首节点", () => {
     const s = fresh();
-    s.realm = "qi4";
+    s.realm = "qi10";
     s.resources.cultivation = 1500;
     s.resources.spirit = 200;
     s.technique = "xuanGui";
@@ -887,7 +889,7 @@ describe("v0.7 境界与筑基主线", () => {
     const r = startTribulation(s, T0);
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
-    expect(st.realm).toBe("foundation1");
+    expect(st.realm).toBe("zhuji1");
     const first = Object.keys(st.maps.map_yunling)[0];
     expect(st.maps.map_yunling[first].unlocked).toBe(true);
   });
@@ -896,7 +898,7 @@ describe("v0.7 境界与筑基主线", () => {
 describe("v0.7 结丹试炼", () => {
   function readyJindan(): SaveState {
     const s = fresh();
-    s.realm = "foundation3";
+    s.realm = "zhuji10";
     s.maps.map_yunling.node_guardian.cleared = true;
     s.maps.map_yunling.node_guardian.unlocked = true;
     s.technique = "xuanGui";
@@ -944,7 +946,7 @@ describe("v0.7 结丹试炼", () => {
     const r = startJindanTrial(s, T0);
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
-    expect(st.realm).toBe("foundation3");
+    expect(st.realm).toBe("zhuji10");
     expect(st.jindanTrial?.success).toBe(false);
   });
 });
@@ -952,7 +954,7 @@ describe("v0.7 结丹试炼", () => {
 describe("v0.7 迁移", () => {
   it("v5 旧档迁移补云岭古道与结丹试炼字段", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     const v5 = structuredClone(s) as unknown as Record<string, unknown>;
     delete v5.jindanTrial;
     delete (v5.maps as Record<string, unknown>).map_yunling;
@@ -1019,7 +1021,7 @@ describe("v0.7 复核修复回归", () => {
 
   it("资源不足时结丹预览仍显示五波与差额", () => {
     const s = fresh();
-    s.realm = "foundation3";
+    s.realm = "zhuji10";
     s.maps.map_yunling.node_guardian.cleared = true;
     s.maps.map_yunling.node_guardian.unlocked = true;
     s.resources.cultivation = 12000;
@@ -1054,7 +1056,7 @@ describe("v0.7 复核修复回归·补全", () => {
   it("修为/灵气差 1 时结丹预览显示对应差额", () => {
     function mk(cult: number, spirit: number, stone: number): SaveState {
       const s = fresh();
-      s.realm = "foundation3";
+      s.realm = "zhuji10";
       s.maps.map_yunling.node_guardian.cleared = true;
       s.maps.map_yunling.node_guardian.unlocked = true;
       s.resources.cultivation = cult;
@@ -1074,7 +1076,7 @@ describe("v0.7 复核修复回归·补全", () => {
 describe("v0.7 修复后复核回归", () => {
   it("挂机结算跨过门槛后，结丹预览 canAfford 翻转", () => {
     const s = fresh();
-    s.realm = "foundation3";
+    s.realm = "zhuji10";
     s.maps.map_yunling.node_guardian.cleared = true;
     s.maps.map_yunling.node_guardian.unlocked = true;
     s.resources.cultivation = 11995; // 差 5 修为
@@ -1094,7 +1096,7 @@ describe("v0.7 修复后复核回归", () => {
 
 describe("v0.8 藏经阁与主辅功法", () => {
   function geared(s: SaveState): SaveState {
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.resources.spiritStone = 10000;
     s.resources.page = 100;
     return s;
@@ -1125,7 +1127,7 @@ describe("v0.8 藏经阁与主辅功法", () => {
 
   it("新功法需一级藏经阁才可主修", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     expect(setTechnique(s, T0, "poYue").ok).toBe(false);
     s.library = 1;
     const r = setTechnique(s, T0, "poYue");
@@ -1249,7 +1251,7 @@ describe("v0.8 独立复核修复回归", () => {
 
   it("资源路线与历练路线各有优势（R43）", () => {
     const base = fresh();
-    base.realm = "foundation3";
+    base.realm = "zhuji10";
     base.library = 2;
     base.techniqueLevel = { qingYun: 3, xuanGui: 0, poYue: 3, juYuan: 3 };
     const res = structuredClone(base);
@@ -1269,7 +1271,7 @@ describe("v0.8 独立复核修复回归", () => {
 describe("v0.9 秘境", () => {
   function strongFoundation(): SaveState {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "poYue";
     s.techniqueLevel.poYue = 3;
@@ -1313,7 +1315,7 @@ describe("v0.9 秘境", () => {
 
   it("战败无奖励", () => {
     const s = fresh();
-    s.realm = "foundation1"; // 无装备无功法 → 必败
+    s.realm = "zhuji1"; // 无装备无功法 → 必败
     const r = enterSecretRealm(s, T0, "realm_herb");
     expect(r.ok).toBe(true);
     const st = r.state as SaveState;
@@ -1348,7 +1350,7 @@ describe("v0.9 迁移与校验", () => {
 describe("v0.9 自查修复回归", () => {
   it("秘境不消耗破军星象、不计入每日战斗目标", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "poYue";
     s.techniqueLevel.poYue = 3;
@@ -1363,7 +1365,7 @@ describe("v0.9 自查修复回归", () => {
 
   it("秘境战斗不受破军加成影响", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.library = 2;
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "qingYun";
@@ -1402,7 +1404,7 @@ describe("v0.9 独立复核修复回归", () => {
 
   it("v8 胜利奖励被改拒绝导入", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "poYue";
     s.techniqueLevel.poYue = 3;
@@ -1415,7 +1417,7 @@ describe("v0.9 独立复核修复回归", () => {
 
   it("v8 失败记录奖励非零拒绝导入", () => {
     const s = fresh();
-    s.realm = "foundation1"; // 无装备 → 必败
+    s.realm = "zhuji1"; // 无装备 → 必败
     const r = enterSecretRealm(s, T0, "realm_herb");
     const st = r.state as SaveState;
     const bad = structuredClone(st) as unknown as Record<string, unknown>;
@@ -1427,7 +1429,7 @@ describe("v0.9 独立复核修复回归", () => {
 describe("v0.9 再次独立复核修复回归", () => {
   function wonHerbSave(): SaveState {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "poYue";
     s.techniqueLevel.poYue = 3;
@@ -1460,9 +1462,9 @@ describe("v0.9 再次独立复核修复回归", () => {
 describe("v0.9 秘境可达性模拟矩阵", () => {
   const equip = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
   const cases: Array<{ rid: SecretRealmId; realm: RealmId; name: string }> = [
-    { rid: "realm_herb", realm: "foundation1", name: "灵药谷" },
-    { rid: "realm_relic", realm: "foundation2", name: "古修遗迹" },
-    { rid: "realm_deep", realm: "foundation3", name: "幽窟险境" },
+    { rid: "realm_herb", realm: "zhuji1", name: "灵药谷" },
+    { rid: "realm_relic", realm: "zhuji2", name: "古修遗迹" },
+    { rid: "realm_deep", realm: "zhuji10", name: "幽窟险境" },
   ];
 
   it("三秘境在破岳诀Lv3+最佳装备下均可胜", () => {
@@ -1493,7 +1495,7 @@ describe("v0.9 秘境可达性模拟矩阵", () => {
 describe("v0.9 最终复核修复回归", () => {
   function wonHerbSave(): SaveState {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "poYue";
     s.techniqueLevel.poYue = 3;
@@ -1526,7 +1528,7 @@ describe("v1.0 炼器", () => {
   it("未筑基不可建炼器台，成本正确", () => {
     const s = fresh();
     expect(buildForge(s, T0).ok).toBe(false); // qi1 未筑基
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.resources.spiritStone = 999;
     s.resources.page = 15;
     expect(buildForge(s, T0).ok).toBe(false); // 灵石差 1
@@ -1541,7 +1543,7 @@ describe("v1.0 炼器", () => {
 
   it("未建炼器台不可炼制，材料不足不可炼制", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.resources.iron = 8;
     s.resources.spiritStone = 800;
     expect(craftEquipment(s, T0, "w_steel").ok).toBe(false); // 未建台
@@ -1552,7 +1554,7 @@ describe("v1.0 炼器", () => {
 
   it("炼制成功扣料入包", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.forge = 1;
     s.resources.iron = 8;
     s.resources.spiritStone = 800;
@@ -1566,14 +1568,14 @@ describe("v1.0 炼器", () => {
 
   it("镇压产玄铁、秘境成功掉玄铁", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.suppression = { map_qingyun: "node_wolf", map_nether: null, map_yunling: null };
     s.suppressionSince = { map_qingyun: 0, map_nether: 0, map_yunling: 0 };
     const settled = settle(s, T0 + 1000);
     expect(settled.resources.iron).toBeCloseTo(0.02, 5); // 0.02/秒 × 1 秒
     // 秘境成功掉玄铁
     const s2 = fresh();
-    s2.realm = "foundation1";
+    s2.realm = "zhuji1";
     s2.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s2.technique = "poYue";
     s2.techniqueLevel.poYue = 3;
@@ -1613,7 +1615,7 @@ describe("v1.0 迁移与坏档", () => {
 describe("v1.0.1 存档回归", () => {
   function wonHerbV8(): Record<string, unknown> {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.library = 1;
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "poYue";
@@ -1654,7 +1656,7 @@ describe("v1.0.1 存档回归", () => {
 describe("v1.0.2 上线安全回归", () => {
   it("秘境记录玄铁奖励被改拒绝导入", () => {
     const s = fresh();
-    s.realm = "foundation1";
+    s.realm = "zhuji1";
     s.library = 1;
     s.equipment = { weapon: "w_azure", armor: "a_iron", accessory: "c_jade" };
     s.technique = "poYue";
@@ -1663,5 +1665,60 @@ describe("v1.0.2 上线安全回归", () => {
     const bad = structuredClone(r.state as SaveState) as unknown as Record<string, unknown>;
     (bad.secretRealmLog as unknown as Array<Record<string, unknown>>)[0].reward = { cultivation: 0, spirit: 0, spiritStone: 100, herb: 30, page: 0, iron: 999 };
     expect(importSave(JSON.stringify(bad)).ok).toBe(false);
+  });
+});
+
+describe("v1.2 境界迁移", () => {
+  it("旧档 foundation1 → zhuji1", () => {
+    const s = fresh();
+    const old = structuredClone(s) as unknown as Record<string, unknown>;
+    old.schemaVersion = 9;
+    old.realm = "foundation1";
+    const r = importSave(JSON.stringify(old));
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).realm).toBe("zhuji1");
+  });
+
+  it("旧档 qi4（炼气圆满）→ qi10", () => {
+    const s = fresh();
+    const old = structuredClone(s) as unknown as Record<string, unknown>;
+    old.schemaVersion = 9;
+    old.realm = "qi4";
+    const r = importSave(JSON.stringify(old));
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).realm).toBe("qi10");
+  });
+
+  it("旧档 foundation3（筑基圆满）→ zhuji10", () => {
+    const s = fresh();
+    const old = structuredClone(s) as unknown as Record<string, unknown>;
+    old.schemaVersion = 9;
+    old.realm = "foundation3";
+    const r = importSave(JSON.stringify(old));
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).realm).toBe("zhuji10");
+  });
+
+  it("旧档 breakthroughFails 键迁移", () => {
+    const s = fresh();
+    const old = structuredClone(s) as unknown as Record<string, unknown>;
+    old.schemaVersion = 9;
+    old.realm = "zhuji1";
+    old.breakthroughFails = { qi1: 1, foundation1: 2 };
+    const r = importSave(JSON.stringify(old));
+    expect(r.ok).toBe(true);
+    const st = r.state as SaveState;
+    expect(st.breakthroughFails.qi1).toBe(1);
+    expect(st.breakthroughFails.zhuji1).toBe(2);
+  });
+
+  it("新版 v10 档不再映射（zhuji1 保持）", () => {
+    const s = fresh();
+    const v10 = structuredClone(s) as unknown as Record<string, unknown>;
+    v10.schemaVersion = 10;
+    v10.realm = "zhuji1";
+    const r = importSave(JSON.stringify(v10));
+    expect(r.ok).toBe(true);
+    expect((r.state as SaveState).realm).toBe("zhuji1");
   });
 });

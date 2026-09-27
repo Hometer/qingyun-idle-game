@@ -1,7 +1,12 @@
-export type RealmId = "qi1" | "qi2" | "qi3" | "qi4" | "foundation1" | "foundation2" | "foundation3" | "jindan1";
+export type RealmStagePrefix =
+  | "qi" | "zhuji" | "jindan" | "yuanying" | "huashen" | "lianxu" | "heti" | "dacheng"
+  | "dujie" | "zhenxian" | "xuanxian" | "jinxian" | "taiyi" | "daluo" | "hunyuan"
+  | "hunyuan_daluo" | "hunyuan_wuji" | "tiandao" | "dadao" | "hongmeng";
+export type RealmLayerNum = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
+export type RealmId = `${RealmStagePrefix}${RealmLayerNum}`;
 export type SpiritRoot = "金" | "木" | "水" | "火" | "土";
 export type AptitudeId = "balanced" | "focus" | "spirit"; // 均衡 / 凝神 / 聚灵
-export type BreakthroughLayer = "qi1" | "qi2" | "qi3" | "foundation1" | "foundation2";
+export type BreakthroughLayer = `${RealmStagePrefix}${Exclude<RealmLayerNum, "10">}`;
 export type BreakthroughMethod = "steady" | "risky"; // 稳妥 / 冲关
 export type BuildingId = "cultivationRoom" | "spiritArray" | "spiritField" | "alchemyFurnace";
 export type TechniqueId = "qingYun" | "xuanGui" | "poYue" | "juYuan";
@@ -161,7 +166,7 @@ export interface SaveState {
   lastSettledAt: number; // epoch ms
   revision: number;
   aptitude: AptitudeId;
-  breakthroughFails: Record<BreakthroughLayer, number>; // 每层保底计数 0~2
+  breakthroughFails: Partial<Record<BreakthroughLayer, number>>; // 每层保底计数 0~2
   breakthroughRecords: BreakthroughRecord[];
   jindanTrial: TribulationLog | null;
   library: number; // 藏经阁等级 0/1/2

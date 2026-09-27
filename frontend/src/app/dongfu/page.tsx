@@ -25,10 +25,10 @@ export default function DongfuPage() {
   const { state, upgradeBuilding, buildLibrary, buildForge } = useGame();
   if (!state) return null;
   const libCost = state.library < 2 ? CONFIG.library.levels[state.library].cost : null;
-  const libRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("foundation1");
+  const libRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("zhuji1");
   const libAfford = !!libCost && libRealmOk && state.resources.spiritStone >= libCost.spiritStone && state.resources.page >= libCost.page;
   const forgeCost = state.forge < 1 ? CONFIG.forge.cost : null;
-  const forgeRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("foundation1");
+  const forgeRealmOk = REALM_ORDER.indexOf(state.realm) >= REALM_ORDER.indexOf("zhuji1");
   const forgeAfford = !!forgeCost && forgeRealmOk && state.resources.spiritStone >= forgeCost.spiritStone && state.resources.page >= forgeCost.page;
 
   return (
