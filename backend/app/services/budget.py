@@ -22,13 +22,17 @@ def _month_key() -> str:
 
 def _load() -> dict:
     try:
-        return json.loads(_SPEND_FILE.read_text(encoding="utf-8"))
+        data = json.loads(_SPEND_FILE.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
     except Exception:
         # 账本损坏不能静默清空：记日志并降级为 0，避免误以为有熔断额度
         logger.warning("月度费用账本损坏，按 0 记账并继续")
         return {}
+    if not isinstance(data, dict):
+        logger.warning("月度费用账本结构异常，按 0 记账并继续")
+        return {}
+    return data
 
 
 def _save(data: dict) -> None:

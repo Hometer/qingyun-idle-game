@@ -875,8 +875,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       if (!state) return;
       const r = eng.acceptCommission(state, Date.now(), id);
-      if (!r.ok || !r.state) {
-        setNotice(r.reason);
+      if (!r.ok) {
+        if (r.reason.includes("已变化")) {
+          const refreshed = eng.refreshCommissionCandidates(state, Date.now());
+          await apply(refreshed, r.reason);
+        } else {
+          setNotice(r.reason);
+        }
         return;
       }
       await apply(r.state, "已接下委托");

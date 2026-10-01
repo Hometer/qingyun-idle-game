@@ -92,6 +92,10 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
 
     reason = "unknown"
     for _ in range(_MAX_ATTEMPTS):
+        # 逐次检查/预留费用：前一次失败已记账，重试前需再次确认未越界
+        if budget.budget_exceeded(budget.estimate_call_cost(prompt, 400)):
+            reason = "budget"
+            break
         start = time.perf_counter()
         try:
             resp = client.chat.completions.create(

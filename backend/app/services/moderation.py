@@ -58,6 +58,9 @@ def validate_result(result: dict, request) -> tuple[bool, str]:
             return False, "bad_option"
         if not (1 <= len(otext) <= OPTION_TEXT_MAX):
             return False, "option_text_length"
+        ok, reason = check_content("", otext)  # 选项文字同样受内容审核约束
+        if not ok:
+            return False, reason
         got_ids.add(oid)
     if got_ids != req_ids:
         return False, "option_id_mismatch"

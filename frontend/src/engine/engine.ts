@@ -397,10 +397,10 @@ function commissionRewards(s: SaveState): { a: Resources; b: Resources } {
   return { a, b };
 }
 
-function makeCraftCommission(s: SaveState, id: string, title: string, action: string, actionParam: string | undefined): Commission {
+function makeCraftCommission(s: SaveState, dateStr: string, id: string, title: string, action: string, actionParam: string | undefined): Commission {
   const r = commissionRewards(s);
   return {
-    id,
+    id: `${id}:${dateStr}`,
     kind: "craft",
     title,
     action,
@@ -423,7 +423,7 @@ function clearedNodes(s: SaveState): Array<{ mid: MapId; nid: string }> {
   return out;
 }
 
-function battleCandidate(s: SaveState): Commission | null {
+function battleCandidate(s: SaveState, dateStr: string): Commission | null {
   const cleared = clearedNodes(s);
   if (cleared.length === 0) return null;
   const current = MAP_ORDER.slice().reverse().find((mid) => {
@@ -435,7 +435,7 @@ function battleCandidate(s: SaveState): Commission | null {
   const node = MAP_CFG[pick.mid].nodes[pick.nid];
   const r = commissionRewards(s);
   return {
-    id: `battle:${pick.mid}:${pick.nid}`,
+    id: `battle:${pick.mid}:${pick.nid}:${dateStr}`,
     kind: "battle",
     title: `在「${MAP_CFG[pick.mid].name}·${node.name}」赢得一场挑战`,
     mapId: pick.mid,
@@ -449,52 +449,62 @@ function battleCandidate(s: SaveState): Commission | null {
   };
 }
 
-function craftCandidate(s: SaveState): Commission | null {
+function craftCandidate(s: SaveState, dateStr: string): Commission | null {
+  // 只生成当前可完成的候选（境界门槛 + 建筑等级），生成后也走 commissionCompletable 兜底
+  const tryMake = (id: string, title: string, action: string, actionParam: string | undefined): Commission | null => {
+    const c = makeCraftCommission(s, dateStr, id, title, action, actionParam);
+    return commissionCompletable(s, c) ? c : null;
+  };
   if (s.forge >= 1) {
     const recipe = Object.entries(CRAFT_CFG).find(([, cfg]) => realmIndex(s.realm) >= realmIndex(cfg.gate as RealmId));
     if (recipe) {
       const id = recipe[0];
-      return makeCraftCommission(s, `craft:craftEquipment:${id}`, `炼制 1 件「${EQUIP_CFG[id].name}」`, "craftEquipment", id);
+      const c = tryMake(`craft:craftEquipment:${id}`, `炼制 1 件「${EQUIP_CFG[id].name}」`, "craftEquipment", id);
+      if (c) return c;
     }
   }
   if (s.buildings.alchemyFurnace >= 1) {
-    return makeCraftCommission(s, "craft:craftPill:1", "炼制 1 枚护劫丹", "craftPill", "1");
+    const c = tryMake("craft:craftPill:1", "炼制 1 枚护劫丹", "craftPill", "1");
+    if (c) return c;
   }
   for (const bid of Object.keys(CONFIG.buildings) as BuildingId[]) {
     if (s.buildings[bid] < CONFIG.buildings[bid].levels.length) {
-      return makeCraftCommission(s, `craft:upgradeBuilding:${bid}`, `升级 1 次「${CONFIG.buildings[bid].name}」`, "upgradeBuilding", bid);
+      const c = tryMake(`craft:upgradeBuilding:${bid}`, `升级 1 次「${CONFIG.buildings[bid].name}」`, "upgradeBuilding", bid);
+      if (c) return c;
     }
   }
   if (s.technique && s.techniqueLevel[s.technique] < CONFIG.techniques[s.technique].levels.length) {
-    return makeCraftCommission(s, "craft:upgradeTechnique", `精进 1 次「${CONFIG.techniques[s.technique].name}」`, "upgradeTechnique", undefined);
+    const c = tryMake("craft:upgradeTechnique", `精进 1 次「${CONFIG.techniques[s.technique].name}」`, "upgradeTechnique", undefined);
+    if (c) return c;
   }
   for (const t of ["yangYuan", "juLing"] as const) {
     if (s.daily.rewardedDan >= 1) break; // 今日已服用，不生成无法当天完成的候选
     for (let tier = 1; tier <= 4; tier++) {
       const pillId = t === "yangYuan" ? `yangYuanDan_${tier}` : `juLingDan_${tier}`;
       if ((s.inventory[pillId] || 0) > 0) {
-        return makeCraftCommission(s, `craft:useGainPill:${t}:${tier}`, `服用 1 枚${t === "yangYuan" ? "养元丹" : "聚灵丹"}`, "useGainPill", `${t}:${tier}`);
+        const c = tryMake(`craft:useGainPill:${t}:${tier}`, `服用 1 枚${t === "yangYuan" ? "养元丹" : "聚灵丹"}`, "useGainPill", `${t}:${tier}`);
+        if (c) return c;
       }
     }
   }
   return null;
 }
 
-function generateCandidates(s: SaveState): Commission[] {
+function generateCandidates(s: SaveState, dateStr: string): Commission[] {
   const out: Commission[] = [];
-  const battle = battleCandidate(s);
+  const battle = battleCandidate(s, dateStr);
   if (battle) out.push(battle);
-  const craft = craftCandidate(s) ?? battle;
+  const craft = craftCandidate(s, dateStr) ?? battle;
   if (craft && !out.some((c) => c.id === craft.id)) out.push(craft);
   return out.slice(0, COMMISSION_CFG.dailyCandidates);
 }
 
 function ensureCommission(s: SaveState, nowMs: number): void {
   const today = todayStr(nowMs);
-  if (!s.commission) s.commission = { date: "", candidates: [], active: null, history: [] };
+  if (!s.commission) s.commission = { date: "", candidates: [], active: null, history: [], acceptedDate: null };
   if (!(today > s.commission.date)) return; // 同日或回拨不重新生成
   s.commission.date = today;
-  s.commission.candidates = generateCandidates(s);
+  s.commission.candidates = generateCandidates(s, today);
 }
 
 function commissionResponse(c: Commission): string {
@@ -504,7 +514,7 @@ function commissionResponse(c: Commission): string {
     : `${npc} 传话：炉火已熄，这份心意我记下了，改日再叙。`;
 }
 
-// 候选在生成后被玩家手动完成（如把目标建筑升满）时可能不再可完成；接取前再验一次
+// 候选在生成后被玩家手动完成时可能不再可完成；接取前再验一次
 function commissionCompletable(s: SaveState, c: Commission): boolean {
   if (c.kind === "battle") {
     return !!c.mapId && !!c.nodeId && !!s.maps[c.mapId]?.[c.nodeId]?.cleared;
@@ -512,11 +522,27 @@ function commissionCompletable(s: SaveState, c: Commission): boolean {
   switch (c.action) {
     case "upgradeBuilding": {
       const bid = c.actionParam as BuildingId | undefined;
-      return !!bid && s.buildings[bid] !== undefined && s.buildings[bid] < CONFIG.buildings[bid].levels.length;
+      if (!bid || s.buildings[bid] === undefined) return false;
+      if (s.buildings[bid] >= CONFIG.buildings[bid].levels.length) return false;
+      const gate = GROWTH_GATES[bid]?.[s.buildings[bid] + 1];
+      return !realmGateFail(s.realm, gate);
     }
     case "upgradeTechnique": {
       const t = s.technique;
-      return !!t && s.techniqueLevel[t] < CONFIG.techniques[t].levels.length;
+      if (!t) return false;
+      if (s.techniqueLevel[t] >= CONFIG.techniques[t].levels.length) return false;
+      const gate = GROWTH_GATES.technique[s.techniqueLevel[t] + 1];
+      return !realmGateFail(s.realm, gate);
+    }
+    case "craftEquipment": {
+      const id = c.actionParam;
+      if (!id || !CRAFT_CFG[id]) return false;
+      const forgeNeed = CRAFT_FORGE_LEVEL[id] ?? 1;
+      if (s.forge < forgeNeed) return false;
+      return realmIndex(s.realm) >= realmIndex(CRAFT_CFG[id].gate as RealmId);
+    }
+    case "craftPill": {
+      return s.buildings.alchemyFurnace >= 1;
     }
     case "useGainPill": {
       if (s.daily.rewardedDan >= 1) return false; // 今日已服用，明日再来
@@ -525,26 +551,33 @@ function commissionCompletable(s: SaveState, c: Commission): boolean {
       return (s.inventory[pillId] || 0) > 0;
     }
     default:
-      return true; // craftEquipment / craftPill 等可重复动作
+      return false; // 未知动作不可接取
   }
 }
 
 export function acceptCommission(state: SaveState, nowMs: number, id: string): Result<SaveState> {
   const s = settle(state, nowMs);
+  const today = todayStr(nowMs);
+  if (s.commission.acceptedDate === today) return fail("今日已接取过委托，明日再来");
+  if (s.commission.active) return fail("已有进行中的委托");
   const idx = s.commission.candidates.findIndex((c) => c.id === id);
   if (idx < 0) return fail("无此委托");
-  if (s.commission.active) return fail("已有进行中的委托");
   const c = s.commission.candidates[idx];
-  if (!commissionCompletable(s, c)) {
-    s.commission.candidates = generateCandidates(s); // 目标已变化，刷新候选
-    return fail("该委托目标已变化，已刷新候选，请重新选择");
-  }
+  if (!commissionCompletable(s, c)) return fail("该委托目标已变化，请重新选择");
   c.status = "accepted";
   s.commission.active = c;
   s.commission.candidates = [];
+  s.commission.acceptedDate = today;
   s.recentLogs.push(`接下委托「${c.title}」。`);
   s.revision += 1;
   return { state: s, ok: true };
+}
+
+export function refreshCommissionCandidates(state: SaveState, nowMs: number): SaveState {
+  const s = settle(state, nowMs);
+  s.commission.candidates = generateCandidates(s, todayStr(nowMs));
+  s.revision += 1;
+  return s;
 }
 
 export function claimCommission(state: SaveState, nowMs: number, choice: "a" | "b"): Result<SaveState> {
@@ -1096,7 +1129,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     secretRealmLog: [],
     forge: 0,
     lastBattle: null,
-    commission: { date: todayStr(nowMs), candidates: [], active: null, history: [] },
+    commission: { date: todayStr(nowMs), candidates: [], active: null, history: [], acceptedDate: null },
     recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}。`],
     milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}` }],
     firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
@@ -1109,7 +1142,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     lastSettledAt: nowMs,
     revision: 0,
   };
-  state.commission.candidates = generateCandidates(state);
+  state.commission.candidates = generateCandidates(state, todayStr(nowMs));
   return state;
 }
 
@@ -1911,7 +1944,7 @@ function syncRealmMaps(s: SaveState): void {
 
 function rollEncounterDay(s: SaveState, nowMs: number): void {
   const today = todayStr(nowMs);
-  if (s.encounter.lastTriggerDate !== today) {
+  if (today > s.encounter.lastTriggerDate) {
     s.encounter.lastTriggerDate = today;
     s.encounter.triggeredToday = 0;
   }
@@ -2192,7 +2225,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   }
 
   if (first && !s.commission.active) {
-    s.commission.candidates = generateCandidates(s); // 首胜后即时刷新候选（补入战斗候选）
+    s.commission.candidates = generateCandidates(s, todayStr(nowMs)); // 首胜后即时刷新候选（补入战斗候选）
   }
 
   let encounterTriggered = false;
@@ -2885,8 +2918,30 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.forge === undefined) s.forge = 0;
   if (!s.resources || typeof s.resources !== "object") {
     s.resources = { cultivation: 0, spirit: 0, spiritStone: 0, herb: 0, page: 0, iron: 0, lingTaiJing: 0, yunHaiSui: 0, buXiuJin: 0, hunYuanYu: 0, taiChuZiJing: 0 };
-  } else if ((s.resources as Record<string, unknown>).iron === undefined) {
-    (s.resources as Record<string, unknown>).iron = 0;
+  } else {
+    const res = s.resources as Record<string, unknown>;
+    if (res.iron === undefined) res.iron = 0;
+    for (const k of MATERIAL_RESOURCES) {
+      if (res[k] === undefined) res[k] = 0; // 旧档缺灵材补 0，随后按已首通节点补发
+    }
+  }
+  const preMaterialSchema = (s.schemaVersion as number) < 14;
+  if (preMaterialSchema) {
+    // v1.3 第八节：已首通新增灵材节点的旧档，一次性补对应首通灵材（4 枚/节点）
+    const res = s.resources as Record<string, number>;
+    const compensated = new Set<string>();
+    for (const mid of MAP_ORDER) {
+      for (const [nid, node] of Object.entries(MAP_CFG[mid].nodes)) {
+        const ns = (s.maps as Record<string, Record<string, { cleared?: boolean }>>)[mid]?.[nid];
+        if (!ns?.cleared) continue;
+        const mat = materialForStage(stageOfGate(node.gate as string));
+        if (!mat) continue;
+        const key = `${mid}:${nid}`;
+        if (compensated.has(key)) continue;
+        compensated.add(key);
+        res[mat] = (res[mat] || 0) + 4;
+      }
+    }
   }
   if (s.secretRealmDate === undefined) s.secretRealmDate = todayStr(Date.now());
   if (!s.secretRealmUsed || typeof s.secretRealmUsed !== "object") s.secretRealmUsed = emptySecretRealmUsed();
@@ -2919,12 +2974,13 @@ export function migrateSave(raw: SaveState): SaveState {
     (s.lastBattle as Record<string, unknown>).tactic = "normal";
   }
   if (!s.commission || typeof s.commission !== "object") {
-    s.commission = { date: "", candidates: [], active: null, history: [] };
+    s.commission = { date: "", candidates: [], active: null, history: [], acceptedDate: null };
   } else {
     const comm = s.commission as unknown as Record<string, unknown>;
     if (!Array.isArray(comm.candidates)) comm.candidates = [];
     if (comm.active === undefined) comm.active = null;
     if (!Array.isArray(comm.history)) comm.history = [];
+    if (comm.acceptedDate === undefined) comm.acceptedDate = null;
     if (typeof comm.date !== "string") comm.date = "";
   }
   s.schemaVersion = SCHEMA_VERSION;
@@ -3279,6 +3335,7 @@ function validateCommissionItem(c: unknown): string | null {
   }
   if (o.kind === "craft") {
     if (typeof o.action !== "string") return "委托动作无效";
+    if (!["craftEquipment", "craftPill", "upgradeBuilding", "upgradeTechnique", "buildLibrary", "buildForge", "useGainPill"].includes(o.action)) return "委托动作无效";
     if (o.actionParam !== undefined && typeof o.actionParam !== "string") return "委托动作参数无效";
   }
   if (!Number.isInteger(o.target) || (o.target as number) < 1) return "委托目标无效";
@@ -3287,8 +3344,9 @@ function validateCommissionItem(c: unknown): string | null {
   for (const key of ["rewardA", "rewardB"]) {
     const r = o[key] as Record<string, unknown> | undefined;
     if (!r || typeof r !== "object") return "委托奖励无效";
-    for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page", "iron"]) {
-      if (!isNonNegFinite(r[k])) return "委托奖励无效";
+    for (const k of [...["cultivation", "spirit", "spiritStone", "herb", "page", "iron"], ...MATERIAL_RESOURCES]) {
+      const x = r[k];
+      if (x !== undefined && x !== null && (!isNonNegFinite(x) || (x as number) > 1e12)) return "委托奖励无效";
     }
   }
   if (o.rewardChoice !== undefined && o.rewardChoice !== "a" && o.rewardChoice !== "b") return "委托奖励选择无效";
@@ -3360,14 +3418,67 @@ function validateMarrowHistory(v: unknown): string | null {
   for (const item of v) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return "洗髓历史记录无效";
     const m = item as Record<string, unknown>;
-    if (typeof m.type !== "string" || typeof m.from !== "string" || typeof m.to !== "string") return "洗髓历史记录无效";
-    if (!Number.isFinite(m.spiritStone) || !Number.isFinite(m.herb) || !Number.isFinite(m.at)) return "洗髓历史记录无效";
+    if (typeof m.type !== "string" || !["meridian", "comprehension", "removeRoot"].includes(m.type)) return "洗髓历史记录无效";
+    if (typeof m.from !== "string" || typeof m.to !== "string") return "洗髓历史记录无效";
+    if (!Number.isFinite(m.spiritStone) || (m.spiritStone as number) < 0 || !Number.isFinite(m.herb) || (m.herb as number) < 0 || !Number.isFinite(m.at) || (m.at as number) < 0) return "洗髓历史记录无效";
   }
   return null;
 }
 
-function validateSpiritRoots(roots: unknown, spiritRoot: unknown, resonance: unknown): string | null {
-  if (roots === undefined || roots === null) return null;
+function validateMeridianComprehension(meridians: unknown, comprehension: unknown, ver: number): string | null {
+  if (meridians === undefined || meridians === null) return ver >= 18 ? "经脉数据无效" : null;
+  if (typeof meridians !== "string" || !(Object.keys(MERIDIAN_CFG) as string[]).includes(meridians)) return "经脉数据无效";
+  if (comprehension === undefined || comprehension === null) return ver >= 18 ? "悟性数据无效" : null;
+  if (typeof comprehension !== "string" || !(Object.keys(COMPREHENSION_CFG) as string[]).includes(comprehension)) return "悟性数据无效";
+  return null;
+}
+
+function validateQuenched(quenched: unknown, itemInstances: unknown): string | null {
+  if (quenched === undefined || quenched === null) return null;
+  if (!Array.isArray(quenched)) return "淬炼数据无效";
+  const insts = (itemInstances ?? {}) as Record<string, unknown>;
+  for (const q of quenched) {
+    if (typeof q !== "string" || !(EQUIP_IDS.has(q) || insts[q])) return "淬炼数据无效";
+  }
+  return null;
+}
+
+function validateLearnedNewTechs(v: unknown, maps: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v)) return "新功法数据无效";
+  const m = (maps ?? {}) as Record<string, Record<string, { cleared?: boolean }>>;
+  for (const t of v) {
+    if (typeof t !== "string" || !(CONFIG.techniques as Record<string, unknown>)[t]) return "新功法数据无效";
+    const req = NEW_TECH_REQUIREMENT[t as TechniqueId];
+    if (!req) return "新功法数据无效"; // 旧基础功法不在 learnedNewTechs 里
+    const firstNode = mainNodeIds(req.grantMap)[0];
+    if (!m[req.grantMap]?.[firstNode]?.cleared) return "新功法数据无效"; // 未首通对应节点
+  }
+  return null;
+}
+
+function validateTribulationLogShape(v: unknown, label: string): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "object") return `${label}记录无效`;
+  const r = v as Record<string, unknown>;
+  if (!isNonNegNum(r.maxHp)) return `${label}记录气血无效`;
+  if (!isNonNegNum(r.reduction) || (r.reduction as number) > 1) return `${label}记录减伤无效`;
+  if (typeof r.pillUsed !== "boolean") return `${label}记录丹药无效`;
+  if (typeof r.success !== "boolean") return `${label}记录结果无效`;
+  if (!Array.isArray(r.waves)) return `${label}记录波次无效`;
+  for (const w of r.waves as unknown[]) {
+    const wv = w as Record<string, unknown>;
+    if (!wv || !isNonNegNum(wv.damage) || !isNonNegNum(wv.hpAfter)) return `${label}记录波次无效`;
+  }
+  if (!Array.isArray(r.log)) return `${label}记录日志无效`;
+  for (const l of r.log as unknown[]) {
+    if (typeof l !== "string") return `${label}记录日志无效`;
+  }
+  return null;
+}
+
+function validateSpiritRoots(roots: unknown, spiritRoot: unknown, resonance: unknown, ver: number): string | null {
+  if (roots === undefined || roots === null) return ver >= 18 ? "灵根数据无效" : null; // v18 起灵根必填
   if (!Array.isArray(roots) || roots.length === 0) return "灵根数据无效";
   const pool = CONFIG.spiritRootPool as unknown as { elements: readonly string[]; variants: readonly string[] };
   const valid = [...pool.elements, ...pool.variants];
@@ -3403,12 +3514,24 @@ function validateDaily(v: unknown, schemaVersion: number): string | null {
     if (!Number.isInteger(rewardedRepeats) || (rewardedRepeats as number) < 0 ||
       (rewardedRepeats as number) > CONFIG.rewardedRepeatBattlesPerDay) return "重复历练次数无效";
   }
-  if (weather && (typeof weather.id !== "string" || typeof weather.used !== "boolean")) return "天气数据无效";
-  if (astrology && (typeof astrology.id !== "string" || typeof astrology.used !== "boolean")) return "星象数据无效";
-  if (goals) {
+  const dan = d.rewardedDan;
+  if (dan !== undefined && (!Number.isInteger(dan) || (dan as number) < 0 || (dan as number) > 1)) return "服丹次数无效";
+  if (schemaVersion >= 18) {
+    if (!weather || typeof weather !== "object" || typeof weather.id !== "string" || typeof weather.used !== "boolean") return "天气数据无效";
+    if (!astrology || typeof astrology !== "object" || typeof astrology.id !== "string" || typeof astrology.used !== "boolean") return "星象数据无效";
+    if (!goals || typeof goals !== "object") return "每日目标数据无效";
     for (const gid of ["battle", "suppress"]) {
       const g = goals[gid] as Record<string, unknown> | undefined;
-      if (g && (typeof g.progress !== "number" || typeof g.claimed !== "boolean")) return "每日目标数据无效";
+      if (!g || typeof g !== "object" || typeof g.progress !== "number" || typeof g.claimed !== "boolean") return "每日目标数据无效";
+    }
+  } else {
+    if (weather && (typeof weather.id !== "string" || typeof weather.used !== "boolean")) return "天气数据无效";
+    if (astrology && (typeof astrology.id !== "string" || typeof astrology.used !== "boolean")) return "星象数据无效";
+    if (goals) {
+      for (const gid of ["battle", "suppress"]) {
+        const g = goals[gid] as Record<string, unknown> | undefined;
+        if (g && (typeof g.progress !== "number" || typeof g.claimed !== "boolean")) return "每日目标数据无效";
+      }
     }
   }
   return null;
@@ -3428,7 +3551,7 @@ function isNonNegNum(x: unknown): x is number {
   return typeof x === "number" && Number.isFinite(x) && x >= 0;
 }
 
-function validateLongTask(v: unknown): string | null {
+function validateLongTask(v: unknown, ver: number): string | null {
   if (v === undefined || v === null) return null;
   if (typeof v !== "object") return "长期任务数据无效";
   const t = v as Record<string, unknown>;
@@ -3445,10 +3568,19 @@ function validateLongTask(v: unknown): string | null {
   }
   if (typeof t.ruleVersion !== "number" || t.ruleVersion !== LONG_TASK_CFG.ruleVersion) return "长期任务规则版本无效";
   const effMin = t.effectiveMinutes;
-  if (typeof effMin !== "number" || !Number.isInteger(effMin) || effMin < 1) return "长期任务实际耗时无效";
+  let actualEffMin: number;
+  if (effMin === undefined) {
+    if (ver >= 18) return "长期任务实际耗时无效"; // v18 起必填
+    // 旧档从 endAt-startAt 回推实际耗时（兼容风共鸣缩短耗时）
+    actualEffMin = Math.max(1, Math.round(((t.endAt as number) - (t.startAt as number)) / 60000));
+  } else if (typeof effMin !== "number" || !Number.isInteger(effMin) || effMin < 1) {
+    return "长期任务实际耗时无效";
+  } else {
+    actualEffMin = effMin;
+  }
   if (!isNonNegNum(t.startAt)) return "长期任务开始时间无效";
   if (!isNonNegNum(t.endAt)) return "长期任务结束时间无效";
-  const expectedEnd = (t.startAt as number) + effMin * 60 * 1000;
+  const expectedEnd = (t.startAt as number) + actualEffMin * 60 * 1000;
   if ((t.endAt as number) !== expectedEnd) return "长期任务起止时间与时长不符";
 
   if (t.type === "training") {
@@ -3596,11 +3728,16 @@ export function importSave(json: string): Result<SaveState> {
     validateEncounter(o.encounter),
     validateMilestonesAndFirsts(o.milestones, o.firsts),
     validateMarrowHistory(o.marrowHistory),
-    validateSpiritRoots(o.spiritRoots, o.spiritRoot, o.resonance),
+    validateSpiritRoots(o.spiritRoots, o.spiritRoot, o.resonance, ver),
+    validateMeridianComprehension(o.meridians, o.comprehension, ver),
+    validateQuenched(o.quenched, o.itemInstances),
+    validateLearnedNewTechs(o.learnedNewTechs, o.maps),
+    validateTribulationLogShape(o.tribulationLog, "天劫"),
+    validateTribulationLogShape(o.yuanyingTrial, "元婴试炼"),
     validateRecentLogs(o.recentLogs),
     validateDaily(o.daily, ver),
     validateSuppressionSince(o.suppressionSince),
-    validateLongTask(o.longTask),
+    validateLongTask(o.longTask, ver),
     validateLongTaskResult(o.lastLongTaskResult),
     validateAptitude(o.aptitude),
     validateBreakthroughFails(o.breakthroughFails),
@@ -3663,7 +3800,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.commission = { ...base.commission, ...((o.commission as Partial<SaveState["commission"]>) || {}) };
   if (o.commission === undefined || o.commission === null) {
     // 旧档（v17 及更早）没有委托：按导入后的真实境界/地图重新生成候选，而不是沿用新建角色的默认候选
-    base.commission.candidates = generateCandidates(base);
+    base.commission.candidates = generateCandidates(base, base.commission.date || todayStr(Date.now()));
   }
   base.aptitude = validAptitude(o.aptitude);
   base.breakthroughFails = { ...base.breakthroughFails, ...((o.breakthroughFails as Record<string, number>) || {}) };

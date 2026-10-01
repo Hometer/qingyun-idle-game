@@ -19,6 +19,7 @@ import {
   upgradeTechnique,
   buildLibrary,
 } from "./engine";
+import { CONFIG } from "./config";
 import type { SaveState } from "./types";
 
 const H = 3600_000;
@@ -211,5 +212,68 @@ describe("全局审查回归（P1/P2 修复）", () => {
     expect(craftGainPill(g, T0, "yangYuan", 1).ok).toBe(false); // 凡品需筑基
     g.realm = "zhuji1";
     expect(craftGainPill(g, T0, "yangYuan", 1).ok).toBe(true);
+  });
+
+  it("P1-01 跨日同目标委托可导入；同日不能二次接取", () => {
+    let s = rich();
+    s.realm = "zhuji1";
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s = settle(s, T0 + DAY);
+    const c = s.commission.candidates.find((x) => x.kind === "battle")!;
+    s = acceptCommission(s, T0 + DAY, c.id).state!;
+    const f = fightNode(s, T0 + DAY + 1000, c.mapId!, c.nodeId!, "challenge");
+    const claimed = claimCommission(f.state, f.state.lastSettledAt, "b").state!;
+    // 跨日同目标接取可导入（ID 含日期，不误判冲突）
+    const next = settle(claimed, T0 + 2 * DAY);
+    const c2 = next.commission.candidates.find((x) => x.kind === "battle")!;
+    expect(c2.id).not.toBe(c.id);
+    const acc2 = acceptCommission(next, T0 + 2 * DAY, c2.id);
+    expect(acc2.ok).toBe(true);
+    expect(importSave(exportSave(acc2.state!)).ok).toBe(true);
+    // 同日再首通新节点后不能二次接取
+    const side = fightNode(claimed, T0 + DAY + 2000, "map_qingyun", "node_bandit");
+    expect(side.state.commission.acceptedDate).toBeTruthy();
+    const tryAgain = acceptCommission(side.state, T0 + DAY + 2000, side.state.commission.candidates[0]?.id ?? "x");
+    expect(tryAgain.ok).toBe(false);
+  });
+
+  it("P1-01 旧 v17 在途闭关（缺 effectiveMinutes）可导入", () => {
+    const s = rich();
+    s.spiritRoots = ["风"];
+    s.resonance = "风";
+    s.firsts.suppressedFirstNodeOnce = true;
+    const r = startLongTask(s, T0, { type: "seclusion", durationMinutes: 30, protection: false });
+    const old = structuredClone(r.state!);
+    old.schemaVersion = 17;
+    delete (old.longTask as unknown as Record<string, unknown>).effectiveMinutes;
+    expect(importSave(exportSave(old)).ok).toBe(true);
+  });
+
+  it("P1-03 旧档缺灵材迁移补零并补发已首通节点灵材", () => {
+    const s = rich();
+    s.schemaVersion = 13;
+    s.realm = "yuanying4";
+    for (const k of ["lingTaiJing", "yunHaiSui", "buXiuJin", "hunYuanYu", "taiChuZiJing"]) {
+      delete (s.resources as unknown as Record<string, number>)[k];
+    }
+    const firstNode = Object.entries((CONFIG.maps as unknown as Record<string, { nodes: Record<string, { side?: boolean }> }>).map_yuanying.nodes)
+      .filter(([, v]) => !v.side)[0][0];
+    s.maps.map_yuanying[firstNode].cleared = true;
+    s.maps.map_yuanying[firstNode].unlocked = true;
+    const m = migrateSave(s);
+    expect(m.resources.lingTaiJing).toBeGreaterThan(0); // 已首通元婴节点补灵胎晶
+    expect(m.resources.yunHaiSui).toBe(0);
+  });
+
+  it("P1-02 删除每日目标/负服丹次数/坏洗髓拒绝导入", () => {
+    const a = fresh();
+    delete (a.daily as unknown as Record<string, unknown>).goals;
+    expect(importSave(exportSave(a)).ok).toBe(false);
+    const b = fresh();
+    b.daily.rewardedDan = -1;
+    expect(importSave(exportSave(b)).ok).toBe(false);
+    const c = fresh();
+    (c.marrowHistory as unknown) = [{ type: "unknown", from: "x", to: "y", spiritStone: -1, herb: -1, at: -1 }];
+    expect(importSave(exportSave(c)).ok).toBe(false);
   });
 });

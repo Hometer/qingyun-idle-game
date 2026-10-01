@@ -192,6 +192,7 @@ export interface CommissionState {
   candidates: Commission[]; // 当日候选（未接取）
   active: Commission | null; // 已接取
   history: Commission[];    // 已领奖
+  acceptedDate: string | null; // 当日已接取日期（同日只接一件）
 }
 
 export interface BattleRoundEvent {
