@@ -35,27 +35,28 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }[pathname] ?? ["修行", "山高水长，道途未尽"];
 
   return (
-    <div className="game-shell mx-auto min-h-screen w-full max-w-[1240px] lg:grid lg:grid-cols-[228px_minmax(0,1fr)] lg:gap-8 lg:px-6 xl:gap-10">
+    <div className="game-shell mx-auto min-h-screen w-full max-w-[1340px] lg:grid lg:grid-cols-[242px_minmax(0,1fr)] lg:gap-8 lg:px-6 xl:gap-10">
       <aside className="desktop-sidebar hidden lg:sticky lg:top-5 lg:my-5 lg:flex lg:h-[calc(100vh-40px)] lg:flex-col">
-        <div className="flex items-center gap-3 px-5 pt-6">
-          <span className="brand-seal flex h-11 w-11 items-center justify-center rounded-xl text-xl">青</span>
-          <div><div className="display-font text-lg font-semibold tracking-[.1em]">青云修仙录</div><div className="mt-0.5 text-[10px] tracking-[.2em] text-[#b7c6bc]">IMMORTAL JOURNEY</div></div>
+        <div className="sidebar-top flex items-center gap-3 px-5 pt-7">
+          <span className="brand-seal flex h-11 w-11 items-center justify-center text-xl">青</span>
+          <div><div className="display-font text-lg font-semibold tracking-[.13em]">青云修仙录</div><div className="mt-0.5 text-[10px] tracking-[.22em] text-[#b7c6bc]">一念入道 · 万象归真</div></div>
         </div>
-        <div className="mx-5 mt-8 border-t border-white/15 pt-4 text-[10px] tracking-[.23em] text-[#98b0a6]">修行目录 · JOURNEY</div>
+        <div className="mx-5 mt-9 border-t border-[#d4c293]/25 pt-4 text-[10px] tracking-[.25em] text-[#a9bcb5]">修行目录 / 仙途五卷</div>
         <nav aria-label="主导航" className="mt-3 flex flex-col gap-1 px-3">
-          {TABS.map((tab) => {
+          {TABS.map((tab, index) => {
             const active = pathname.startsWith(tab.href);
             return <Link key={tab.href} href={tab.href} aria-current={active ? "page" : undefined}
-              className={`sidebar-link flex items-center gap-3 rounded-xl px-3 py-3 ${active ? "sidebar-link-active" : ""}`}>
+              className={`sidebar-link flex items-center gap-3 px-3 py-3 ${active ? "sidebar-link-active" : ""}`}>
+              <span className="sidebar-link-index">{String(index + 1).padStart(2, "0")}</span>
               <NavIcon name={tab.icon} className="h-5 w-5 shrink-0" />
-              <span className="text-sm font-medium">{tab.label}</span>
-              <span className="ml-auto text-[9px] tracking-widest opacity-60">{tab.english}</span>
+              <span className="display-font text-[16px] font-semibold tracking-[.1em]">{tab.label}</span>
+              <span aria-hidden="true" className="ml-auto text-sm opacity-55">{active ? "◆" : "·"}</span>
             </Link>;
           })}
         </nav>
         <div className="mt-auto px-5 pb-6">
-          <div className="border-t border-white/15 pt-5 text-xs leading-relaxed text-[#aebfb4]">云深处，自有归途。<br />且行，且修。</div>
-          <div className="mt-5 text-[10px] tracking-widest text-[#729184]">CHAPTER · 01</div>
+          <div className="sidebar-verse border-t border-[#d4c293]/25 pt-5 text-xs leading-loose text-[#c2d0c4]">山高自有客，云深亦有路。<br />且行，且修。</div>
+          <div className="mt-5 text-[10px] tracking-[.3em] text-[#9dbaac]">青云 · 修行纪</div>
         </div>
       </aside>
       <div className="min-w-0 pb-24 lg:pb-10 lg:pt-5">
@@ -119,10 +120,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <main className="game-main mx-auto w-full max-w-[920px] px-4 pb-4 sm:px-5 lg:px-0">
         <div className="page-intro mb-5 mt-7 flex items-end justify-between gap-4">
-          <div><p className="text-[10px] font-semibold tracking-[.28em] text-gold">THE PATH · {TABS.find((tab) => pathname.startsWith(tab.href))?.english ?? "STORY"}</p>
-          <h2 className="display-font mt-1 text-[29px] font-semibold leading-tight tracking-[.08em] text-ink sm:text-[34px]">{pageInfo[0]}</h2>
+          <div><p className="text-[11px] font-semibold tracking-[.26em] text-gold">青云纪 · {pageInfo[0]}篇</p>
+          <h2 className="display-font mt-1 text-[31px] font-semibold leading-tight tracking-[.12em] text-ink sm:text-[37px]">{pageInfo[0]}</h2>
           <p className="mt-1 text-sm text-muted">{pageInfo[1]}</p></div>
-          <div aria-hidden="true" className="page-intro-mark hidden text-3xl text-gold/50 sm:block">◌</div>
+          <div aria-hidden="true" className="page-intro-mark hidden text-2xl sm:grid">道</div>
         </div>
         {children}
       </main>

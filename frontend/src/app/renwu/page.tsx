@@ -41,11 +41,14 @@ export default function RenwuPage() {
   const stats = playerStats(state);
   const base = { attack: CONFIG.baseAttack, defense: CONFIG.baseDefense, hp: CONFIG.baseHp };
   const wearing = [state.equipment.weapon, state.equipment.armor, state.equipment.accessory].filter(Boolean) as string[];
+  const equipmentBaseId = (id: string) => state.itemInstances[id]?.baseId ?? id;
+  const equipmentName = (id: string) => EQUIPMENT[equipmentBaseId(id)]?.name ?? "未知装备";
   const eqContrib: string[] = [];
   for (const slot of ["weapon", "armor", "accessory"] as const) {
     const id = state.equipment[slot];
     if (id) {
-      const e = EQUIPMENT[id];
+      const e = EQUIPMENT[equipmentBaseId(id)];
+      if (!e) continue;
       const bits: string[] = [];
       if (e.attack) bits.push(`攻+${e.attack}`);
       if (e.defense) bits.push(`防+${e.defense}`);
@@ -119,7 +122,7 @@ export default function RenwuPage() {
         </p>
         <p className="mt-1 text-sm text-muted">修行进度：第 {currentStage}/20 境 · 历练首通 {clearedNodes.length}/{totalEnemies}</p>
         {wearing.length > 0 && (
-          <p className="mt-1 text-sm text-muted">穿戴：{wearing.map((id) => EQUIPMENT[id].name).join("、")}</p>
+          <p className="mt-1 text-sm text-muted">穿戴：{wearing.map(equipmentName).join("、")}</p>
         )}
       </Section>
 

@@ -48,25 +48,20 @@ export function CreateCharacter() {
   const mult = m.productionMult * (CONFIG.aptitudes[aptitude] as unknown as { cultivationMult: number }).cultivationMult;
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-5 sm:py-8">
-      <div className="grid w-full max-w-[980px] overflow-hidden rounded-[28px] border border-line bg-card shadow-[0_24px_70px_rgba(24,47,40,.15)] lg:grid-cols-[.82fr_1fr]">
-        <div className="realm-hero relative flex min-h-[220px] flex-col justify-between overflow-hidden p-7 text-[#f9f2e4] sm:p-9 lg:min-h-[690px]">
-          <svg aria-hidden="true" viewBox="0 0 460 560" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full opacity-50">
-            <circle cx="360" cy="135" r="100" fill="none" stroke="#d9bf88" strokeWidth="1" />
-            <path d="M-30 450 130 225l100 130 52-65 205 270H-30Z" fill="#749187" opacity=".4" />
-            <path d="M-40 550 115 350l85 88 65-58 225 180H-40Z" fill="#a1b7a4" opacity=".24" />
-            <path d="M0 485c95-46 166 24 280-21 72-28 112-6 180-40" fill="none" stroke="#ddcda5" strokeWidth="2" opacity=".5" />
-          </svg>
+    <div className="creation-screen flex min-h-screen items-center justify-center px-4 py-5 sm:py-8">
+      <div className="creation-card grid w-full max-w-[1060px] overflow-hidden border border-line bg-card lg:grid-cols-[.82fr_1fr]">
+        <div className="creation-cover realm-hero relative flex min-h-[270px] flex-col justify-between overflow-hidden p-7 text-[#f9f2e4] sm:p-9 lg:min-h-[700px]">
+          <div className="hero-frame pointer-events-none absolute inset-[9px]" aria-hidden="true" />
           <div className="relative">
-            <div className="brand-seal mb-6 flex h-14 w-14 items-center justify-center rounded-2xl text-2xl">青</div>
-            <p className="text-[11px] tracking-[.28em] text-[#d6c18e]">A JOURNEY BEGINS</p>
-            <h1 className="display-font mt-2 text-4xl font-semibold tracking-[.12em] sm:text-[45px]">青云修仙录</h1>
-            <p className="mt-3 text-sm leading-relaxed text-[#d9e3d9]">从一缕灵气开始，写下你的修行故事。</p>
+            <div className="brand-seal mb-7 flex h-14 w-14 items-center justify-center text-2xl">青</div>
+            <p className="text-[11px] tracking-[.28em] text-[#d6c18e]">壹 · 初入仙途</p>
+            <h1 className="display-font mt-3 text-4xl font-semibold tracking-[.14em] sm:text-[48px]">青云修仙录</h1>
+            <p className="mt-3 text-sm leading-relaxed text-[#d9e3d9]">一念入山门，万里皆仙途。</p>
           </div>
-          <div className="relative hidden border-t border-white/20 pt-6 text-sm leading-8 text-[#d7e0d5] lg:block">云起青山，路入仙门。<br />命盘既定，前途由你亲手开辟。</div>
+          <div className="relative hidden border-t border-[#d7bd87]/35 pt-6 text-sm leading-8 text-[#e3ddc8] lg:block">云起青山，路入仙门。<br />命盘既定，前途由你亲手开辟。</div>
         </div>
-        <div className="p-5 sm:p-8">
-        <p className="text-[10px] font-semibold tracking-[.24em] text-gold">第一卷 · 入道</p>
+        <div className="creation-form p-5 sm:p-8">
+        <p className="text-[11px] font-semibold tracking-[.24em] text-gold">命盘 · 第一卷</p>
         <h2 className="display-font mt-1 text-[25px] font-semibold tracking-wide">定下你的命盘</h2>
         <p className="mt-1 text-sm text-muted">选好道号与修行资质，即可踏入仙途。</p>
 

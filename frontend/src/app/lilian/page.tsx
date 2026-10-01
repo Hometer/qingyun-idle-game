@@ -85,8 +85,8 @@ export default function LilianPage() {
     <>
       <p className="rounded-xl border border-gold/30 bg-gold/5 px-3 py-2 text-xs text-muted">重复历练：今日已领取 {(view ?? state).daily.rewardedRepeats}/{CONFIG.rewardedRepeatBattlesPerDay} 次奖励；首通奖励不占额度，额度用尽仍可战斗。</p>
 
-      <div className="mb-3 flex items-center gap-2 text-sm">
-        <label htmlFor="map-picker" className="shrink-0">历练地图</label>
+      <div className="map-picker-wrap mb-3 flex items-center gap-2 text-sm">
+        <label htmlFor="map-picker" className="display-font shrink-0 font-semibold tracking-wider">历练地图</label>
         <select id="map-picker" value={activeMap} onChange={(e) => setSelectedMap(e.target.value as MapId)} className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-3 py-2">
           {mapIds.map((mid) => {
             const cleared = Object.keys(MAPS[mid].nodes).filter((nid) => state.maps[mid][nid]?.cleared).length;
@@ -95,8 +95,8 @@ export default function LilianPage() {
         </select>
       </div>
 
-      <div className="mb-3 rounded-xl border border-line bg-card p-3">
-        <p className="mb-2 text-sm font-medium">战斗难度</p>
+      <div className="map-difficulty mb-3 border border-line bg-card p-3">
+        <p className="display-font mb-2 text-sm font-semibold tracking-wider">战斗难度</p>
         <div className="flex gap-2">
           {(["normal", "challenge"] as const).map((mode) => (
             <button key={mode} onClick={() => setDifficulty(mode)} aria-pressed={difficulty === mode}
@@ -111,7 +111,7 @@ export default function LilianPage() {
       {[activeMap].map((mid) => (
         <Section key={mid} title={MAPS[mid].name} variant="featured">
           <p className="mb-2 text-sm text-muted">{WORLD_TEXT[mid]}</p>
-          <p className="text-xs font-medium text-muted">主线与守关 BOSS</p>
+          <p className="map-trail-heading text-xs font-medium text-muted">山门主线 · 守关试炼</p>
           {Object.entries(MAPS[mid].nodes).map(([nid, n], index) => {
             const ns = state.maps[mid][nid];
             const supped = state.suppression[mid] === nid;
@@ -120,15 +120,18 @@ export default function LilianPage() {
             const firstSide = n.side && !Object.values(MAPS[mid].nodes)[index - 1]?.side;
             return (
               <div key={nid}>
-                {firstSide && <p className="mt-3 border-t border-line pt-3 text-xs font-medium text-muted">入口支线 · 可选挑战</p>}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/60 py-2 last:border-0">
-                  <div className="min-w-0 text-sm">
+                {firstSide && <p className="map-trail-heading mt-3 border-t border-line pt-3 text-xs font-medium text-muted">山间支线 · 可选挑战</p>}
+                <div className={`map-node-row flex flex-wrap items-center justify-between gap-2 border-b border-line/60 py-3 last:border-0 ${isBossNode(mid, nid) ? "map-node-boss" : ""}`}>
+                  <div className="flex min-w-0 items-center gap-2.5 text-sm">
+                    <span aria-hidden="true" className="map-node-mark">{isBossNode(mid, nid) ? "关" : n.side ? "支" : String(index + 1).padStart(2, "0")}</span>
+                    <span>
                     <span>{n.name}</span>
                     {isBossNode(mid, nid) && <span className="ml-1 rounded bg-cinnabar/10 px-1.5 py-0.5 text-xs text-cinnabar">守关 BOSS</span>}
                     {!ns.unlocked && <span className="text-muted">（需{REALM_NAMES[n.gate]}解锁）</span>}
                     {ns.unlocked && !enough && <span className="text-cinnabar">（需{REALM_NAMES[n.gate]}方可挑战）</span>}
                     {ns.cleared && <span className="text-muted">·已通关</span>}
                     {supped && <span className="text-cinnabar">·镇压中·剩 {remainingHours(mid)} 时</span>}
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     {ns.unlocked && <button onClick={() => setSelected(`${mid}|${nid}`)} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-sm">详情</button>}

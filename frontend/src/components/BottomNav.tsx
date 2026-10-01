@@ -28,7 +28,7 @@ export function BottomNav() {
   const pathname = usePathname();
   return (
     <nav aria-label="主导航" className="mobile-nav fixed bottom-0 left-0 right-0 z-20 lg:hidden">
-      <div className="mx-auto grid max-w-[780px] grid-cols-5 border-t border-line bg-card/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgba(25,43,38,.08)] backdrop-blur-xl">
+      <div className="mobile-nav-inner mx-auto grid max-w-[780px] grid-cols-5 border-t border-gold/40 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgba(25,43,38,.16)] backdrop-blur-xl">
         {TABS.map((t) => {
           const active = pathname.startsWith(t.href);
           return (
@@ -36,9 +36,9 @@ export function BottomNav() {
               key={t.href}
               href={t.href}
               aria-current={active ? "page" : undefined}
-              className={`relative flex min-h-[62px] flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] transition-colors ${active ? "font-semibold text-cinnabar" : "text-muted"}`}
+              className={`mobile-nav-link relative flex min-h-[66px] flex-col items-center justify-center gap-0.5 text-[11px] transition-colors ${active ? "font-semibold text-cinnabar" : "text-muted"}`}
             >
-              {active && <span className="absolute inset-x-5 top-0 h-[2px] rounded-full bg-cinnabar" />}
+              {active && <span className="absolute inset-x-5 top-0 h-[2px] bg-cinnabar" />}
               <NavIcon name={t.icon} className="h-[21px] w-[21px]" />
               <span>{t.label}</span>
             </Link>

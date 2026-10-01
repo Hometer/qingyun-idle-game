@@ -10,10 +10,10 @@ export function Section({
   variant?: "default" | "featured";
 }) {
   return (
-    <section className={`game-section relative mt-4 overflow-hidden rounded-[22px] border border-line bg-card p-4 sm:p-5 ${variant === "featured" ? "game-section-featured" : ""}`}>
+    <section className={`game-section relative mt-4 overflow-hidden border border-line bg-card p-4 sm:p-5 ${variant === "featured" ? "game-section-featured" : ""}`}>
       <div className="relative mb-4 flex items-center justify-between gap-3 border-b border-line/70 pb-3">
-        <h2 className="game-section-title flex min-w-0 items-center gap-2.5 text-[18px] font-semibold tracking-wide sm:text-[20px]">
-          <span aria-hidden="true" className="h-4 w-[3px] shrink-0 rounded-full bg-cinnabar" />
+        <h2 className="game-section-title flex min-w-0 items-center gap-2.5 text-[19px] font-semibold tracking-[.08em] sm:text-[21px]">
+          <span aria-hidden="true" className="section-seal flex h-7 w-7 shrink-0 items-center justify-center text-sm">章</span>
           {title}
         </h2>
         {action}
