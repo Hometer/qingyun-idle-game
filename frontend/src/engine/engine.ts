@@ -4,11 +4,14 @@ import type {
   Affix,
   AptitudeId,
   BattleDifficulty,
+  BattleRoundEvent,
   BreakthroughLayer,
   BreakthroughMethod,
   BreakthroughRecord,
   BuildingId,
+  ContinuityStory,
   DailyState,
+  LastBattle,
   LongTask,
   LongTaskDifficulty,
   LongTaskResult,
@@ -23,12 +26,13 @@ import type {
   SaveState,
   SecretRealmId,
   SpiritRoot,
+  StoryId,
   TechniqueId,
   TribulationLog,
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -104,8 +108,32 @@ const EQUIP_CFG = CONFIG.equipment as unknown as Record<
 
 const ENC_CFG = CONFIG.encounters as unknown as Record<
   string,
-  { minStage: number; title: string; options: Record<string, { label: string; meaning: string; reward: Partial<Resources> }> }
+  { minStage?: number; title: string; options: Record<string, { label: string; meaning: string; result?: string; reward?: Partial<Resources> }> }
 >;
+
+const CONTINUITY_CFG = CONFIG.continuity as unknown as {
+  stories: Record<string, { originEventId: string; followUps: Record<string, string> }>;
+};
+
+const BATTLE_REPORT_CFG = CONFIG.battleReport as unknown as { maxEvents: number; maxKeyEvents: number };
+
+function followUpEventId(cont: ContinuityStory): string | null {
+  return CONTINUITY_CFG.stories[cont.storyId]?.followUps[cont.originOptionId] ?? null;
+}
+
+function isContinuityOriginEvent(eventId: string): StoryId | null {
+  for (const [sid, cfg] of Object.entries(CONTINUITY_CFG.stories)) {
+    if (cfg.originEventId === eventId) return sid as StoryId;
+  }
+  return null;
+}
+
+function isFollowUpEvent(eventId: string): boolean {
+  for (const cfg of Object.values(CONTINUITY_CFG.stories)) {
+    if (Object.values(cfg.followUps).includes(eventId)) return true;
+  }
+  return false;
+}
 
 const LONG_TASK_CFG = CONFIG.longTask as unknown as {
   durations: readonly number[];
@@ -831,7 +859,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     learnedNewTechs: [],
     maps,
     suppression: emptySuppression(),
-    encounter: { pending: null, triggeredToday: 0, lastTriggerDate: todayStr(nowMs), guideDone: false },
+    encounter: { pending: null, triggeredToday: 0, lastTriggerDate: todayStr(nowMs), guideDone: false, continuity: null, completedStories: [] },
     tribulationLog: null,
     jindanTrial: null,
     yuanyingTrial: null,
@@ -841,6 +869,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     secretRealmUsed: emptySecretRealmUsed(),
     secretRealmLog: [],
     forge: 0,
+    lastBattle: null,
     recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}。`],
     milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}` }],
     firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
@@ -1624,19 +1653,26 @@ function syncRealmMaps(s: SaveState): void {
   }
 }
 
-function rollEncounter(s: SaveState, nowMs: number): boolean {
+function rollEncounterDay(s: SaveState, nowMs: number): void {
   const today = todayStr(nowMs);
   if (s.encounter.lastTriggerDate !== today) {
     s.encounter.lastTriggerDate = today;
     s.encounter.triggeredToday = 0;
   }
+}
+
+function rollEncounter(s: SaveState, nowMs: number): boolean {
+  rollEncounterDay(s, nowMs);
   if (s.encounter.triggeredToday >= CONFIG.encounter.dailyMax) return false;
   return Math.random() < CONFIG.encounter.probability;
 }
 
 function randomEventId(s: SaveState): string {
   const stage = REALMS[realmIndex(s.realm)]?.stage ?? 1;
-  const ids = Object.keys(ENC_CFG).filter((id) => ENC_CFG[id].minStage <= stage);
+  const ids = Object.keys(ENC_CFG).filter((id) => {
+    const min = ENC_CFG[id].minStage;
+    return min !== undefined && min <= stage;
+  });
   return ids[Math.floor(Math.random() * ids.length)];
 }
 
@@ -1653,27 +1689,42 @@ function runBattle(
   maxRounds = 50,
   mods: { critRate: number; regen: number; lowHpBoost: number } = { critRate: 0, regen: 0, lowHpBoost: 0 },
   rng: () => number = Math.random,
-): { won: boolean; log: string[] } {
+): { won: boolean; log: string[]; rounds: BattleRoundEvent[]; keyEvents: string[]; roundLimitReached: boolean } {
   const log: string[] = [];
+  const rounds: BattleRoundEvent[] = [];
+  const keyEvents: string[] = [];
   let pHp = stats.hp;
   let eHp = enemy.hp;
   let playerTurn = true;
   let won = false;
   let guard = 0;
+  let round = 0;
   while (guard++ < maxRounds * 2) {
     if (playerTurn) {
+      round += 1;
       if (mods.regen > 0 && pHp > 0) {
         const healed = Math.min(stats.hp - pHp, mods.regen);
         if (healed > 0) {
           pHp += healed;
-          log.push(`回血${healed}点，你余${pHp}气血。`);
+          const text = `回血${healed}点，你余${pHp}气血。`;
+          log.push(text);
+          rounds.push({ round, actor: "player", kind: "regen", amount: healed, playerHpAfter: pHp, enemyHpAfter: Math.max(0, eHp), text, key: true });
+          keyEvents.push(`第${round}回合回复 ${healed} 气血`);
         }
       }
-      const crit = rng() < mods.critRate ? 1.5 : 1;
-      const lowHp = pHp < stats.hp * 0.3 ? 1 + mods.lowHpBoost : 1;
+      const isCrit = rng() < mods.critRate;
+      const crit = isCrit ? 1.5 : 1;
+      const lowHpBoostOn = mods.lowHpBoost > 0 && pHp < stats.hp * 0.3;
+      const lowHp = lowHpBoostOn ? 1 + mods.lowHpBoost : 1;
       const dmg = Math.max(1, Math.round((stats.attack - enemy.defense) * dmgMult * crit * lowHp));
       eHp -= dmg;
-      log.push(`你出手，伤敌${dmg}点，敌余${Math.max(0, eHp)}气血。`);
+      const eHpAfter = Math.max(0, eHp);
+      const kind: BattleRoundEvent["kind"] = isCrit ? "crit" : "attack";
+      const text = isCrit ? `你暴击，伤敌${dmg}点，敌余${eHpAfter}气血。` : `你出手，伤敌${dmg}点，敌余${eHpAfter}气血。`;
+      log.push(text);
+      rounds.push({ round, actor: "player", kind, amount: dmg, playerHpAfter: pHp, enemyHpAfter: eHpAfter, text, key: isCrit || lowHpBoostOn });
+      if (isCrit) keyEvents.push(`第${round}回合暴击`);
+      if (lowHpBoostOn) keyEvents.push(`第${round}回合低血增伤生效`);
       if (eHp <= 0) {
         won = true;
         break;
@@ -1681,13 +1732,56 @@ function runBattle(
     } else {
       const dmg = Math.max(1, Math.round((enemy.attack - stats.defense) * takenMult));
       pHp -= dmg;
-      log.push(`敌反击，伤你${dmg}点，你余${Math.max(0, pHp)}气血。`);
+      const pHpAfter = Math.max(0, pHp);
+      const text = `敌反击，伤你${dmg}点，你余${pHpAfter}气血。`;
+      log.push(text);
+      rounds.push({ round, actor: "enemy", kind: "attack", amount: dmg, playerHpAfter: pHpAfter, enemyHpAfter: Math.max(0, eHp), text });
       if (pHp <= 0) break;
     }
     playerTurn = !playerTurn;
   }
-  if (!won && pHp > 0 && eHp > 0 && maxRounds < 50) log.push(`${maxRounds} 回合已到，挑战失败。`);
-  return { won, log };
+  let roundLimitReached = false;
+  if (!won && pHp > 0 && eHp > 0 && maxRounds < 50) {
+    roundLimitReached = true;
+    const text = `${maxRounds} 回合已到，挑战失败。`;
+    log.push(text);
+    rounds.push({ round, actor: "player", kind: "limit", amount: 0, playerHpAfter: Math.max(0, pHp), enemyHpAfter: Math.max(0, eHp), text, key: true });
+    keyEvents.push(`${maxRounds} 回合已到`);
+  }
+  return { won, log, rounds, keyEvents, roundLimitReached };
+}
+
+function buildBattleReport(
+  kind: "map" | "secret",
+  mapName: string,
+  enemyName: string,
+  difficulty: string,
+  maxRounds: number,
+  battle: { won: boolean; log: string[]; rounds: BattleRoundEvent[]; keyEvents: string[]; roundLimitReached: boolean },
+  player: { attack: number; defense: number; hp: number },
+  enemy: { attack: number; defense: number; hp: number },
+  nowMs: number,
+  rewardLines: string[],
+  noRewardNote?: string,
+): LastBattle {
+  const last = battle.rounds[battle.rounds.length - 1];
+  return {
+    won: battle.won,
+    kind,
+    mapName,
+    enemyName,
+    difficulty,
+    maxRounds,
+    roundLimitReached: battle.roundLimitReached,
+    rounds: last ? last.round : 0,
+    player: { attack: player.attack, defense: player.defense, hp: player.hp, hpAfter: last ? last.playerHpAfter : player.hp },
+    enemy: { attack: enemy.attack, defense: enemy.defense, hp: enemy.hp, hpAfter: last ? last.enemyHpAfter : enemy.hp },
+    events: battle.rounds.slice(-BATTLE_REPORT_CFG.maxEvents),
+    keyEvents: battle.keyEvents.slice(-BATTLE_REPORT_CFG.maxKeyEvents),
+    rewardLines,
+    noRewardNote,
+    at: nowMs,
+  };
 }
 
 function fightRules(mapId: MapId, nodeId: string, difficulty: BattleDifficulty) {
@@ -1757,6 +1851,8 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   const battle = runBattle(stats, rules.enemy, dmgMult, battleTakenMult(s), rules.maxRounds, battleMods(s));
   const log = battle.log;
   const won = battle.won;
+  const rewardLines: string[] = [];
+  let noRewardNote: string | undefined;
   s.daily.goals.battle.progress = Math.min(s.daily.goals.battle.progress + 1, CONFIG.dailyGoals.battle.target);
   if (!s.daily.astrology.used && s.daily.astrology.id !== "none") {
     if (s.daily.astrology.id === "war") {
@@ -1770,6 +1866,8 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   if (!won) {
     log.push(analyzeFailure(stats, rules.enemy));
     s.recentLogs.push(`与${nodeCfg.name}交手，不敌落败。`);
+    noRewardNote = "未获得奖励";
+    s.lastBattle = buildBattleReport("map", mapCfg.name, nodeCfg.name, difficulty, rules.maxRounds, battle, stats, rules.enemy, nowMs, rewardLines, noRewardNote);
     s.revision += 1;
     return { ok: true, reason: "战败", state: s, log, won: false, encounterTriggered: false };
   }
@@ -1788,7 +1886,13 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     if (fc.equipment) {
       createInstance(s, fc.equipment as string);
       s.recentLogs.push(`得装备「${EQUIP_CFG[fc.equipment].name}」。`);
+      rewardLines.push(`装备「${EQUIP_CFG[fc.equipment].name}」`);
     }
+    if (fc.cultivation) rewardLines.push(`修为 ${fc.cultivation}`);
+    if (battleCult > 0) rewardLines.push(`战斗修为 ${battleCult}`);
+    if (fc.spiritStone) rewardLines.push(`灵石 ${fc.spiritStone}`);
+    if (fc.page) rewardLines.push(`残页 ${fc.page}`);
+    if (mat && !nodeCfg.side) rewardLines.push(`${RESOURCE_NAMES[mat]} 4`);
     s.recentLogs.push(`首通${mapCfg.name}·${nodeCfg.name}。`);
     pushMilestone(s, "firstClear", nowMs, `首通${mapCfg.name}·${nodeCfg.name}`);
     // 首通授予：新功法按本境首节点，鸿蒙印按终点守关
@@ -1797,12 +1901,14 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
       if (mapId === req.grantMap && nodeId === firstNode && !s.learnedNewTechs.includes(techId)) {
         s.learnedNewTechs.push(techId);
         s.recentLogs.push(`得新功法《${CONFIG.techniques[techId as TechniqueId].name}》。`);
+        rewardLines.push(`功法《${CONFIG.techniques[techId as TechniqueId].name}》`);
       }
     }
     const hmLast = mainNodeIds("map_hongmeng").at(-1)!;
     if (mapId === "map_hongmeng" && nodeId === hmLast) {
       createInstance(s, "c_hongmeng");
       s.recentLogs.push("通关鸿蒙守关，得纪念佩饰「鸿蒙印」。");
+      rewardLines.push("鸿蒙印");
     }
     unlockNext(s, mapId, nodeId);
   } else {
@@ -1813,23 +1919,42 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
       if (battleCult > 0) s.resources.cultivation += battleCult;
       s.resources.page += rc.page;
       if (rc.material) (s.resources as unknown as Record<string, number>)[rc.material] += 1;
+      if (rc.cultivation) rewardLines.push(`修为 ${rc.cultivation}`);
+      if (battleCult > 0) rewardLines.push(`战斗修为 ${battleCult}`);
+      if (rc.page) rewardLines.push(`残页 ${rc.page}`);
+      if (rc.material) rewardLines.push(`${RESOURCE_NAMES[rc.material]} 1`);
       s.recentLogs.push(`再胜${nodeCfg.name}，领取今日重复历练奖励。`);
     } else {
       s.recentLogs.push(`再胜${nodeCfg.name}，今日重复历练奖励已领尽。`);
+      noRewardNote = "本次无重复奖励";
     }
   }
 
   let encounterTriggered = false;
   const isGuide = mapId === CONFIG.encounter.guideMapId && nodeId === CONFIG.encounter.guideNodeId;
-  if (first && isGuide && !s.encounter.guideDone) {
-    triggerEncounter(s, mapId, CONFIG.encounter.guideEventId);
-    s.encounter.guideDone = true;
-    encounterTriggered = true;
-  } else if (rollEncounter(s, nowMs)) {
-    triggerEncounter(s, mapId, randomEventId(s));
-    encounterTriggered = true;
+  if (!s.encounter.pending) {
+    rollEncounterDay(s, nowMs);
+    if (first && isGuide && !s.encounter.guideDone) {
+      triggerEncounter(s, mapId, CONFIG.encounter.guideEventId);
+      s.encounter.guideDone = true;
+      encounterTriggered = true;
+    } else {
+      const cont = s.encounter.continuity;
+      if (cont && cont.stage === "awaiting" && todayStr(nowMs) > cont.originDate) {
+        const fId = followUpEventId(cont);
+        if (fId && s.encounter.triggeredToday < CONFIG.encounter.dailyMax) {
+          triggerEncounter(s, mapId, fId);
+          cont.stage = "active";
+          encounterTriggered = true;
+        }
+      } else if (rollEncounter(s, nowMs)) {
+        triggerEncounter(s, mapId, randomEventId(s));
+        encounterTriggered = true;
+      }
+    }
   }
 
+  s.lastBattle = buildBattleReport("map", mapCfg.name, nodeCfg.name, difficulty, rules.maxRounds, battle, stats, rules.enemy, nowMs, rewardLines, noRewardNote);
   s.revision += 1;
   return { ok: true, reason: "", state: s, log, won: true, encounterTriggered };
 }
@@ -1862,15 +1987,46 @@ export function resolveEncounter(state: SaveState, nowMs: number, optionId: stri
   if (!evt) return fail("未知际遇");
   const opt = evt.options[optionId];
   if (!opt) return fail("无效选项");
+
+  // 连续际遇后续事件：纯叙事，不发奖励，记录「起因—选择—回响」
+  if (isFollowUpEvent(pending.eventId)) {
+    const cont = s.encounter.continuity;
+    if (!cont || cont.stage !== "active") return fail("无对应的连续际遇");
+    const originEvt = ENC_CFG[CONTINUITY_CFG.stories[cont.storyId].originEventId];
+    const originLabel = originEvt?.options[cont.originOptionId]?.label ?? "";
+    const originTitle = originEvt?.title ?? "";
+    const echoLabel = opt.label;
+    s.encounter.pending = null;
+    s.encounter.continuity = null;
+    if (!s.encounter.completedStories.includes(cont.storyId)) s.encounter.completedStories.push(cont.storyId);
+    const record = `连续际遇「${originTitle}」· ${originLabel} → 回响「${echoLabel}」`;
+    s.recentLogs.push(`${record}。`);
+    pushMilestone(s, "continuity", nowMs, record);
+    s.revision += 1;
+    return { state: s, ok: true };
+  }
+
   const r = opt.reward;
-  if (r.cultivation) s.resources.cultivation += r.cultivation;
-  if (r.spirit) s.resources.spirit += r.spirit;
-  if (r.spiritStone) s.resources.spiritStone += r.spiritStone;
-  if (r.herb) s.resources.herb += r.herb;
-  if (r.page) s.resources.page += r.page;
+  if (r?.cultivation) s.resources.cultivation += r.cultivation;
+  if (r?.spirit) s.resources.spirit += r.spirit;
+  if (r?.spiritStone) s.resources.spiritStone += r.spiritStone;
+  if (r?.herb) s.resources.herb += r.herb;
+  if (r?.page) s.resources.page += r.page;
   s.encounter.pending = null;
   s.recentLogs.push(`际遇「${evt.title}」已定，选择「${opt.label}」。`);
   pushMilestone(s, "encounter", nowMs, `际遇「${evt.title}」`);
+
+  // 连续际遇起源事件：每档每故事只开一次；已有挂起/已完成的故事不重开
+  const storyId = isContinuityOriginEvent(pending.eventId);
+  if (storyId && !s.encounter.continuity && !s.encounter.completedStories.includes(storyId)) {
+    s.encounter.continuity = {
+      storyId,
+      originOptionId: optionId,
+      originDate: todayStr(nowMs),
+      stage: "awaiting",
+    };
+  }
+
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -2303,16 +2459,26 @@ export function enterSecretRealm(state: SaveState, nowMs: number, realmId: Secre
   const stats = playerStats(s);
   const battle = runBattle(stats, cfg.enemy, secretRealmDamageMult(s), battleTakenMult(s), 50, battleMods(s), seededRng(hashSeed(realmId)));
   const reward = battle.won ? secretRealmReward(realmId) : emptyResources();
+  const rewardLines: string[] = [];
+  let noRewardNote: string | undefined;
   if (battle.won) {
     applyReward(s, reward);
     const mat = materialForSecretRealm(realmId);
     if (mat) (s.resources as unknown as Record<string, number>)[mat] += 4;
+    if (reward.spiritStone) rewardLines.push(`灵石 ${reward.spiritStone}`);
+    if (reward.herb) rewardLines.push(`灵草 ${reward.herb}`);
+    if (reward.page) rewardLines.push(`残页 ${reward.page}`);
+    if (reward.iron) rewardLines.push(`玄铁 ${reward.iron}`);
+    if (mat) rewardLines.push(`${RESOURCE_NAMES[mat]} 4`);
+  } else {
+    noRewardNote = "未获得奖励";
   }
   s.secretRealmUsed[realmId] = true;
   s.secretRealmLog.push({ realm: realmId, won: battle.won, reward: { ...reward }, at: nowMs });
   const rewardTxt = battle.won ? `得 ${fmtReward(reward)}` : "未获奖励";
   s.recentLogs.push(`秘境「${cfg.name}」${battle.won ? "探索成功" : "探索失败"}，${rewardTxt}。`);
   pushMilestone(s, "realm", nowMs, `秘境「${cfg.name}」${battle.won ? "探索成功" : "探索失败"}，${rewardTxt}`);
+  s.lastBattle = buildBattleReport("secret", cfg.name, cfg.name, "secret", 50, battle, stats, cfg.enemy, nowMs, rewardLines, noRewardNote);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -2459,6 +2625,11 @@ export function migrateSave(raw: SaveState): SaveState {
     if ((s.breakthroughFails as Record<string, unknown>)[l] === undefined) (s.breakthroughFails as Record<string, unknown>)[l] = 0;
   }
   if (!Array.isArray(s.breakthroughRecords)) s.breakthroughRecords = [];
+  const rawEncounter = (s.encounter ?? {}) as Record<string, unknown>;
+  if (rawEncounter.continuity === undefined) rawEncounter.continuity = null;
+  if (!Array.isArray(rawEncounter.completedStories)) rawEncounter.completedStories = [];
+  s.encounter = rawEncounter;
+  if (s.lastBattle === undefined) s.lastBattle = null;
   s.schemaVersion = SCHEMA_VERSION;
   const migrated = s as unknown as SaveState;
   syncRealmMaps(migrated);
@@ -2730,6 +2901,66 @@ function validateEncounter(v: unknown): string | null {
   if (pending !== null && pending !== undefined) {
     if (!ENC_CFG[pending.eventId as string]) return "际遇事件无效";
   }
+  const cont = e.continuity as Record<string, unknown> | null | undefined;
+  if (cont !== null && cont !== undefined) {
+    if (!cont || typeof cont !== "object") return "连续际遇数据无效";
+    if (!(Object.keys(CONTINUITY_CFG.stories) as string[]).includes(cont.storyId as string)) return "连续际遇故事无效";
+    if (typeof cont.originOptionId !== "string" || !cont.originOptionId.trim()) return "连续际遇原选择无效";
+    if (typeof cont.originDate !== "string" || !isValidDateStr(cont.originDate)) return "连续际遇日期无效";
+    if (cont.stage !== "awaiting" && cont.stage !== "active") return "连续际遇状态无效";
+  }
+  const done = e.completedStories;
+  if (done !== undefined) {
+    if (!Array.isArray(done)) return "已完成故事数据无效";
+    const ids = Object.keys(CONTINUITY_CFG.stories) as string[];
+    if ((done as unknown[]).some((x) => typeof x !== "string" || !ids.includes(x))) return "已完成故事无效";
+  }
+  return null;
+}
+
+function isNonNegFinite(x: unknown): x is number {
+  return typeof x === "number" && Number.isFinite(x) && x >= 0;
+}
+
+function validateLastBattle(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "object") return "最近战报无效";
+  const b = v as Record<string, unknown>;
+  if (typeof b.won !== "boolean") return "最近战报胜负无效";
+  if (b.kind !== "map" && b.kind !== "secret") return "最近战报类型无效";
+  for (const k of ["mapName", "enemyName", "difficulty"]) {
+    if (typeof b[k] !== "string") return "最近战报字段无效";
+  }
+  if (!Number.isInteger(b.maxRounds) || (b.maxRounds as number) < 0) return "最近战报回合上限无效";
+  if (!Number.isInteger(b.rounds) || (b.rounds as number) < 0) return "最近战报回合数无效";
+  if (typeof b.roundLimitReached !== "boolean") return "最近战报限制标记无效";
+  if (!isNonNegFinite(b.at)) return "最近战报时间无效";
+  for (const side of ["player", "enemy"]) {
+    const o = b[side] as Record<string, unknown> | undefined;
+    if (!o || typeof o !== "object") return "最近战报双方数据无效";
+    for (const k of ["attack", "defense", "hp", "hpAfter"]) {
+      if (!isNonNegFinite(o[k])) return "最近战报双方属性无效";
+    }
+  }
+  const events = b.events;
+  if (!Array.isArray(events) || events.length > BATTLE_REPORT_CFG.maxEvents) return "最近战报回合记录无效";
+  for (const ev of events as unknown[]) {
+    const e = ev as Record<string, unknown>;
+    if (!e || typeof e !== "object") return "最近战报回合记录无效";
+    if (!Number.isInteger(e.round) || (e.round as number) < 0) return "最近战报回合序号无效";
+    if (e.actor !== "player" && e.actor !== "enemy") return "最近战报行动方无效";
+    if (!["attack", "crit", "regen", "low_hp", "limit"].includes(e.kind as string)) return "最近战报行动类型无效";
+    if (typeof e.amount !== "number" || !Number.isFinite(e.amount)) return "最近战报行动数值无效";
+    if (!isNonNegFinite(e.playerHpAfter) || !isNonNegFinite(e.enemyHpAfter)) return "最近战报剩余气血无效";
+    if (typeof e.text !== "string") return "最近战报行动描述无效";
+    if (e.key !== undefined && typeof e.key !== "boolean") return "最近战报关键标记无效";
+  }
+  const keyEvents = b.keyEvents;
+  if (!Array.isArray(keyEvents) || keyEvents.length > BATTLE_REPORT_CFG.maxKeyEvents) return "最近战报关键事件无效";
+  if ((keyEvents as unknown[]).some((x) => typeof x !== "string")) return "最近战报关键事件无效";
+  const rewardLines = b.rewardLines;
+  if (!Array.isArray(rewardLines) || (rewardLines as unknown[]).some((x) => typeof x !== "string")) return "最近战报奖励无效";
+  if (b.noRewardNote !== undefined && typeof b.noRewardNote !== "string") return "最近战报奖励说明无效";
   return null;
 }
 
@@ -2970,6 +3201,7 @@ export function importSave(json: string): Result<SaveState> {
     validateBreakthroughFails(o.breakthroughFails),
     validateBreakthroughRecords(o.breakthroughRecords),
     validateJindanTrial(o.jindanTrial),
+    validateLastBattle(o.lastBattle),
   ];
   for (const c of checks) if (c) return fail(c);
 
@@ -3021,6 +3253,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.suppressionSince = { ...emptySuppressionSince(), ...((o.suppressionSince as Partial<SaveState["suppressionSince"]>) || {}) };
   base.longTask = (o.longTask as LongTask | null) ?? null;
   base.lastLongTaskResult = (o.lastLongTaskResult as LongTaskResult | null) ?? null;
+  base.lastBattle = (o.lastBattle as LastBattle | null) ?? null;
   base.aptitude = validAptitude(o.aptitude);
   base.breakthroughFails = { ...base.breakthroughFails, ...((o.breakthroughFails as Record<string, number>) || {}) };
   base.breakthroughRecords = Array.isArray(o.breakthroughRecords) ? (o.breakthroughRecords as BreakthroughRecord[]) : [];

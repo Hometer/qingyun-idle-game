@@ -1454,6 +1454,55 @@ const BASE_CONFIG = {
         origin_b: { label: "继续前行", meaning: "沿紫气指引向前", result: "你没有停步，紫气随行，前方的石阶渐渐清晰。", reward: { iron: 500 } },
       },
     },
+    // ---- v1.7 连续际遇后续事件（无 minStage 不会进入随机池；无 reward 纯叙事） ----
+    event_well_down: {
+      title: "古井回响",
+      body: "数日后再过山径，你认得那口古井。井底残文的几笔仍在心头盘旋，似与近日所得隐隐相映。",
+      options: {
+        well_down_a: { label: "循线再探", meaning: "依残文线索再下井印证", result: "你复下井底，将残文与近日所得一一对照，心头豁然。" },
+        well_down_b: { label: "封存残文", meaning: "把残文抄下收好，暂不深究", result: "你抄下残文藏于袖中，留待来日再作计较。" },
+      },
+    },
+    event_well_around: {
+      title: "井畔旧事",
+      body: "你未探那口井，却在镇上听人提起它，说是旧时一位修士所遗，只余苔痕与传说。",
+      options: {
+        well_around_a: { label: "细问旧事", meaning: "向镇上老人打听井的来历", result: "你向老者细问，拼出那口古井的旧事，若有所得。" },
+        well_around_b: { label: "一笑置之", meaning: "听过便罢，不再挂怀", result: "你听过便罢，不再挂怀，心境反更松快。" },
+      },
+    },
+    event_beast_saved: {
+      title: "灵鹿再逢",
+      body: "林间再遇那只幼鹿，它已挣脱荆棘，见你便缓步靠近，似还记得当日相救之恩。",
+      options: {
+        beast_saved_a: { label: "任它靠近", meaning: "静候灵鹿近前", result: "灵鹿以额轻触你的掌心，片刻后转身没入林中。" },
+        beast_saved_b: { label: "留食而去", meaning: "留下嫩草，悄悄离去", result: "你留下几株嫩草悄然离去，身后有轻快的蹄声相送。" },
+      },
+    },
+    event_beast_watch: {
+      title: "远观灵鹿",
+      body: "你又见那灵鹿，远远饮于溪畔，毛色比记忆中更润泽，却不曾近前。",
+      options: {
+        beast_watch_a: { label: "静观其行", meaning: "立在远处看它饮罢归林", result: "你立在远处看它饮罢归林，未扰其安。" },
+        beast_watch_b: { label: "绕道而行", meaning: "把林间让给它，悄悄绕开", result: "你悄悄绕开，把林间让给它，脚步渐轻。" },
+      },
+    },
+    event_cave_enter: {
+      title: "洞中札记",
+      body: "你重访那残破洞府，石壁间残存的气息与记忆中一般，前人所留札记的字迹仍在。",
+      options: {
+        cave_enter_a: { label: "再读札记", meaning: "重读前人札记，补上漏看批注", result: "你重读札记，补上几处漏看的批注，所悟更深。" },
+        cave_enter_b: { label: "护住洞府", meaning: "移来山石掩住洞口", result: "你移来山石掩住洞口，免它再受风雨侵损。" },
+      },
+    },
+    event_cave_note: {
+      title: "洞外重访",
+      body: "你依着当日记下的方位重访，未入洞门，只在洞外寻得几处旧时遗迹。",
+      options: {
+        cave_note_a: { label: "细察洞外", meaning: "遍察洞外刻痕与残砖", result: "你遍察洞外刻痕与残砖，心中有了盘算。" },
+        cave_note_b: { label: "补全方位", meaning: "校正所记方位", result: "你校正了所记方位，以待来日再探。" },
+      },
+    },
   } as const,
 
   encounter: {
@@ -1463,6 +1512,19 @@ const BASE_CONFIG = {
     guideMapId: "map_qingyun",
     guideNodeId: "node_wolf",
   },
+
+  continuity: {
+    stories: {
+      well: { originEventId: "event_well", followUps: { well_a: "event_well_down", well_b: "event_well_around" } },
+      beast: { originEventId: "event_beast", followUps: { beast_a: "event_beast_saved", beast_b: "event_beast_watch" } },
+      cave: { originEventId: "event_cave", followUps: { cave_a: "event_cave_enter", cave_b: "event_cave_note" } },
+    },
+  } as const,
+
+  battleReport: {
+    maxEvents: 120,
+    maxKeyEvents: 20,
+  } as const,
 
   tribulation: {
     wavesPct: [0.20, 0.25, 0.30, 0.35, 0.40],

@@ -3,6 +3,8 @@
 事件：{event_title}（事件 ID：{event_id}）
 人物：{name}（灵根：{spirit_root}，境界：{realm}）
 地点：{map_id}
+情境提示（若为连续际遇后续，必须承接此前玩家的选择，不得否认或改写）：
+{context}
 最近修行摘要：
 {recent_logs}
 可选项（只需为每个选项写一句简短、有氛围的选项文字，不得改变选项含义）：

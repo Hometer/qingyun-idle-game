@@ -10,6 +10,7 @@ export interface EncounterRequestBody {
   map_id: string;
   options: EncounterOptionIn[];
   recent_logs: string[];
+  context?: string | null;
 }
 
 export interface EncounterResponse {

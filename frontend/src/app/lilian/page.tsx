@@ -35,7 +35,7 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"], material: 
 }
 
 export default function LilianPage() {
-  const { state, view, now, fight, suppress, battleLog, startLong, realmPending, realmNarrative, realmNarrativeLoading, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
+  const { state, view, now, fight, suppress, startLong, realmPending, realmNarrative, realmNarrativeLoading, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedMap, setSelectedMap] = useState<MapId | null>(null);
   const [difficulty, setDifficulty] = useState<BattleDifficulty>("normal");
@@ -145,13 +145,37 @@ export default function LilianPage() {
         </Section>
       ))}
 
-      {battleLog.length > 0 && (
-        <Section title="战报">
-          {battleLog.map((l, i) => (
-            <p key={i} className={`py-0.5 text-sm ${l.startsWith("短板") ? "text-cinnabar" : "text-ink/80"}`}>
-              {l}
+      {state.lastBattle && (
+        <Section title={`最近一战 · ${state.lastBattle.enemyName}`}>
+          <div className="rounded-lg border border-line/60 p-3">
+            <p className="text-sm font-medium">
+              {state.lastBattle.won ? <span className="text-cinnabar">胜利</span> : <span className="text-muted">战败</span>}
+              <span className="ml-2 text-muted">
+                {state.lastBattle.mapName} · {state.lastBattle.difficulty === "normal" ? "普通" : state.lastBattle.difficulty === "challenge" ? "挑战" : "秘境"}
+              </span>
             </p>
-          ))}
+            <p className="mt-1 text-xs text-muted">
+              共 {state.lastBattle.rounds} 回合 · 我方余 {state.lastBattle.player.hpAfter}/{state.lastBattle.player.hp} · 敌方余 {state.lastBattle.enemy.hpAfter}/{state.lastBattle.enemy.hp}
+              {state.lastBattle.roundLimitReached ? ` · ${state.lastBattle.maxRounds} 回合已到` : ""}
+            </p>
+            {state.lastBattle.keyEvents.length > 0 && (
+              <p className="mt-1 text-xs text-cinnabar">关键：{state.lastBattle.keyEvents.join("；")}</p>
+            )}
+            {state.lastBattle.rewardLines.length > 0 && (
+              <p className="mt-1 text-xs text-muted">获得：{state.lastBattle.rewardLines.join("、")}</p>
+            )}
+            {state.lastBattle.noRewardNote && <p className="mt-1 text-xs text-muted">{state.lastBattle.noRewardNote}</p>}
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm text-cinnabar">逐回合记录</summary>
+              <div className="mt-1 max-h-64 overflow-y-auto">
+                {state.lastBattle.events.map((e, i) => (
+                  <p key={i} className={`py-0.5 text-xs ${e.key ? "text-cinnabar" : "text-ink/70"} ${e.actor === "enemy" ? "pl-2" : ""}`}>
+                    {e.text}
+                  </p>
+                ))}
+              </div>
+            </details>
+          </div>
         </Section>
       )}
 

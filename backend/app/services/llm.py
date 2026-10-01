@@ -43,6 +43,7 @@ def _build_prompt(req: GenerateRequest) -> str:
     options_desc = "\n".join(f"- {o.option_id}：{o.label}（{o.meaning}）" for o in req.options)
     logs = "\n".join(f"- {x}" for x in req.recent_logs) or "（无）"
     meta = fallback.template_for(req.event_id)
+    context = req.context.strip() if req.context and req.context.strip() else "（无）"
     return _PROMPT.format(
         event_id=req.event_id,
         event_title=meta["title"],
@@ -50,6 +51,7 @@ def _build_prompt(req: GenerateRequest) -> str:
         spirit_root=req.character.spirit_root,
         realm=req.character.realm,
         map_id=req.map_id,
+        context=context,
         options=options_desc,
         recent_logs=logs,
     )

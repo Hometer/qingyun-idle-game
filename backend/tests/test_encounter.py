@@ -151,6 +151,27 @@ def test_templates_cover_all_events():
         assert len(t["options"]) == 2
 
 
+def test_followup_templates_cover_all_paths():
+    for eid in ["event_well_down", "event_well_around", "event_beast_saved", "event_beast_watch", "event_cave_enter", "event_cave_note"]:
+        t = fallback.template_for(eid)
+        assert t is not None
+        assert len(t["options"]) == 2
+
+
+def test_followup_context_optional(monkeypatch):
+    monkeypatch.setattr(settings, "model_api_key", "")
+    options = [
+        {"option_id": "well_down_a", "label": "循线再探", "meaning": "依残文线索再下井印证"},
+        {"option_id": "well_down_b", "label": "封存残文", "meaning": "把残文抄下收好"},
+    ]
+    body = _req("event_well_down", options)
+    body["context"] = "此前你在古井奇遇中选择了探查井底"
+    r = client.post("/api/v1/encounter/generate", json=body)
+    assert r.status_code == 200
+    assert r.json()["source"] == "template"
+    assert {o["option_id"] for o in r.json()["options"]} == {"well_down_a", "well_down_b"}
+
+
 def test_late_event_has_valid_template_response(monkeypatch):
     monkeypatch.setattr(settings, "model_api_key", "")
     options = [

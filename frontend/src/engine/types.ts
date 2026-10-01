@@ -46,11 +46,22 @@ export interface NodeState {
   cleared: boolean;
 }
 
+export type StoryId = "well" | "beast" | "cave";
+
+export interface ContinuityStory {
+  storyId: StoryId;        // 故事
+  originOptionId: string;  // 玩家当初的原选择（如 well_a）
+  originDate: string;      // 完成初始事件的本地日期 YYYY-MM-DD
+  stage: "awaiting" | "active"; // awaiting=待触发后续；active=后续已触发、待选择
+}
+
 export interface EncounterState {
   pending: { eventId: string; mapId: string } | null;
   triggeredToday: number;
   lastTriggerDate: string; // "YYYY-MM-DD"
   guideDone: boolean;
+  continuity: ContinuityStory | null; // 当前挂起的连续际遇（最多一条）
+  completedStories: StoryId[]; // 已完整走完的故事（防止重复开启）
 }
 
 export interface TribulationWave {
@@ -152,6 +163,35 @@ export interface SecretRealmLog {
   at: number;
 }
 
+export interface BattleRoundEvent {
+  round: number; // 第几回合（从 1 起）
+  actor: "player" | "enemy";
+  kind: "attack" | "crit" | "regen" | "low_hp" | "limit";
+  amount: number; // 伤害或回复量
+  playerHpAfter: number;
+  enemyHpAfter: number;
+  text: string;
+  key?: boolean; // 是否为关键事件（暴击/回血/低血增伤）
+}
+
+export interface LastBattle {
+  won: boolean;
+  kind: "map" | "secret";
+  mapName: string;
+  enemyName: string;
+  difficulty: string; // normal / challenge / secret
+  maxRounds: number;
+  roundLimitReached: boolean;
+  rounds: number; // 实际回合数
+  player: { attack: number; defense: number; hp: number; hpAfter: number };
+  enemy: { attack: number; defense: number; hp: number; hpAfter: number };
+  events: BattleRoundEvent[]; // 逐回合精简记录（有界）
+  keyEvents: string[]; // 实际发生的关键事件描述
+  rewardLines: string[]; // 实际获得奖励（人话）
+  noRewardNote?: string; // 如「本次无重复奖励」
+  at: number;
+}
+
 export interface SaveState {
   schemaVersion: number;
   id: string;
@@ -199,6 +239,7 @@ export interface SaveState {
   secretRealmUsed: Record<SecretRealmId, boolean>;
   secretRealmLog: SecretRealmLog[];
   forge: number; // 炼器台等级 0/1
+  lastBattle: LastBattle | null;
 }
 
 export type Result<T> =

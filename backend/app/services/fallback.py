@@ -28,6 +28,36 @@ TEMPLATES: dict = {
             "cave_b": "记下位置",
         },
     },
+    "event_well_down": {
+        "title": "古井回响",
+        "body": "数日后再过山径，你认得那口古井。井底残文的几笔仍在心头盘旋，似与近日所得隐隐相映。",
+        "options": {"well_down_a": "循线再探", "well_down_b": "封存残文"},
+    },
+    "event_well_around": {
+        "title": "井畔旧事",
+        "body": "你未探那口井，却在镇上听人提起它，说是旧时一位修士所遗，只余苔痕与传说。",
+        "options": {"well_around_a": "细问旧事", "well_around_b": "一笑置之"},
+    },
+    "event_beast_saved": {
+        "title": "灵鹿再逢",
+        "body": "林间再遇那只幼鹿，它已挣脱荆棘，见你便缓步靠近，似还记得当日相救之恩。",
+        "options": {"beast_saved_a": "任它靠近", "beast_saved_b": "留食而去"},
+    },
+    "event_beast_watch": {
+        "title": "远观灵鹿",
+        "body": "你又见那灵鹿，远远饮于溪畔，毛色比记忆中更润泽，却不曾近前。",
+        "options": {"beast_watch_a": "静观其行", "beast_watch_b": "绕道而行"},
+    },
+    "event_cave_enter": {
+        "title": "洞中札记",
+        "body": "你重访那残破洞府，石壁间残存的气息与记忆中一般，前人所留札记的字迹仍在。",
+        "options": {"cave_enter_a": "再读札记", "cave_enter_b": "护住洞府"},
+    },
+    "event_cave_note": {
+        "title": "洞外重访",
+        "body": "你依着当日记下的方位重访，未入洞门，只在洞外寻得几处旧时遗迹。",
+        "options": {"cave_note_a": "细察洞外", "cave_note_b": "补全方位"},
+    },
     "event_star": {
         "title": "星盘余辉",
         "body": "山道旁有半埋的星盘，铜环虽旧，刻度仍清晰。盘面映着当夜星光，似在指向远处的岔路。",

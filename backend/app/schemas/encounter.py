@@ -21,6 +21,7 @@ class GenerateRequest(BaseModel):
     map_id: str = Field(min_length=1, max_length=64)
     options: List[OptionIn] = Field(min_length=1, max_length=4)
     recent_logs: List[str] = Field(default_factory=list, max_length=20)
+    context: str | None = Field(default=None, max_length=200)
 
     @field_validator("recent_logs")
     @classmethod

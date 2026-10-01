@@ -124,11 +124,24 @@ for (const r of CONFIG.realms) REALM_NAMES[r.id] = r.name;
 type EncounterCfg = { title: string; options: Record<string, { label: string; meaning: string; result: string }> };
 const ENC = CONFIG.encounters as unknown as Record<string, EncounterCfg>;
 
+type ContinuityCfg = { stories: Record<string, { originEventId: string; followUps: Record<string, string> }> };
+const CONT = CONFIG.continuity as unknown as ContinuityCfg;
+
+function continuityContext(state: SaveState): string | undefined {
+  const cont = state.encounter.continuity;
+  if (!cont || cont.stage !== "active") return undefined;
+  const story = CONT.stories[cont.storyId];
+  const originEvt = story ? ENC[story.originEventId] : undefined;
+  const originOpt = originEvt?.options[cont.originOptionId];
+  if (!originEvt || !originOpt) return undefined;
+  return `此前你在「${originEvt.title}」中选择了「${originOpt.label}」，本段须承接这一选择。`;
+}
+
 function localTemplate(eventId: string): EncounterCopy {
-  const evt = CONFIG.encounters[eventId as keyof typeof CONFIG.encounters];
+  const evt = CONFIG.encounters[eventId as keyof typeof CONFIG.encounters] as { title: string; body?: string; options: Record<string, { label: string }> };
   return {
     title: evt.title,
-    body: "机缘当前，且看你如何抉择。",
+    body: evt.body ?? "机缘当前，且看你如何抉择。",
     options: Object.entries(evt.options).map(([id, o]) => ({ option_id: id, option_text: o.label })),
     source: "本地模板",
   };
@@ -247,6 +260,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       map_id: state.encounter.pending!.mapId,
       options,
       recent_logs: state.recentLogs.slice(-2),
+      context: continuityContext(state),
     };
     (async () => {
       const resp: EncounterResponse | null =
@@ -824,6 +838,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (r.won) {
           const lines = deltaLines(settled, r.state);
           if (r.encounterTriggered) lines.push("触发际遇");
+          const report = r.state.lastBattle;
+          if (report?.roundLimitReached) lines.push(`${report.maxRounds} 回合已到`);
+          if (report?.keyEvents?.length) lines.push(...report.keyEvents.slice(0, 3));
           setLastResult({ title: "战斗胜利", lines });
         } else {
           setLastResult({ title: "战斗落败", lines: ["未获得奖励", ...r.log.filter((l) => l.startsWith("短板"))] });
@@ -862,8 +879,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const optCfg = evtCfg?.options[optionId];
       const optLabel = optCfg?.label ?? "";
       const optResult = optCfg?.result ?? "";
+      const isFollowUp = state.encounter.continuity?.stage === "active";
       const title = evtCfg ? `际遇「${evtCfg.title}」` : "际遇";
-      const ok = await apply(r.state, "选择已定，奖励到账");
+      const ok = await apply(r.state, isFollowUp ? "回响入册" : "选择已定，奖励到账");
       if (ok) {
         const lines: string[] = [];
         if (optLabel) lines.push(`选择「${optLabel}」`);
