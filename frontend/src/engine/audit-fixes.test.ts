@@ -15,6 +15,9 @@ import {
   claimCommission,
   fightNode,
   migrateSave,
+  upgradeBuilding,
+  upgradeTechnique,
+  buildLibrary,
 } from "./engine";
 import type { SaveState } from "./types";
 
@@ -158,5 +161,55 @@ describe("全局审查回归（P1/P2 修复）", () => {
     const imported = importSave(exportSave(old));
     expect(imported.ok).toBe(true);
     expect(migrateSave(old).commission).toBeTruthy();
+  });
+
+  it("P1-04 建筑/功法/藏经阁/炼器台有逐级境界门槛", () => {
+    // 炼气一层不能把修炼室升到 Lv4
+    const b = rich();
+    b.buildings.cultivationRoom = 3;
+    expect(upgradeBuilding(b, T0, "cultivationRoom").ok).toBe(false);
+    b.realm = "yuanying1";
+    expect(upgradeBuilding(b, T0, "cultivationRoom").ok).toBe(true);
+
+    // 炼气一层不能把青云诀升到 Lv4（需金丹）
+    const t = rich();
+    t.technique = "qingYun";
+    t.techniqueLevel.qingYun = 3;
+    expect(upgradeTechnique(t, T0).ok).toBe(false);
+    t.realm = "jindan1";
+    expect(upgradeTechnique(t, T0).ok).toBe(true);
+
+    // 筑基一层不能把藏经阁升到 Lv3（需元婴）
+    const l = rich();
+    l.library = 2;
+    l.realm = "zhuji1";
+    expect(buildLibrary(l, T0).ok).toBe(false);
+    l.realm = "yuanying1";
+    expect(buildLibrary(l, T0).ok).toBe(true);
+
+    // 一级炼器台不能炼虚空刃（需 Lv2）
+    const f = rich();
+    f.realm = "lianxu2";
+    f.forge = 1;
+    expect(craftEquipment(f, T0, "w_xuwu").ok).toBe(false);
+    f.forge = 2;
+    expect(craftEquipment(f, T0, "w_xuwu").ok).toBe(true);
+  });
+
+  it("P1-04 炼丹炉 Lv4 扣残页、凡品收益丹需筑基", () => {
+    const s = rich();
+    s.buildings.alchemyFurnace = 3;
+    s.realm = "yuanying1";
+    s.resources.page = 0;
+    expect(upgradeBuilding(s, T0, "alchemyFurnace").ok).toBe(false); // 缺残页 100
+    s.resources.page = 100;
+    expect(upgradeBuilding(s, T0, "alchemyFurnace").ok).toBe(true);
+
+    const g = rich();
+    g.buildings.alchemyFurnace = 1;
+    g.realm = "qi10";
+    expect(craftGainPill(g, T0, "yangYuan", 1).ok).toBe(false); // 凡品需筑基
+    g.realm = "zhuji1";
+    expect(craftGainPill(g, T0, "yangYuan", 1).ok).toBe(true);
   });
 });

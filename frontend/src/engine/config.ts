@@ -508,6 +508,30 @@ const BASE_CONFIG = {
     c_taichu: { gate: "dadao4", cost: { iron: 5000, spiritStone: 500000, herb: 0, page: 8000, taiChuZiJing: 6 } },
   } as const,
 
+  // ---- v1.3 成长门槛与费用（升到该级所需境界；未列出的级别无额外门槛） ----
+  growthGates: {
+    cultivationRoom: { 4: "yuanying1", 5: "dacheng1", 6: "jinxian1", 7: "hunyuan_daluo1", 8: "dadao1" },
+    spiritArray: { 4: "yuanying1", 5: "dacheng1", 6: "jinxian1", 7: "hunyuan_daluo1", 8: "dadao1" },
+    spiritField: { 4: "yuanying1", 5: "dacheng1", 6: "jinxian1", 7: "hunyuan_daluo1", 8: "dadao1" },
+    alchemyFurnace: { 4: "yuanying1", 5: "zhenxian1", 6: "hunyuan_daluo1" },
+    library: { 3: "yuanying1", 4: "dacheng1", 5: "jinxian1", 6: "hunyuan_daluo1", 7: "dadao1" },
+    forge: { 2: "yuanying1", 3: "dacheng1", 4: "jinxian1", 5: "hunyuan_daluo1", 6: "dadao1" },
+    technique: { 4: "jindan1", 5: "huashen1", 6: "heti1", 7: "dujie1", 8: "xuanxian1", 9: "taiyi1", 10: "hunyuan1", 11: "hunyuan_wuji1", 12: "hongmeng1" },
+    furnacePage: { 4: 100, 5: 600, 6: 2500 },
+  } as const,
+
+  // 配方额外炼器台等级要求（未列出的配方为 Lv1）
+  craftForgeLevel: {
+    w_xuwu: 2, a_xuwu: 2,
+    w_feixian: 3, a_feixian: 3,
+    w_daluo: 4, a_daluo: 4,
+    w_tianming: 5, a_tianming: 5,
+    c_hushen: 2, c_wendao: 3, c_buxiu: 4, c_guiyuan: 5, c_taichu: 6,
+  } as const,
+
+  // 分段灵材对应的淬炼/配方炼器台等级
+  materialForgeLevel: { lingTaiJing: 2, yunHaiSui: 3, buXiuJin: 4, hunYuanYu: 5, taiChuZiJing: 6 } as const,
+
   equipment: {
     w_bronze: { name: "青铜剑", slot: "weapon", attack: 5 },
     w_azure: { name: "青锋剑", slot: "weapon", attack: 15 },

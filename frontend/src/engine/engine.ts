@@ -188,6 +188,24 @@ function emptySecretRealmUsed(): Record<SecretRealmId, boolean> {
 const FORGE_CFG = CONFIG.forge as unknown as { levels: Array<{ cost: { spiritStone: number; page: number } }> };
 const IRON_CFG = CONFIG.iron as unknown as { suppressionPerSec: number; realmDrop: Record<SecretRealmId, number> };
 const CRAFT_CFG = CONFIG.crafts as unknown as Record<string, { gate: RealmId; cost: Record<string, number> }>;
+
+const GROWTH_GATES = CONFIG.growthGates as unknown as {
+  cultivationRoom: Record<number, string>;
+  spiritArray: Record<number, string>;
+  spiritField: Record<number, string>;
+  alchemyFurnace: Record<number, string>;
+  library: Record<number, string>;
+  forge: Record<number, string>;
+  technique: Record<number, string>;
+  furnacePage: Record<number, number>;
+};
+const CRAFT_FORGE_LEVEL = CONFIG.craftForgeLevel as unknown as Record<string, number>;
+const MATERIAL_FORGE_LEVEL = CONFIG.materialForgeLevel as unknown as Record<string, number>;
+
+function realmGateFail(realm: RealmId, gate: string): string | null {
+  if (!gate) return null;
+  return realmIndex(realm) >= realmIndex(gate as RealmId) ? null : `需${realmName(gate as RealmId)}`;
+}
 const MERIDIAN_CFG = CONFIG.meridians as unknown as Record<string, { name: string; probability: number; productionMult: number }>;
 const COMPREHENSION_CFG = CONFIG.comprehensions as unknown as Record<string, { name: string; probability: number; pageMult: number }>;
 const AFFIX_CFG = CONFIG.affixes as unknown as Record<string, { name: string; min: number; max: number; type: string; bias: string }> & { maxByStage: number[] };
@@ -1518,9 +1536,15 @@ export function upgradeBuilding(state: SaveState, nowMs: number, id: BuildingId)
   const s = settle(state, nowMs);
   const lvl = s.buildings[id];
   if (lvl >= CONFIG.buildings[id].levels.length) return fail("已满级");
+  const gate = GROWTH_GATES[id]?.[lvl + 1]; // 升到下一级的境界门槛
+  const gateFail = realmGateFail(s.realm, gate);
+  if (gateFail) return fail(`${CONFIG.buildings[id].name}${gateFail}方可升级`);
   const cfg = CONFIG.buildings[id].levels[lvl];
   if (s.resources.spiritStone < cfg.cost) return fail("灵石不足");
+  const pageCost = id === "alchemyFurnace" ? (GROWTH_GATES.furnacePage[lvl + 1] ?? 0) : 0;
+  if (s.resources.page < pageCost) return fail(`残页不足（需${pageCost}）`);
   s.resources.spiritStone -= cfg.cost;
+  if (pageCost > 0) s.resources.page -= pageCost;
   s.buildings[id] = lvl + 1;
   s.recentLogs.push(`洞府扩建，${CONFIG.buildings[id].name}升至${lvl + 1}级。`);
   commissionProgress(s, "craft", (c) => c.action === "upgradeBuilding" && c.actionParam === id);
@@ -1612,7 +1636,9 @@ export function setAuxiliaryTechnique(state: SaveState, nowMs: number, id: Techn
 export function buildLibrary(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.library >= CONFIG.library.levels.length) return fail("藏经阁已满级");
-  if (realmIndex(s.realm) < realmIndex("zhuji1")) return fail("需筑基一层方可建藏经阁");
+  const gate = GROWTH_GATES.library[s.library + 1] ?? "zhuji1";
+  const gateFail = realmGateFail(s.realm, gate);
+  if (gateFail) return fail(`藏经阁${gateFail}方可升级`);
   const cfg = CONFIG.library.levels[s.library];
   if (s.resources.spiritStone < cfg.cost.spiritStone || s.resources.page < cfg.cost.page) {
     return fail(`藏经阁升级需灵石${cfg.cost.spiritStone}、残页${cfg.cost.page}`);
@@ -1632,7 +1658,9 @@ export function buildLibrary(state: SaveState, nowMs: number): Result<SaveState>
 export function buildForge(state: SaveState, nowMs: number): Result<SaveState> {
   const s = settle(state, nowMs);
   if (s.forge >= CONFIG.forge.levels.length) return fail("炼器台已满级");
-  if (realmIndex(s.realm) < realmIndex("zhuji1")) return fail("需筑基一层方可建炼器台");
+  const gate = GROWTH_GATES.forge[s.forge + 1] ?? "zhuji1";
+  const gateFail = realmGateFail(s.realm, gate);
+  if (gateFail) return fail(`炼器台${gateFail}方可升级`);
   const forgeCfg = FORGE_CFG.levels[s.forge];
   if (s.resources.spiritStone < forgeCfg.cost.spiritStone || s.resources.page < forgeCfg.cost.page) {
     return fail(`炼器台需灵石${forgeCfg.cost.spiritStone}、残页${forgeCfg.cost.page}`);
@@ -1653,6 +1681,8 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
   if (!cfg) return fail("无此配方");
   if (!EQUIP_CFG[id]) return fail("无此装备");
   if (s.forge < 1) return fail("需先建炼器台");
+  const forgeNeed = CRAFT_FORGE_LEVEL[id] ?? 1;
+  if (s.forge < forgeNeed) return fail(`需${forgeNeed}级炼器台方可炼制`);
   if (realmIndex(s.realm) < realmIndex(cfg.gate)) return fail(`需${realmName(cfg.gate)}方可炼制`);
   const cost = cfg.cost;
   const res = s.resources as unknown as Record<string, number>;
@@ -1684,6 +1714,10 @@ export function quenchEquipment(state: SaveState, nowMs: number, equipId: string
   const iron = Math.ceil((craft.cost.iron ?? 0) * 0.25);
   const stone = Math.ceil((craft.cost.spiritStone ?? 0) * 0.25);
   const mat = materialForStage(stageOfGate(craft.gate as string));
+  if (mat) {
+    const forgeNeed = MATERIAL_FORGE_LEVEL[mat] ?? 1;
+    if (s.forge < forgeNeed) return fail(`需${forgeNeed}级炼器台方可淬炼`);
+  }
   const res = s.resources as unknown as Record<string, number>;
   if ((res.iron ?? 0) < iron || (res.spiritStone ?? 0) < stone || (mat && (res[mat] ?? 0) < 2)) {
     return fail("淬炼材料不足");
@@ -1704,6 +1738,9 @@ export function upgradeTechnique(state: SaveState, nowMs: number): Result<SaveSt
   if ((t === "poYue" || t === "juYuan") && s.library < 1) return fail("需先建一级藏经阁");
   const lvl = s.techniqueLevel[t];
   if (lvl >= CONFIG.techniques[t].levels.length) return fail("功法已满级");
+  const gate = GROWTH_GATES.technique[lvl + 1];
+  const gateFail = realmGateFail(s.realm, gate);
+  if (gateFail) return fail(`功法精进${gateFail}方可`);
   const cost = Math.floor(CONFIG.techniques[t].levels[lvl].pageCost * comprehensionPageMult(s) + 0.5);
   if (s.resources.page < cost) return fail("残页不足");
   s.resources.page -= cost;
@@ -1763,6 +1800,7 @@ export function craftPill(state: SaveState, nowMs: number, tier = 1): Result<Sav
 
 export function craftGainPill(state: SaveState, nowMs: number, type: "yangYuan" | "juLing", tier: number): Result<SaveState> {
   const s = settle(state, nowMs);
+  if (tier === 1 && realmIndex(s.realm) < realmIndex("zhuji1")) return fail("需筑基一层方可炼制凡品收益丹");
   const needFurnace = CONFIG.pills.gainFurnaceLevel[tier - 1];
   if (s.buildings.alchemyFurnace < needFurnace) return fail(`需${needFurnace}级炼丹炉方可炼制该品丹药`);
   const herb = CONFIG.pills.gainHerb[tier - 1];
