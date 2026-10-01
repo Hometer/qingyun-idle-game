@@ -63,13 +63,13 @@ select { min-height: 42px; }
   --c-muted: 102 110 102;
 }
 .dark {
-  --c-paper: 19 28 30;
-  --c-card: 30 40 39;
-  --c-ink: 238 231 213;
-  --c-cinnabar: 219 132 109;
-  --c-gold: 215 180 116;
-  --c-line: 77 91 82;
-  --c-muted: 181 191 179;
+  --c-paper: 9 15 22;
+  --c-card: 17 24 32;
+  --c-ink: 232 225 207;
+  --c-cinnabar: 211 170 103;
+  --c-gold: 197 157 91;
+  --c-line: 69 71 67;
+  --c-muted: 164 167 158;
 }
 body {
   background-color: rgb(var(--c-paper));
@@ -79,9 +79,15 @@ body {
     repeating-linear-gradient(0deg, transparent 0, transparent 5px, rgb(116 100 72 / .012) 6px);
 }
 .dark body {
+  background-color: #0a1017;
   background-image:
-    radial-gradient(ellipse 60% 35% at 92% 2%, rgb(62 84 75 / .22), transparent 75%),
-    radial-gradient(ellipse 55% 45% at -8% 75%, rgb(63 75 64 / .16), transparent 75%);
+    radial-gradient(circle at 17% 21%, rgb(221 187 111 / .25) .7px, transparent 1.7px),
+    radial-gradient(circle at 74% 43%, rgb(221 187 111 / .16) .7px, transparent 1.7px),
+    linear-gradient(180deg, rgb(6 11 18 / .93), rgb(9 16 23 / .91) 55%, rgb(8 14 20 / .96)),
+    url("/images/ink-clouds.jpg");
+  background-size: 277px 233px, 389px 307px, cover, cover;
+  background-position: 0 0, 51px 89px, center, center top;
+  background-attachment: fixed;
 }
 .realm-hero,
 .desktop-sidebar { background: linear-gradient(150deg, #0b242a 0%, #183638 49%, #0c252e 100%); }
@@ -268,6 +274,21 @@ body {
   font-family: "Songti SC", serif;
   font-size: 15px;
 }
+.map-atlas-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 12px; }
+.map-atlas-eyebrow { color: rgb(var(--c-gold)); font: 11px "Songti SC", "STSong", serif; letter-spacing: .22em; }
+.map-atlas-seal { display: grid; flex: none; place-items: center; width: 34px; height: 34px; color: rgb(var(--c-gold)); border: 1px solid rgb(var(--c-gold) / .5); font: 20px "Songti SC", serif; transform: rotate(-7deg); }
+.map-route { display: flex; position: relative; overflow-x: auto; gap: 0; margin: 0 0 16px; padding: 17px 8px 13px; border: 1px solid rgb(var(--c-gold) / .24); background: rgb(var(--c-paper) / .38); scrollbar-width: thin; }
+.map-route-line { display: none; }
+.map-route-stop { position: relative; display: flex; flex: 1 0 108px; flex-direction: column; align-items: center; min-width: 108px; max-width: 210px; padding: 0 6px; color: rgb(var(--c-ink)); text-align: center; }
+.map-route-stop:not(:last-child)::after { content: ""; position: absolute; top: 19px; left: calc(50% + 22px); width: calc(100% - 44px); border-top: 1px dashed rgb(var(--c-gold) / .5); pointer-events: none; }
+.map-route-orb { display: grid; position: relative; z-index: 1; place-items: center; width: 39px; height: 39px; border: 1px solid rgb(var(--c-gold) / .7); border-radius: 50%; background: rgb(var(--c-card)); color: rgb(var(--c-gold)); font: 14px Georgia, "Songti SC", serif; box-shadow: 0 0 0 4px rgb(var(--c-paper) / .6), 0 0 18px rgb(var(--c-gold) / .12); }
+.map-route-name { margin-top: 7px; font: 14px "Songti SC", "STSong", serif; white-space: nowrap; }
+.map-route-state { margin-top: 2px; color: rgb(var(--c-muted)); font-size: 10px; letter-spacing: .14em; }
+.map-route-stop-cleared .map-route-orb { color: rgb(var(--c-paper)); background: rgb(var(--c-gold)); }
+.map-route-stop-boss .map-route-orb { border-color: rgb(var(--c-cinnabar)); color: rgb(var(--c-cinnabar)); }
+.map-route-stop:disabled { opacity: .48; }
+.map-route-stop:not(:disabled):hover .map-route-orb,
+.map-route-stop:focus-visible .map-route-orb { box-shadow: 0 0 0 4px rgb(var(--c-paper) / .65), 0 0 24px rgb(var(--c-gold) / .42); transform: scale(1.06); }
 .game-shell button.bg-cinnabar,
 .creation-screen button.bg-cinnabar {
   border: 1px solid rgb(var(--c-cinnabar));
@@ -299,11 +320,184 @@ body {
 .creation-cover { background-position: 58% center; }
 .creation-cover::before { background: linear-gradient(180deg, rgb(5 20 24 / .53), transparent 55%, rgb(5 20 24 / .48)); }
 .creation-form { background: rgb(var(--c-card)); }
+
+/* 太玄问道参考方向：夜色、鎏金细线与克制的游戏面板。保留青云原有布局和操作。 */
+.game-topbar {
+  min-height: 39px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+  padding: 0 3px;
+  border-bottom: 1px solid rgb(var(--c-gold) / .28);
+  color: rgb(var(--c-gold));
+  font: 12px "Songti SC", "STSong", serif;
+  letter-spacing: .18em;
+}
+.game-topbar-brand span { margin-left: 4px; color: rgb(var(--c-muted)); font: 10px Georgia, serif; letter-spacing: .2em; }
+.game-topbar-location { color: rgb(var(--c-muted)); }
+.game-topbar-location span { margin: 0 8px; color: rgb(var(--c-gold) / .65); }
+
+.dark .desktop-sidebar {
+  color: #e9dfc8;
+  background: linear-gradient(165deg, rgb(17 24 33 / .97), rgb(10 16 23 / .97));
+  border: 1px solid rgb(198 156 84 / .38);
+  border-radius: 4px;
+  box-shadow: 0 18px 46px rgb(0 0 0 / .28), inset 0 0 35px rgb(187 139 67 / .025);
+}
+.dark .desktop-sidebar::before { inset: 6px; border-color: rgb(197 157 91 / .14); }
+.dark .desktop-sidebar::after { opacity: .06; }
+.dark .brand-seal {
+  color: #171a1b;
+  background: linear-gradient(145deg, #ebd096, #bc9250);
+  border-color: #e9cd90;
+  box-shadow: inset 0 0 0 3px rgb(255 238 190 / .18), 0 0 24px rgb(216 174 97 / .12);
+}
+.dark .sidebar-link { color: #b7b7aa; }
+.dark .sidebar-link:hover { color: #f4e4be; background: rgb(211 174 107 / .08); }
+.dark .sidebar-link-active {
+  color: #f7dfaa;
+  border-left-color: #dbb775;
+  background: linear-gradient(90deg, rgb(209 168 96 / .18), rgb(209 168 96 / .015));
+}
+.dark .sidebar-link-index { color: #9d8c6e; }
+.dark .sidebar-verse { color: #9fa9a4; }
+
+.dark .realm-hero {
+  border: 1px solid rgb(211 170 103 / .42);
+  border-radius: 4px;
+  background-image:
+    linear-gradient(90deg, rgb(8 15 22 / .94), rgb(9 17 25 / .76) 50%, rgb(8 15 22 / .46)),
+    url("/images/ink-clouds.jpg");
+  background-position: center, center 49%;
+  background-size: cover;
+  box-shadow: 0 18px 40px rgb(0 0 0 / .25), inset 0 0 40px rgb(0 0 0 / .24);
+}
+.dark .realm-hero::before {
+  background: radial-gradient(circle at 78% 18%, rgb(220 193 137 / .13), transparent 32%),
+    linear-gradient(90deg, rgb(4 10 17 / .3), transparent 72%);
+}
+@media (min-width: 1024px) {
+  .dark .realm-hero {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(400px, 1.35fr);
+    column-gap: 24px;
+    align-items: center;
+  }
+  .dark .realm-hero > div:nth-child(2),
+  .dark .realm-hero > div:nth-child(5),
+  .dark .realm-hero > details { grid-column: 1 / -1; }
+  .dark .realm-hero > div:nth-child(3) { grid-column: 1; margin-bottom: 0; }
+  .dark .realm-hero > div:nth-child(4) { grid-column: 2; margin-top: 0; }
+}
+.dark .hero-frame { border-color: rgb(223 182 108 / .22); box-shadow: inset 0 0 0 3px rgb(223 182 108 / .025); }
+.dark .hero-omen { color: #dbcba7; background: rgb(8 15 22 / .66); border-color: rgb(216 174 106 / .28); }
+.dark .resource-tile {
+  min-height: 67px;
+  background: rgb(11 18 26 / .77);
+  border-color: rgb(216 174 106 / .24);
+  box-shadow: inset 0 1px rgb(255 231 181 / .035);
+}
+.dark .hero-claim {
+  border-color: #e8ca88;
+  color: #15191b;
+  background: linear-gradient(135deg, #edcf8f, #caa35f);
+  box-shadow: 0 5px 20px rgb(0 0 0 / .28), 0 0 22px rgb(210 165 91 / .12);
+}
+.dark .hero-claim:hover { background: #f3d89e; }
+
+.dark .page-intro { border-color: rgb(197 157 91 / .34); }
+.dark .page-intro::after { height: 2px; background: #d6ac65; }
+.dark .page-intro-mark {
+  color: #d4b576;
+  border-color: rgb(210 167 94 / .45);
+  box-shadow: inset 0 0 0 4px rgb(var(--c-paper)), inset 0 0 0 5px rgb(210 167 94 / .25);
+}
+.dark .game-section {
+  border-color: rgb(211 170 103 / .33);
+  border-radius: 4px;
+  background: linear-gradient(145deg, rgb(20 27 36 / .96), rgb(13 20 29 / .96) 75%, rgb(29 30 31 / .96));
+  box-shadow: 0 9px 28px rgb(0 0 0 / .18), inset 0 1px rgb(255 235 190 / .035);
+}
+.dark .game-section::before { inset: 6px; border-color: rgb(200 155 83 / .095); }
+.dark .game-section::after { border-color: rgb(211 170 103 / .42); }
+.dark .game-section-featured {
+  border-color: rgb(221 179 102 / .52);
+  background: linear-gradient(135deg, rgb(21 30 39 / .98), rgb(13 20 29 / .97) 70%),
+    url("/images/ink-clouds.jpg") center / cover;
+}
+.dark .game-section-title { color: #e6c98e; }
+.dark .section-seal {
+  color: #e3c17f;
+  background: rgb(210 167 94 / .08);
+  border-color: rgb(210 167 94 / .44);
+  box-shadow: inset 0 0 0 2px rgb(210 167 94 / .035);
+}
+.dark .first-steps,
+.dark .surface-note,
+.dark .map-difficulty {
+  background: linear-gradient(110deg, rgb(22 30 39 / .96), rgb(15 22 31 / .96));
+  border-color: rgb(204 165 99 / .34);
+  box-shadow: 0 5px 20px rgb(0 0 0 / .12);
+}
+.dark .map-node-row { border-color: rgb(200 163 100 / .19); }
+.dark .map-node-row:hover { background: rgb(203 161 91 / .07); }
+.dark .map-node-boss { background: rgb(195 109 79 / .07); }
+.dark .map-node-mark { background: rgb(211 170 103 / .07); box-shadow: 0 0 18px rgb(211 170 103 / .07); }
+.dark .map-route { background: radial-gradient(ellipse at 55% 100%, rgb(50 64 66 / .18), transparent 68%), rgb(8 16 24 / .74); border-color: rgb(210 166 91 / .3); scrollbar-color: #645237 #101820; }
+.dark .map-route-orb { background: #121d29; box-shadow: 0 0 0 4px #101c27, 0 0 20px rgb(218 173 93 / .18); }
+.dark .map-route-stop-cleared .map-route-orb { color: #151a1e; background: #dab671; }
+.dark .map-route-stop-boss .map-route-orb { color: #eac28f; border-color: #b87860; }
+.dark .game-shell button.bg-paper,
+.dark .creation-screen button.bg-paper {
+  color: rgb(var(--c-ink));
+  background: rgb(24 32 41 / .86);
+  border-color: rgb(200 160 92 / .36);
+  box-shadow: inset 0 1px rgb(255 233 179 / .035);
+}
+.dark .game-shell button.bg-paper:not(:disabled):hover,
+.dark .creation-screen button.bg-paper:not(:disabled):hover {
+  border-color: rgb(224 183 106 / .72);
+  background: rgb(49 43 36 / .66);
+}
+.dark .game-shell button.bg-cinnabar,
+.dark .creation-screen button.bg-cinnabar {
+  color: #141a20;
+  background: linear-gradient(135deg, #e9ca89, #c5a064);
+  border-color: #dabc7b;
+  box-shadow: 0 5px 16px rgb(0 0 0 / .2);
+}
+.dark .game-shell button.bg-cinnabar:not(:disabled):hover,
+.dark .creation-screen button.bg-cinnabar:not(:disabled):hover { background: #efd69e; }
+.dark .game-shell input,
+.dark .game-shell select,
+.dark .creation-screen input,
+.dark .creation-screen select {
+  color: rgb(var(--c-ink));
+  background: rgb(11 18 26 / .8);
+  border-color: rgb(201 165 100 / .38);
+}
+.dark .game-shell option { background: #121a23; color: #e7dfcc; }
+.dark .creation-card {
+  border-color: rgb(214 174 104 / .42);
+  border-radius: 4px;
+  background: #101821;
+  box-shadow: 0 30px 70px rgb(0 0 0 / .35);
+}
+.dark .creation-form { background: linear-gradient(145deg, #18232d, #101821); }
+.dark .creation-cover { border-color: rgb(212 173 105 / .38); }
+.dark .mobile-nav-inner { background: rgb(10 17 25 / .97); border-color: rgb(211 170 103 / .46); }
+.dark .mobile-nav-link { color: #adb2aa; }
+.dark .mobile-nav-link[aria-current="page"] { color: #f0d396; background: linear-gradient(180deg, rgb(219 174 97 / .16), transparent); }
+.dark .mobile-nav-link[aria-current="page"] > span:first-child { background: #e3bb77; }
+.dark ::-webkit-scrollbar { width: 9px; height: 9px; }
+.dark ::-webkit-scrollbar-track { background: #0a1118; }
+.dark ::-webkit-scrollbar-thumb { background: #514b3d; border: 2px solid #0a1118; border-radius: 9px; }
 @media (max-width: 1023px) {
   .realm-hero { border-top: 0; border-right: 0; border-left: 0; }
   .creation-cover { border: 0; border-bottom: 1px solid rgb(215 187 132 / .56); }
 }
 @media (max-width: 639px) {
+  .map-route-stop { flex-basis: 96px; min-width: 96px; }
   .game-main button { min-height: 40px; }
   .realm-hero { padding-top: 14px; padding-bottom: 12px; }
   .realm-hero > div:nth-of-type(2) { margin-bottom: 9px; padding-bottom: 9px; }

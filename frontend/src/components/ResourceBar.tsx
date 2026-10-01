@@ -19,9 +19,9 @@ export function ResourceBar() {
   const secondary = Object.entries(state.resources).filter(([key]) => !primary.includes(key as (typeof primary)[number]));
 
   return (
-    <header className="realm-hero relative overflow-hidden rounded-b-[18px] px-5 pb-5 pt-5 text-[#f8f3e8] sm:rounded-[12px] sm:px-7 sm:pt-7">
+    <header className="realm-hero relative overflow-hidden px-5 pb-4 pt-4 text-[#f8f3e8] sm:px-7 sm:pt-5">
       <div className="hero-frame pointer-events-none absolute inset-[7px]" aria-hidden="true" />
-      <div className="relative mb-5 flex items-center gap-3 border-b border-[#d7bd87]/25 pb-3 text-[11px] tracking-[.22em] text-[#d9c79e]">
+      <div className="relative mb-3 flex items-center gap-3 border-b border-[#d7bd87]/25 pb-2 text-[11px] tracking-[.22em] text-[#d9c79e]">
         <span className="hero-volume">青云纪 · 修行卷</span>
         <span className="h-px flex-1 bg-[#d7bd87]/25" />
         <span>道途漫漫</span>
@@ -29,11 +29,11 @@ export function ResourceBar() {
       <div className="relative flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-[11px] tracking-[.32em] text-[#dccda9]">当前境界</p>
-          <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
-            <h1 className="display-font text-[35px] font-semibold leading-none tracking-[.08em] sm:text-[44px]">{REALM_NAMES[state.realm]}</h1>
+          <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
+            <h1 className="display-font text-[34px] font-semibold leading-none tracking-[.08em] sm:text-[40px]">{REALM_NAMES[state.realm]}</h1>
             <span className="hero-name display-font text-sm text-[#e3e2d6]">道号 · {state.name}</span>
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[#dfdfcf]">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#dfdfcf]">
             <span className="hero-omen" title={w?.desc}>天象 · {w?.name ?? "平常"}{state.daily.weather.used ? " · 已用" : ""}</span>
             <span className="hero-omen" title={a?.desc}>星象 · {a?.name ?? "平常"}{state.daily.astrology.used ? " · 已用" : ""}</span>
           </div>
@@ -42,7 +42,7 @@ export function ResourceBar() {
           <span aria-hidden="true" className="text-lg leading-none">◇</span> 领取收益
         </button>
       </div>
-      <div className="relative mt-8 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {primary.map((key, index) => (
           <div key={key} className="resource-tile relative overflow-hidden border border-[#d5c396]/25 px-3 py-2.5 backdrop-blur-sm">
             <span aria-hidden="true" className="resource-tile-index">{String(index + 1).padStart(2, "0")}</span>
@@ -51,7 +51,7 @@ export function ResourceBar() {
           </div>
         ))}
       </div>
-      <div className="relative mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#d7bd87]/20 pt-3 text-xs">
+      <div className="relative mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#d7bd87]/20 pt-2 text-xs">
         {pendingParts ? <p className="text-[#ebce90]">待领取 · {pendingParts}</p> : <p className="text-[#c9d4cc]">静心修行，灵气自来</p>}
         <Link href="/renwu" className="hero-goal border border-[#d3be91]/40 px-3 py-1 text-[#f4e4bd]">今日目标 {claimed}/2 →</Link>
       </div>

@@ -110,7 +110,28 @@ export default function LilianPage() {
 
       {[activeMap].map((mid) => (
         <Section key={mid} title={MAPS[mid].name} variant="featured">
-          <p className="mb-2 text-sm text-muted">{WORLD_TEXT[mid]}</p>
+          <div className="map-atlas-intro">
+            <div>
+              <p className="map-atlas-eyebrow">山河舆图 · 当前行程</p>
+              <p className="mt-1 text-sm text-muted">{WORLD_TEXT[mid]}</p>
+            </div>
+            <span className="map-atlas-seal" aria-hidden="true">游</span>
+          </div>
+          <div className="map-route" role="group" aria-label={`${MAPS[mid].name}主线节点`}>
+            <span className="map-route-line" aria-hidden="true" />
+            {Object.entries(MAPS[mid].nodes).filter(([, n]) => !n.side).map(([nid, n], index) => {
+              const ns = state.maps[mid][nid];
+              const boss = isBossNode(mid, nid);
+              return (
+                <button key={nid} type="button" onClick={() => setSelected(`${mid}|${nid}`)} disabled={!ns.unlocked}
+                  className={`map-route-stop ${ns.cleared ? "map-route-stop-cleared" : ""} ${boss ? "map-route-stop-boss" : ""}`}>
+                  <span className="map-route-orb" aria-hidden="true">{boss ? "关" : String(index + 1)}</span>
+                  <span className="map-route-name">{n.name}</span>
+                  <span className="map-route-state">{ns.cleared ? "已通" : ns.unlocked ? "可入" : "未启"}</span>
+                </button>
+              );
+            })}
+          </div>
           <p className="map-trail-heading text-xs font-medium text-muted">山门主线 · 守关试炼</p>
           {Object.entries(MAPS[mid].nodes).map(([nid, n], index) => {
             const ns = state.maps[mid][nid];

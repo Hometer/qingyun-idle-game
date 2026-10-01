@@ -35,7 +35,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }[pathname] ?? ["修行", "山高水长，道途未尽"];
 
   return (
-    <div className="game-shell mx-auto min-h-screen w-full max-w-[1340px] lg:grid lg:grid-cols-[242px_minmax(0,1fr)] lg:gap-8 lg:px-6 xl:gap-10">
+    <div className="game-shell mx-auto min-h-screen w-full max-w-[1510px] lg:grid lg:grid-cols-[222px_minmax(0,1fr)] lg:gap-5 lg:px-5 xl:gap-6">
       <aside className="desktop-sidebar hidden lg:sticky lg:top-5 lg:my-5 lg:flex lg:h-[calc(100vh-40px)] lg:flex-col">
         <div className="sidebar-top flex items-center gap-3 px-5 pt-7">
           <span className="brand-seal flex h-11 w-11 items-center justify-center text-xl">青</span>
@@ -60,6 +60,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <div className="min-w-0 pb-24 lg:pb-10 lg:pt-5">
+      <div className="game-topbar hidden lg:flex" aria-label="当前篇章">
+        <span className="game-topbar-brand">青云修仙录 <span>· QINGYUN</span></span>
+        <span className="game-topbar-location">仙途五卷 <span aria-hidden="true">／</span> {pageInfo[0]}篇</span>
+      </div>
       <ResourceBar />
 
       {state.longTask && (
@@ -118,8 +122,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="game-main mx-auto w-full max-w-[920px] px-4 pb-4 sm:px-5 lg:px-0">
-        <div className="page-intro mb-5 mt-7 flex items-end justify-between gap-4">
+      <main className="game-main mx-auto w-full max-w-[1100px] px-4 pb-4 sm:px-5 lg:px-0">
+        <div className="page-intro mb-4 mt-6 flex items-end justify-between gap-4">
           <div><p className="text-[11px] font-semibold tracking-[.26em] text-gold">青云纪 · {pageInfo[0]}篇</p>
           <h2 className="display-font mt-1 text-[31px] font-semibold leading-tight tracking-[.12em] text-ink sm:text-[37px]">{pageInfo[0]}</h2>
           <p className="mt-1 text-sm text-muted">{pageInfo[1]}</p></div>

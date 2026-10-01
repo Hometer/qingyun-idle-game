@@ -10,11 +10,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" className="dark" suppressHydrationWarning>
       <body className="min-h-screen bg-paper text-ink">
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('qingyun_theme')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);if(localStorage.getItem('qingyun_reduce_motion')==='1'){document.documentElement.classList.add('reduce-motion');}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('qingyun_theme')||'dark';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);if(localStorage.getItem('qingyun_reduce_motion')==='1'){document.documentElement.classList.add('reduce-motion');}}catch(e){document.documentElement.classList.add('dark');}})();`,
           }}
         />
         <GameProvider>

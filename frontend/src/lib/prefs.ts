@@ -31,7 +31,7 @@ export function setCopyMode(mode: CopyMode): void {
 
 export function getTheme(): Theme {
   const v = read(THEME_KEY);
-  return v === "dark" || v === "light" ? v : "system";
+  return v === "dark" || v === "light" || v === "system" ? v : "dark";
 }
 
 export function setTheme(theme: Theme): void {
