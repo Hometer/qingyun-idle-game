@@ -12,7 +12,7 @@ import {
 } from "react";
 import * as eng from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
-import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId, BreakthroughMethod, SecretRealmId, BattleDifficulty } from "@/engine/types";
+import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId, BreakthroughMethod, SecretRealmId, BattleDifficulty, TacticId } from "@/engine/types";
 import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave, type LoadedSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
@@ -78,8 +78,10 @@ interface GameContextValue {
   craftGainPill: (type: "yangYuan" | "juLing", tier: number) => void;
   useGainPill: (type: "yangYuan" | "juLing", tier: number) => void;
   quenchEquipment: (id: string) => void;
-  fight: (mapId: MapId, nodeId: string, difficulty?: BattleDifficulty) => void;
+  fight: (mapId: MapId, nodeId: string, difficulty?: BattleDifficulty, tactic?: TacticId) => void;
   suppress: (mapId: MapId, nodeId: string) => void;
+  acceptCommission: (id: string) => void;
+  claimCommission: (choice: "a" | "b") => void;
   choose: (optionId: string) => void;
   startTrial: () => void;
   doExport: () => void;
@@ -820,11 +822,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state, apply]);
 
   const fight = useCallback(
-    async (mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal") => {
+    async (mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal", tactic: TacticId = "normal") => {
       if (!state) return;
       const nowMs = Date.now();
       const settled = eng.settle(state, nowMs);
-      const r = eng.fightNode(settled, nowMs, mapId, nodeId, difficulty);
+      const r = eng.fightNode(settled, nowMs, mapId, nodeId, difficulty, tactic);
       setBattleLog(r.log);
       if (!r.ok) {
         setNotice(r.reason);
@@ -859,6 +861,32 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return;
       }
       await apply(r.state, "已镇压，获得持续产出");
+    },
+    [state, apply],
+  );
+
+  const acceptCommission = useCallback(
+    async (id: string) => {
+      if (!state) return;
+      const r = eng.acceptCommission(state, Date.now(), id);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "已接下委托");
+    },
+    [state, apply],
+  );
+
+  const claimCommission = useCallback(
+    async (choice: "a" | "b") => {
+      if (!state) return;
+      const r = eng.claimCommission(state, Date.now(), choice);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "委托奖励已领取");
     },
     [state, apply],
   );
@@ -1060,6 +1088,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     quenchEquipment,
     fight,
     suppress,
+    acceptCommission,
+    claimCommission,
     choose,
     startTrial,
     doExport,

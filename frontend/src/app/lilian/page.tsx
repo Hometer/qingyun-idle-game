@@ -6,7 +6,7 @@ import { Section } from "@/components/Section";
 import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, RESOURCE_LABELS, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, SECRET_REALMS, fmt, fmtCombat, fmtTime, fmtDuration } from "@/lib/labels";
 import { CONFIG } from "@/engine/config";
 import { isBossNode, predictFight, predictLongTask, predictSecretRealm, repeatRewardFor, secretRealmReward } from "@/engine/engine";
-import type { BattleDifficulty, MapId, SecretRealmId } from "@/engine/types";
+import type { BattleDifficulty, MapId, SecretRealmId, TacticId } from "@/engine/types";
 
 type NodeCfg = {
   name: string;
@@ -19,6 +19,20 @@ type NodeCfg = {
 };
 
 const MAPS_CFG = CONFIG.maps as unknown as Record<MapId, { name: string; nodes: Record<string, NodeCfg> }>;
+
+const TACTIC_CFG = CONFIG.tactics as unknown as Record<TacticId, { name: string; note: string }>;
+const COMMISSION_NPC = (CONFIG.commission as unknown as { fixedNpcName: string }).fixedNpcName;
+
+function rewardParts(r: { cultivation: number; spirit: number; spiritStone: number; herb: number; page: number; iron: number }): string {
+  const parts: string[] = [];
+  if (r.cultivation) parts.push(`修为 ${r.cultivation}`);
+  if (r.spirit) parts.push(`灵气 ${r.spirit}`);
+  if (r.spiritStone) parts.push(`灵石 ${r.spiritStone}`);
+  if (r.herb) parts.push(`灵草 ${r.herb}`);
+  if (r.page) parts.push(`残页 ${r.page}`);
+  if (r.iron) parts.push(`玄铁 ${r.iron}`);
+  return parts.join("、") || "无";
+}
 
 function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"], material: string | null): string {
   const parts: string[] = [];
@@ -35,10 +49,11 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"], material: 
 }
 
 export default function LilianPage() {
-  const { state, view, now, fight, suppress, startLong, realmPending, realmNarrative, realmNarrativeLoading, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
+  const { state, view, now, fight, suppress, startLong, acceptCommission, claimCommission, realmPending, realmNarrative, realmNarrativeLoading, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedMap, setSelectedMap] = useState<MapId | null>(null);
   const [difficulty, setDifficulty] = useState<BattleDifficulty>("normal");
+  const [tactic, setTactic] = useState<TacticId>("normal");
   const [trainNode, setTrainNode] = useState<{ mid: MapId; nid: string } | null>(null);
   const [trainDifficulty, setTrainDifficulty] = useState<"steady" | "risky">("steady");
   const [trainDuration, setTrainDuration] = useState(30);
@@ -78,8 +93,9 @@ export default function LilianPage() {
 
   const sel = selected ? (selected.split("|") as [MapId, string]) : null;
   const selCfg = sel ? MAPS_CFG[sel[0]]?.nodes[sel[1]] : null;
-  const selPred = sel ? predictFight(state, sel[0], sel[1], difficulty) : null;
+  const selPred = sel ? predictFight(state, sel[0], sel[1], difficulty, tactic) : null;
   const selRepeat = sel ? repeatRewardFor(sel[0], sel[1], difficulty) : null;
+  const hasAnyClear = Object.values(state.maps).some((m) => Object.values(m).some((n) => n.cleared));
 
   return (
     <>
@@ -173,6 +189,7 @@ export default function LilianPage() {
               {state.lastBattle.won ? <span className="text-cinnabar">胜利</span> : <span className="text-muted">战败</span>}
               <span className="ml-2 text-muted">
                 {state.lastBattle.mapName} · {state.lastBattle.difficulty === "normal" ? "普通" : state.lastBattle.difficulty === "challenge" ? "挑战" : "秘境"}
+                {state.lastBattle.difficulty === "challenge" ? ` · ${TACTIC_CFG[state.lastBattle.tactic]?.name ?? state.lastBattle.tactic}` : ""}
               </span>
             </p>
             <p className="mt-1 text-xs text-muted">
@@ -197,6 +214,59 @@ export default function LilianPage() {
               </div>
             </details>
           </div>
+        </Section>
+      )}
+
+      {hasAnyClear && (
+        <Section title={`山河委托 · ${COMMISSION_NPC}`}>
+          {state.commission.active ? (
+            <div className="rounded-lg border border-line/60 p-3">
+              <p className="text-sm font-medium">{state.commission.active.title}</p>
+              <p className="mt-1 text-xs text-muted">
+                进度 {state.commission.active.progress}/{state.commission.active.target}
+                {state.commission.active.status === "ready" ? " · 已完成，待领奖" : " · 进行中"}
+              </p>
+              {state.commission.active.status === "ready" && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-muted">选择奖励（二选一，领取后关闭）</p>
+                  <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+                    <button onClick={() => claimCommission("a")} className="flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-xs text-left hover:bg-cinnabar/10">
+                      {rewardParts(state.commission.active.rewardA)}
+                    </button>
+                    <button onClick={() => claimCommission("b")} className="flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-xs text-left hover:bg-cinnabar/10">
+                      {rewardParts(state.commission.active.rewardB)}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {state.commission.candidates.length === 0 && (
+                <p className="text-xs text-muted">今日暂无可接的委托，明日再来。</p>
+              )}
+              {state.commission.candidates.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-2 border-b border-line/60 py-2 last:border-0">
+                  <div className="min-w-0 text-sm">
+                    <span>{c.title}</span>
+                    <span className="ml-1 text-xs text-muted">{c.kind === "battle" ? "· 战斗" : "· 制作"}</span>
+                  </div>
+                  <button onClick={() => acceptCommission(c.id)} className="shrink-0 rounded-lg border border-line bg-paper px-3 py-1.5 text-sm hover:bg-cinnabar/10">接取</button>
+                </div>
+              ))}
+            </>
+          )}
+          {state.commission.history.length > 0 && (
+            <div className="mt-3 border-t border-line/60 pt-2">
+              <p className="text-xs font-medium text-muted">已交付</p>
+              {[...state.commission.history].reverse().slice(0, 5).map((c) => (
+                <div key={c.id} className="mt-1 text-xs text-muted">
+                  <span className="text-ink/75">{c.title}</span>
+                  {c.response && <span className="ml-1">{c.response}</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </Section>
       )}
 
@@ -320,6 +390,20 @@ export default function LilianPage() {
                 预估：{selPred.won ? <span className="text-cinnabar">预计可胜</span> : <span className="text-muted">预计难胜</span>}
               </p>
             )}
+            {difficulty === "challenge" && selPred.ok && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-muted">战前战术</p>
+                <div className="mt-1 flex gap-2">
+                  {(["normal", "break", "guard"] as const).map((t) => (
+                    <button key={t} type="button" onClick={() => setTactic(t)} aria-pressed={tactic === t}
+                      className={`flex-1 rounded-lg border px-2 py-1.5 text-xs ${tactic === t ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>
+                      {TACTIC_CFG[t].name}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-muted">{TACTIC_CFG[tactic].note}（含随机暴击，实际或与预估有差异）</p>
+              </div>
+            )}
             <p className="mt-1 text-xs text-muted">{difficulty === "normal" ? rewardText(selCfg.firstClear, selCfg.repeat, selRepeat?.material ?? null) : `挑战胜利：修为 ${selRepeat?.cultivation ?? 0}、残页 ${selRepeat?.page ?? 0}${selRepeat?.material ? `、${RESOURCE_LABELS[selRepeat.material]} 1` : ""}（每日限次；${isBossNode(sel[0], sel[1]) ? "12 回合内获胜" : "不限回合"}）`}</p>
             <p className="mt-1 text-xs text-muted">
               镇压产出：灵石 {selCfg.suppressRate}/秒（约 {fmt(selCfg.suppressRate * 3600)}/小时）
@@ -327,7 +411,7 @@ export default function LilianPage() {
             <div className="mt-4 flex gap-2">
               <button
                 onClick={() => {
-                  fight(sel[0], sel[1], difficulty);
+                  fight(sel[0], sel[1], difficulty, tactic);
                   setSelected(null);
                 }}
                 disabled={!selPred.ok}

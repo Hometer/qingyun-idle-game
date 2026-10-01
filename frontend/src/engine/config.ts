@@ -1526,6 +1526,18 @@ const BASE_CONFIG = {
     maxKeyEvents: 20,
   } as const,
 
+  tactics: {
+    normal: { name: "常法", damageMult: 1, takenMult: 1, note: "沿用既有攻守" },
+    break: { name: "破势", damageMult: 1.25, takenMult: 1.35, note: "提高输出、承伤更重" },
+    guard: { name: "守拙", damageMult: 0.78, takenMult: 0.7, note: "降低输出、提升生存" },
+  } as const,
+
+  commission: {
+    fixedNpcName: "青崖",
+    dailyCandidates: 2,
+    rewardShare: 0.4,
+  } as const,
+
   tribulation: {
     wavesPct: [0.20, 0.25, 0.30, 0.35, 0.40],
     reductionCap: 0.4,

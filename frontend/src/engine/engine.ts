@@ -9,6 +9,7 @@ import type {
   BreakthroughMethod,
   BreakthroughRecord,
   BuildingId,
+  Commission,
   ContinuityStory,
   DailyState,
   LastBattle,
@@ -27,6 +28,7 @@ import type {
   SecretRealmId,
   SpiritRoot,
   StoryId,
+  TacticId,
   TechniqueId,
   TribulationLog,
   TribulationWave,
@@ -116,6 +118,13 @@ const CONTINUITY_CFG = CONFIG.continuity as unknown as {
 };
 
 const BATTLE_REPORT_CFG = CONFIG.battleReport as unknown as { maxEvents: number; maxKeyEvents: number };
+
+const TACTIC_CFG = CONFIG.tactics as unknown as Record<
+  TacticId,
+  { name: string; damageMult: number; takenMult: number; note: string }
+>;
+
+const COMMISSION_CFG = CONFIG.commission as unknown as { fixedNpcName: string; dailyCandidates: number; rewardShare: number };
 
 function followUpEventId(cont: ContinuityStory): string | null {
   return CONTINUITY_CFG.stories[cont.storyId]?.followUps[cont.originOptionId] ?? null;
@@ -340,6 +349,173 @@ function ensureSecretRealm(s: SaveState, nowMs: number): void {
     s.secretRealmDate = today;
     s.secretRealmUsed = emptySecretRealmUsed();
   }
+}
+
+// ---- 山河委托（v1.8） ----
+
+function commissionProgress(s: SaveState, kind: Commission["kind"], match: (c: Commission) => boolean): void {
+  const c = s.commission?.active;
+  if (!c || c.kind !== kind || c.status !== "accepted") return;
+  if (!match(c)) return;
+  c.progress = Math.min(c.target, c.progress + 1);
+  if (c.progress >= c.target) c.status = "ready";
+}
+
+function commissionRewards(s: SaveState): { a: Resources; b: Resources } {
+  const prod = productionBreakdown(s);
+  const share = COMMISSION_CFG.rewardShare;
+  const day = 86400;
+  const cult = Math.max(1, Math.round(prod.cultivationPerSec * day * share));
+  const spirit = Math.max(1, Math.round(prod.spiritPerSec * day * share));
+  const herb = Math.max(0, Math.round(prod.herbPerSec * day * share));
+  const stone = Math.max(0, Math.round(prod.spiritStonePerSec * day * share));
+  const a: Resources = { ...emptyResources(), cultivation: cult, spirit };
+  const b: Resources = {
+    ...emptyResources(),
+    spiritStone: Math.max(1, stone + cult),
+    herb: Math.max(1, herb + 1),
+    page: Math.max(1, Math.round(cult / 5)),
+  };
+  return { a, b };
+}
+
+function makeCraftCommission(s: SaveState, id: string, title: string, action: string, actionParam: string | undefined): Commission {
+  const r = commissionRewards(s);
+  return {
+    id,
+    kind: "craft",
+    title,
+    action,
+    actionParam,
+    target: 1,
+    progress: 0,
+    rewardA: r.a,
+    rewardB: r.b,
+    status: "accepted",
+  };
+}
+
+function clearedNodes(s: SaveState): Array<{ mid: MapId; nid: string }> {
+  const out: Array<{ mid: MapId; nid: string }> = [];
+  for (const mid of MAP_ORDER) {
+    for (const nid of mainNodeIds(mid)) {
+      if (s.maps[mid]?.[nid]?.cleared) out.push({ mid, nid });
+    }
+  }
+  return out;
+}
+
+function battleCandidate(s: SaveState): Commission | null {
+  const cleared = clearedNodes(s);
+  if (cleared.length === 0) return null;
+  const current = MAP_ORDER.slice().reverse().find((mid) => {
+    const firstNode = mainNodeIds(mid)[0];
+    return realmIndex(s.realm) >= realmIndex(MAP_CFG[mid].nodes[firstNode].gate as RealmId);
+  });
+  const preferred = cleared.filter((c) => c.mid === current);
+  const pick = (preferred.length ? preferred : cleared)[0];
+  const node = MAP_CFG[pick.mid].nodes[pick.nid];
+  const r = commissionRewards(s);
+  return {
+    id: `battle:${pick.mid}:${pick.nid}`,
+    kind: "battle",
+    title: `在「${MAP_CFG[pick.mid].name}·${node.name}」赢得一场挑战`,
+    mapId: pick.mid,
+    nodeId: pick.nid,
+    difficulty: "challenge",
+    target: 1,
+    progress: 0,
+    rewardA: r.a,
+    rewardB: r.b,
+    status: "accepted",
+  };
+}
+
+function craftCandidate(s: SaveState): Commission | null {
+  if (s.forge >= 1) {
+    const recipe = Object.entries(CRAFT_CFG).find(([, cfg]) => realmIndex(s.realm) >= realmIndex(cfg.gate as RealmId));
+    if (recipe) {
+      const id = recipe[0];
+      return makeCraftCommission(s, `craft:craftEquipment:${id}`, `炼制 1 件「${EQUIP_CFG[id].name}」`, "craftEquipment", id);
+    }
+  }
+  if (s.buildings.alchemyFurnace >= 1) {
+    return makeCraftCommission(s, "craft:craftPill:1", "炼制 1 枚护劫丹", "craftPill", "1");
+  }
+  for (const bid of Object.keys(CONFIG.buildings) as BuildingId[]) {
+    if (s.buildings[bid] < CONFIG.buildings[bid].levels.length) {
+      return makeCraftCommission(s, `craft:upgradeBuilding:${bid}`, `升级 1 次「${CONFIG.buildings[bid].name}」`, "upgradeBuilding", bid);
+    }
+  }
+  if (s.technique && s.techniqueLevel[s.technique] < CONFIG.techniques[s.technique].levels.length) {
+    return makeCraftCommission(s, "craft:upgradeTechnique", `精进 1 次「${CONFIG.techniques[s.technique].name}」`, "upgradeTechnique", undefined);
+  }
+  for (const t of ["yangYuan", "juLing"] as const) {
+    for (let tier = 1; tier <= 4; tier++) {
+      const pillId = t === "yangYuan" ? `yangYuanDan_${tier}` : `juLingDan_${tier}`;
+      if ((s.inventory[pillId] || 0) > 0) {
+        return makeCraftCommission(s, `craft:useGainPill:${t}:${tier}`, `服用 1 枚${t === "yangYuan" ? "养元丹" : "聚灵丹"}`, "useGainPill", `${t}:${tier}`);
+      }
+    }
+  }
+  return null;
+}
+
+function generateCandidates(s: SaveState): Commission[] {
+  const out: Commission[] = [];
+  const battle = battleCandidate(s);
+  if (battle) out.push(battle);
+  const craft = craftCandidate(s) ?? battle;
+  if (craft && !out.some((c) => c.id === craft.id)) out.push(craft);
+  return out.slice(0, COMMISSION_CFG.dailyCandidates);
+}
+
+function ensureCommission(s: SaveState, nowMs: number): void {
+  const today = todayStr(nowMs);
+  if (!s.commission) s.commission = { date: today, candidates: [], active: null, history: [] };
+  if (s.commission.date === today) return;
+  s.commission.date = today;
+  s.commission.candidates = generateCandidates(s);
+}
+
+function commissionResponse(c: Commission): string {
+  const npc = COMMISSION_CFG.fixedNpcName;
+  return c.kind === "battle"
+    ? `${npc} 传话：这场仗打得漂亮，山河之间又少了一处隐患。`
+    : `${npc} 传话：炉火已熄，这份心意我记下了，改日再叙。`;
+}
+
+export function acceptCommission(state: SaveState, nowMs: number, id: string): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const idx = s.commission.candidates.findIndex((c) => c.id === id);
+  if (idx < 0) return fail("无此委托");
+  if (s.commission.active) return fail("已有进行中的委托");
+  const c = s.commission.candidates[idx];
+  c.status = "accepted";
+  s.commission.active = c;
+  s.commission.candidates = [];
+  s.recentLogs.push(`接下委托「${c.title}」。`);
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function claimCommission(state: SaveState, nowMs: number, choice: "a" | "b"): Result<SaveState> {
+  const s = settle(state, nowMs);
+  const c = s.commission.active;
+  if (!c) return fail("无进行中的委托");
+  if (c.status !== "ready") return fail("委托尚未完成");
+  const reward = choice === "a" ? c.rewardA : c.rewardB;
+  applyReward(s, reward);
+  c.status = "claimed";
+  c.rewardChoice = choice;
+  c.claimedAt = nowMs;
+  c.response = commissionResponse(c);
+  s.commission.history.push(c);
+  s.commission.active = null;
+  s.recentLogs.push(`委托「${c.title}」完成，得${fmtReward(reward)}。`);
+  pushMilestone(s, "commission", nowMs, `山河委托「${c.title}」完成`);
+  s.revision += 1;
+  return { state: s, ok: true };
 }
 
 function applyReward(s: SaveState, reward: Partial<Resources>): void {
@@ -870,6 +1046,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     secretRealmLog: [],
     forge: 0,
     lastBattle: null,
+    commission: { date: todayStr(nowMs), candidates: [], active: null, history: [] },
     recentLogs: [`入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}。`],
     milestones: [{ type: "create", time: nowMs, text: `入道青云，名「${name}」，灵根属${validSpiritRoot(spiritRoot)}，资质${APTITUDE_CFG[apt].name}` }],
     firsts: { settledOnce: false, suppressedFirstNodeOnce: false, viewedTribPreviewOnce: false },
@@ -882,6 +1059,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     lastSettledAt: nowMs,
     revision: 0,
   };
+  state.commission.candidates = generateCandidates(state);
   return state;
 }
 
@@ -1168,6 +1346,7 @@ export function productionBreakdown(state: SaveState): ProductionBreakdown {
 export function settle(state: SaveState, nowMs: number): SaveState {
   const s = structuredClone(state);
   ensureDaily(s, nowMs);
+  ensureCommission(s, nowMs);
 
   const capMs = CONFIG.offlineCapHours * 3600 * 1000;
   const from = s.lastSettledAt;
@@ -1311,6 +1490,7 @@ export function upgradeBuilding(state: SaveState, nowMs: number, id: BuildingId)
   s.resources.spiritStone -= cfg.cost;
   s.buildings[id] = lvl + 1;
   s.recentLogs.push(`洞府扩建，${CONFIG.buildings[id].name}升至${lvl + 1}级。`);
+  commissionProgress(s, "craft", (c) => c.action === "upgradeBuilding" && c.actionParam === id);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1409,6 +1589,7 @@ export function buildLibrary(state: SaveState, nowMs: number): Result<SaveState>
   s.library += 1;
   s.recentLogs.push(`藏经阁升至${s.library}级。`);
   pushMilestone(s, "library", nowMs, `藏经阁升至${s.library}级`);
+  commissionProgress(s, "craft", (c) => c.action === "buildLibrary");
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1428,6 +1609,7 @@ export function buildForge(state: SaveState, nowMs: number): Result<SaveState> {
   s.forge += 1;
   s.recentLogs.push("炼器台扩建，可炼制更高阶装备。");
   pushMilestone(s, "forge", nowMs, `炼器台升至${s.forge}级`);
+  commissionProgress(s, "craft", (c) => c.action === "buildForge");
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1453,6 +1635,7 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
   createInstance(s, id);
   s.recentLogs.push(`炼得${EQUIP_CFG[id].name}。`);
   pushMilestone(s, "craft", nowMs, `炼得${EQUIP_CFG[id].name}`);
+  commissionProgress(s, "craft", (c) => c.action === "craftEquipment" && c.actionParam === id);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1495,6 +1678,7 @@ export function upgradeTechnique(state: SaveState, nowMs: number): Result<SaveSt
   s.techniqueLevel[t] = lvl + 1;
   s.recentLogs.push(`${CONFIG.techniques[t].name}精进至${lvl + 1}重。`);
   pushMilestone(s, "technique", nowMs, `${CONFIG.techniques[t].name}精进至${lvl + 1}重`);
+  commissionProgress(s, "craft", (c) => c.action === "upgradeTechnique");
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1540,6 +1724,7 @@ export function craftPill(state: SaveState, nowMs: number, tier = 1): Result<Sav
   }
   const tierName = ["凡", "灵", "仙", "道"][tier - 1];
   s.recentLogs.push(`开炉炼丹，得护劫丹（${tierName}品）一枚。`);
+  commissionProgress(s, "craft", (c) => c.action === "craftPill" && c.actionParam === String(tier));
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1579,6 +1764,7 @@ export function useGainPill(state: SaveState, nowMs: number, type: "yangYuan" | 
   s.inventory[pillId] -= 1;
   s.daily.rewardedDan += 1;
   s.recentLogs.push(`服下${type === "yangYuan" ? "养元丹" : "聚灵丹"}，得${type === "yangYuan" ? "修为" : "灵气"}${amount}。`);
+  commissionProgress(s, "craft", (c) => c.action === "useGainPill" && c.actionParam === `${type}:${tier}`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -1756,6 +1942,7 @@ function buildBattleReport(
   mapName: string,
   enemyName: string,
   difficulty: string,
+  tactic: TacticId,
   maxRounds: number,
   battle: { won: boolean; log: string[]; rounds: BattleRoundEvent[]; keyEvents: string[]; roundLimitReached: boolean },
   player: { attack: number; defense: number; hp: number },
@@ -1771,6 +1958,7 @@ function buildBattleReport(
     mapName,
     enemyName,
     difficulty,
+    tactic,
     maxRounds,
     roundLimitReached: battle.roundLimitReached,
     rounds: last ? last.round : 0,
@@ -1816,7 +2004,7 @@ export interface FightPrediction {
   player: { attack: number; defense: number; hp: number };
 }
 
-export function predictFight(state: SaveState, mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal"): FightPrediction {
+export function predictFight(state: SaveState, mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal", tactic: TacticId = "normal"): FightPrediction {
   const mapCfg = MAP_CFG[mapId];
   const nodeCfg = mapCfg?.nodes[nodeId];
   const nodeState = state.maps[mapId]?.[nodeId];
@@ -1829,11 +2017,12 @@ export function predictFight(state: SaveState, mapId: MapId, nodeId: string, dif
   if (difficulty === "challenge" && !nodeState.cleared) return { ok: false, reason: "需先普通首胜，方可挑战高难度", won: false, log: [], enemy: empty, player: empty };
   const stats = playerStats(state);
   const rules = fightRules(mapId, nodeId, difficulty);
-  const battle = runBattle(stats, rules.enemy, battleDamageMult(state), battleTakenMult(state), rules.maxRounds, battleMods(state));
+  const t = difficulty === "challenge" ? TACTIC_CFG[tactic] : TACTIC_CFG.normal;
+  const battle = runBattle(stats, rules.enemy, battleDamageMult(state) * t.damageMult, battleTakenMult(state) * t.takenMult, rules.maxRounds, battleMods(state));
   return { ok: true, reason: "", won: battle.won, log: battle.log, enemy: rules.enemy, player: stats };
 }
 
-export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal"): FightOutcome {
+export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal", tactic: TacticId = "normal"): FightOutcome {
   const s = settle(state, nowMs);
   const mapCfg = MAP_CFG[mapId];
   const nodeCfg = mapCfg?.nodes[nodeId];
@@ -1848,7 +2037,9 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   const stats = playerStats(s);
   const dmgMult = battleDamageMult(s);
   const rules = fightRules(mapId, nodeId, difficulty);
-  const battle = runBattle(stats, rules.enemy, dmgMult, battleTakenMult(s), rules.maxRounds, battleMods(s));
+  const t = difficulty === "challenge" ? TACTIC_CFG[tactic] : TACTIC_CFG.normal;
+  const effTactic: TacticId = difficulty === "challenge" ? tactic : "normal";
+  const battle = runBattle(stats, rules.enemy, dmgMult * t.damageMult, battleTakenMult(s) * t.takenMult, rules.maxRounds, battleMods(s));
   const log = battle.log;
   const won = battle.won;
   const rewardLines: string[] = [];
@@ -1867,7 +2058,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     log.push(analyzeFailure(stats, rules.enemy));
     s.recentLogs.push(`与${nodeCfg.name}交手，不敌落败。`);
     noRewardNote = "未获得奖励";
-    s.lastBattle = buildBattleReport("map", mapCfg.name, nodeCfg.name, difficulty, rules.maxRounds, battle, stats, rules.enemy, nowMs, rewardLines, noRewardNote);
+    s.lastBattle = buildBattleReport("map", mapCfg.name, nodeCfg.name, difficulty, effTactic, rules.maxRounds, battle, stats, rules.enemy, nowMs, rewardLines, noRewardNote);
     s.revision += 1;
     return { ok: true, reason: "战败", state: s, log, won: false, encounterTriggered: false };
   }
@@ -1954,7 +2145,8 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
     }
   }
 
-  s.lastBattle = buildBattleReport("map", mapCfg.name, nodeCfg.name, difficulty, rules.maxRounds, battle, stats, rules.enemy, nowMs, rewardLines, noRewardNote);
+  s.lastBattle = buildBattleReport("map", mapCfg.name, nodeCfg.name, difficulty, effTactic, rules.maxRounds, battle, stats, rules.enemy, nowMs, rewardLines, noRewardNote);
+  commissionProgress(s, "battle", (c) => c.mapId === mapId && c.nodeId === nodeId && (c.difficulty ?? "normal") === difficulty);
   s.revision += 1;
   return { ok: true, reason: "", state: s, log, won: true, encounterTriggered };
 }
@@ -2478,7 +2670,7 @@ export function enterSecretRealm(state: SaveState, nowMs: number, realmId: Secre
   const rewardTxt = battle.won ? `得 ${fmtReward(reward)}` : "未获奖励";
   s.recentLogs.push(`秘境「${cfg.name}」${battle.won ? "探索成功" : "探索失败"}，${rewardTxt}。`);
   pushMilestone(s, "realm", nowMs, `秘境「${cfg.name}」${battle.won ? "探索成功" : "探索失败"}，${rewardTxt}`);
-  s.lastBattle = buildBattleReport("secret", cfg.name, cfg.name, "secret", 50, battle, stats, cfg.enemy, nowMs, rewardLines, noRewardNote);
+  s.lastBattle = buildBattleReport("secret", cfg.name, cfg.name, "secret", "normal", 50, battle, stats, cfg.enemy, nowMs, rewardLines, noRewardNote);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -2629,7 +2821,20 @@ export function migrateSave(raw: SaveState): SaveState {
   if (rawEncounter.continuity === undefined) rawEncounter.continuity = null;
   if (!Array.isArray(rawEncounter.completedStories)) rawEncounter.completedStories = [];
   s.encounter = rawEncounter;
-  if (s.lastBattle === undefined) s.lastBattle = null;
+  if (s.lastBattle === undefined || s.lastBattle === null) {
+    s.lastBattle = null;
+  } else if (typeof s.lastBattle === "object" && (s.lastBattle as Record<string, unknown>).tactic === undefined) {
+    (s.lastBattle as Record<string, unknown>).tactic = "normal";
+  }
+  if (!s.commission || typeof s.commission !== "object") {
+    s.commission = { date: todayStr(Date.now()), candidates: [], active: null, history: [] };
+  } else {
+    const comm = s.commission as unknown as Record<string, unknown>;
+    if (!Array.isArray(comm.candidates)) comm.candidates = [];
+    if (comm.active === undefined) comm.active = null;
+    if (!Array.isArray(comm.history)) comm.history = [];
+    if (typeof comm.date !== "string") comm.date = todayStr(Date.now());
+  }
   s.schemaVersion = SCHEMA_VERSION;
   const migrated = s as unknown as SaveState;
   syncRealmMaps(migrated);
@@ -2928,6 +3133,7 @@ function validateLastBattle(v: unknown): string | null {
   const b = v as Record<string, unknown>;
   if (typeof b.won !== "boolean") return "最近战报胜负无效";
   if (b.kind !== "map" && b.kind !== "secret") return "最近战报类型无效";
+  if (b.tactic !== undefined && !["normal", "break", "guard"].includes(b.tactic as string)) return "最近战报战术无效";
   for (const k of ["mapName", "enemyName", "difficulty"]) {
     if (typeof b[k] !== "string") return "最近战报字段无效";
   }
@@ -2961,6 +3167,57 @@ function validateLastBattle(v: unknown): string | null {
   const rewardLines = b.rewardLines;
   if (!Array.isArray(rewardLines) || (rewardLines as unknown[]).some((x) => typeof x !== "string")) return "最近战报奖励无效";
   if (b.noRewardNote !== undefined && typeof b.noRewardNote !== "string") return "最近战报奖励说明无效";
+  return null;
+}
+
+function validateCommissionItem(c: unknown): string | null {
+  if (!c || typeof c !== "object" || Array.isArray(c)) return "委托数据无效";
+  const o = c as Record<string, unknown>;
+  if (typeof o.id !== "string" || !o.id.trim()) return "委托 ID 无效";
+  if (o.kind !== "battle" && o.kind !== "craft") return "委托类型无效";
+  if (typeof o.title !== "string" || !o.title.trim()) return "委托标题无效";
+  if (o.kind === "battle") {
+    if (typeof o.mapId !== "string" || !MAP_CFG[o.mapId as MapId]) return "委托地图无效";
+    if (typeof o.nodeId !== "string" || !MAP_CFG[o.mapId as MapId]?.nodes[o.nodeId]) return "委托节点无效";
+  }
+  if (o.kind === "craft" && typeof o.action !== "string") return "委托动作无效";
+  if (!Number.isInteger(o.target) || (o.target as number) < 1) return "委托目标无效";
+  if (!Number.isInteger(o.progress) || (o.progress as number) < 0 || (o.progress as number) > (o.target as number)) return "委托进度无效";
+  if (!["accepted", "ready", "claimed"].includes(o.status as string)) return "委托状态无效";
+  for (const key of ["rewardA", "rewardB"]) {
+    const r = o[key] as Record<string, unknown> | undefined;
+    if (!r || typeof r !== "object") return "委托奖励无效";
+    for (const k of ["cultivation", "spirit", "spiritStone", "herb", "page", "iron"]) {
+      if (!isNonNegFinite(r[k])) return "委托奖励无效";
+    }
+  }
+  if (o.rewardChoice !== undefined && o.rewardChoice !== "a" && o.rewardChoice !== "b") return "委托奖励选择无效";
+  if (o.claimedAt !== undefined && !isNonNegFinite(o.claimedAt)) return "委托领奖时间无效";
+  if (o.response !== undefined && typeof o.response !== "string") return "委托回应无效";
+  return null;
+}
+
+function validateCommission(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "object") return "委托数据无效";
+  const o = v as Record<string, unknown>;
+  if (typeof o.date !== "string" || !isValidDateStr(o.date)) return "委托日期无效";
+  const candidates = o.candidates;
+  if (!Array.isArray(candidates) || candidates.length > COMMISSION_CFG.dailyCandidates) return "委托候选无效";
+  for (const c of candidates as unknown[]) {
+    const err = validateCommissionItem(c);
+    if (err) return err;
+  }
+  if (o.active !== null && o.active !== undefined) {
+    const err = validateCommissionItem(o.active);
+    if (err) return err;
+  }
+  const history = o.history;
+  if (!Array.isArray(history)) return "委托历史无效";
+  for (const c of history as unknown[]) {
+    const err = validateCommissionItem(c);
+    if (err) return err;
+  }
   return null;
 }
 
@@ -3202,6 +3459,7 @@ export function importSave(json: string): Result<SaveState> {
     validateBreakthroughRecords(o.breakthroughRecords),
     validateJindanTrial(o.jindanTrial),
     validateLastBattle(o.lastBattle),
+    validateCommission(o.commission),
   ];
   for (const c of checks) if (c) return fail(c);
 
@@ -3254,6 +3512,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.longTask = (o.longTask as LongTask | null) ?? null;
   base.lastLongTaskResult = (o.lastLongTaskResult as LongTaskResult | null) ?? null;
   base.lastBattle = (o.lastBattle as LastBattle | null) ?? null;
+  base.commission = { ...base.commission, ...((o.commission as Partial<SaveState["commission"]>) || {}) };
   base.aptitude = validAptitude(o.aptitude);
   base.breakthroughFails = { ...base.breakthroughFails, ...((o.breakthroughFails as Record<string, number>) || {}) };
   base.breakthroughRecords = Array.isArray(o.breakthroughRecords) ? (o.breakthroughRecords as BreakthroughRecord[]) : [];

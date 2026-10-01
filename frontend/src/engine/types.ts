@@ -11,6 +11,7 @@ export type AptitudeId = "balanced" | "focus" | "spirit"; // 均衡 / 凝神 / �
 export type BreakthroughLayer = `${RealmStagePrefix}${Exclude<RealmLayerNum, "10">}`;
 export type BreakthroughMethod = "steady" | "risky"; // 稳妥 / 冲关
 export type BattleDifficulty = "normal" | "challenge";
+export type TacticId = "normal" | "break" | "guard";
 export type BuildingId = "cultivationRoom" | "spiritArray" | "spiritField" | "alchemyFurnace";
 export type TechniqueId = "qingYun" | "xuanGui" | "poYue" | "juYuan" | "ningYing" | "yunHai" | "buXiu" | "hunYuanGuiYi" | "taiChu";
 export type EquipSlot = "weapon" | "armor" | "accessory";
@@ -163,6 +164,35 @@ export interface SecretRealmLog {
   at: number;
 }
 
+export type CommissionKind = "battle" | "craft";
+export type CommissionStatus = "accepted" | "ready" | "claimed";
+
+export interface Commission {
+  id: string;
+  kind: CommissionKind;
+  title: string;
+  mapId?: MapId;            // battle 目标地图
+  nodeId?: string;          // battle 目标节点
+  difficulty?: BattleDifficulty; // battle 目标难度
+  action?: string;          // craft 动作
+  actionParam?: string;     // craft 动作参数
+  target: number;           // 需完成次数
+  progress: number;         // 已完成次数
+  rewardA: Resources;
+  rewardB: Resources;
+  status: CommissionStatus;
+  rewardChoice?: "a" | "b";
+  claimedAt?: number;
+  response?: string;        // 固定人物后续回应
+}
+
+export interface CommissionState {
+  date: string;             // 候选生成日期 YYYY-MM-DD
+  candidates: Commission[]; // 当日候选（未接取）
+  active: Commission | null; // 已接取
+  history: Commission[];    // 已领奖
+}
+
 export interface BattleRoundEvent {
   round: number; // 第几回合（从 1 起）
   actor: "player" | "enemy";
@@ -180,6 +210,7 @@ export interface LastBattle {
   mapName: string;
   enemyName: string;
   difficulty: string; // normal / challenge / secret
+  tactic: TacticId; // 所选战术（挑战战时有效；其余为 normal）
   maxRounds: number;
   roundLimitReached: boolean;
   rounds: number; // 实际回合数
@@ -240,6 +271,7 @@ export interface SaveState {
   secretRealmLog: SecretRealmLog[];
   forge: number; // 炼器台等级 0/1
   lastBattle: LastBattle | null;
+  commission: CommissionState;
 }
 
 export type Result<T> =
