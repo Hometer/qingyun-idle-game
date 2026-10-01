@@ -350,11 +350,13 @@ export default function LilianPage() {
           const gateOk = pred.ok;
           const used = (view?.secretRealmUsed ?? state.secretRealmUsed)[rid];
           const reward = secretRealmReward(rid);
+          const materialId = Object.keys(CONFIG.materials as Record<string, unknown>).find((k) => ((CONFIG.materials as unknown as Record<string, { secretRealm: string }>)[k].secretRealm === rid));
           const rewardParts = [
             reward.spiritStone ? `灵石 ${reward.spiritStone}` : "",
             reward.herb ? `灵草 ${reward.herb}` : "",
             reward.page ? `残页 ${reward.page}` : "",
             reward.iron ? `玄铁 ${reward.iron}` : "",
+            materialId ? `${RESOURCE_LABELS[materialId]} 4` : "",
           ].filter(Boolean).join("、");
           return (
             <div key={rid} className="border-b border-line/60 py-2 last:border-0">

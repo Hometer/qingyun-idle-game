@@ -199,9 +199,11 @@ export default function BeibaoPage() {
             const eq = CONFIG.equipment[id as keyof typeof CONFIG.equipment] as unknown as { name: string; attack?: number; defense?: number; hp?: number; tribulationReduction?: number };
             if (!cfg || !eq) return null;
             const gateOk = REALM_ORDER.indexOf(current.realm) >= REALM_ORDER.indexOf(cfg.gate);
+            const forgeLevel = (CONFIG.craftForgeLevel as Record<string, number>)[id] ?? 1;
+            const forgeOk = state.forge >= forgeLevel;
             const costObj = cfg.cost as Record<string, number>;
             const canCraft =
-              gateOk &&
+              gateOk && forgeOk &&
               Object.entries(costObj).every(([k, v]) => v <= 0 || (current.resources as unknown as Record<string, number>)[k] >= v);
             const attrs = [
               eq.attack ? `攻+${eq.attack}` : "",
@@ -225,7 +227,7 @@ export default function BeibaoPage() {
                 </div>
                 <p className="mt-0.5 text-xs text-muted">
                   材料：{Object.entries(costObj).filter(([, v]) => v > 0).map(([k, v]) => `${RESOURCE_LABELS[k] ?? k} ${v}`).join("、") || "无"}
-                  {!gateOk ? `（需${REALM_NAMES[cfg.gate]}）` : !canCraft ? "（材料不足）" : ""}
+                  {!gateOk ? `（需${REALM_NAMES[cfg.gate]}）` : !forgeOk ? `（需${forgeLevel}级炼器台）` : !canCraft ? "（材料不足）" : ""}
                 </p>
               </div>
             );

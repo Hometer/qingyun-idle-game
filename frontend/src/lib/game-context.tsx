@@ -53,6 +53,7 @@ interface GameContextValue {
   createWithFortune: (name: string, fortune: { spiritRoots: string[]; meridians: string; comprehension: string }, aptitude: AptitudeId) => void;
   setAptitude: (aptitude: AptitudeId) => void;
   setResonance: (resonance: string | null) => void;
+  settleRoots: (roots: string[]) => void;
   marrow: (choice: "meridian" | "comprehension" | "removeRoot", removeRoot?: string) => void;
   reforge: (baseId: string) => void;
   lockAffix: (baseId: string, affixId: string) => void;
@@ -210,14 +211,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const settled = eng.settle(migrated, nowMs);
         const delta = resourceGains(migrated, settled);
         setState(settled);
-        const res = await persistSave(settled, saved.revision, genRef.current);
-        if (res.conflict) {
-          const latest = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
-          genRef.current = latest.generation;
-          baseRef.current = latest.state ? latest.state.revision : 0;
-          setState(latest.state ? eng.settle(latest.state, Date.now()) : null);
-        } else {
-          baseRef.current = settled.revision;
+        try {
+          const res = await persistSave(settled, saved.revision, genRef.current);
+          if (res.conflict) {
+            const latest = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
+            genRef.current = latest.generation;
+            baseRef.current = latest.state ? latest.state.revision : 0;
+            setState(latest.state ? eng.settle(latest.state, Date.now()) : null);
+          } else {
+            baseRef.current = settled.revision;
+          }
+        } catch {
+          // 迁移后写回失败：保留原档与内存进度，提示恢复路径
+          baseRef.current = saved.revision;
+          setNotice("存档迁移保存失败，已保留当前进度；请尝试导出备份后重新导入");
         }
         try {
           if (localStorage.getItem("qingyun_notice_shown") !== "1") setShowDataNotice(true);
@@ -305,7 +312,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // 写入成功才提示；冲突则丢弃本地改动、重读最新档
   const apply = useCallback(async (next: SaveState, msg: string): Promise<boolean> => {
-    const res = await persistSave(next, baseRef.current, genRef.current);
+    let res;
+    try {
+      res = await persistSave(next, baseRef.current, genRef.current);
+    } catch {
+      setNotice("保存失败，进度未变更，请重试或先导出备份");
+      return false;
+    }
     if (res.conflict) {
       const loaded = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
       genRef.current = loaded.generation;
@@ -505,6 +518,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return;
       }
       await apply(r.state, "已切换共鸣");
+    },
+    [state, apply],
+  );
+
+  const settleRoots = useCallback(
+    async (roots: string[]) => {
+      if (!state) return;
+      const r = eng.settleRoots(state, Date.now(), roots);
+      if (!r.ok || !r.state) {
+        setNotice(r.reason);
+        return;
+      }
+      await apply(r.state, "定根完成");
     },
     [state, apply],
   );
@@ -1032,7 +1058,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const doReset = useCallback(async () => {
     if (!window.confirm("确定重置？当前进度将被覆盖，建议先导出存档。")) return;
-    const gen = await clearSave().catch(() => genRef.current);
+    let gen: number;
+    try {
+      gen = await clearSave();
+    } catch {
+      setNotice("重置失败：存档未能清空，请重试");
+      return;
+    }
     genRef.current = gen;
     baseRef.current = 0;
     setState(null);
@@ -1080,6 +1112,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     createWithFortune,
     setAptitude,
     setResonance,
+    settleRoots,
     marrow,
     reforge,
     lockAffix,

@@ -18,6 +18,8 @@ import {
   upgradeBuilding,
   upgradeTechnique,
   buildLibrary,
+  setResonance,
+  settleRoots,
 } from "./engine";
 import { CONFIG } from "./config";
 import type { SaveState } from "./types";
@@ -275,5 +277,21 @@ describe("全局审查回归（P1/P2 修复）", () => {
     const c = fresh();
     (c.marrowHistory as unknown) = [{ type: "unknown", from: "x", to: "y", spiritStone: -1, herb: -1, at: -1 }];
     expect(importSave(exportSave(c)).ok).toBe(false);
+  });
+
+  it("P2-02 旧式灵根待免费定根，定根前不可共鸣，定根只提交一次", () => {
+    const s = fresh();
+    s.schemaVersion = 13;
+    delete (s as unknown as Record<string, unknown>).spiritRoots;
+    delete (s as unknown as Record<string, unknown>).legacyRootPending;
+    const m = migrateSave(s);
+    expect(m.legacyRootPending).toBe(true);
+    expect(setResonance(m, T0, "金").ok).toBe(false); // 未定根不可共鸣
+    const r = settleRoots(m, T0, ["金", "水"]);
+    expect(r.ok).toBe(true);
+    expect(r.state!.legacyRootPending).toBe(false);
+    expect(r.state!.spiritRoots).toEqual(["金", "水"]);
+    expect(settleRoots(r.state!, T0, ["木"]).ok).toBe(false); // 只能定根一次
+    expect(setResonance(r.state!, T0, "金").ok).toBe(true); // 定根后可共鸣
   });
 });

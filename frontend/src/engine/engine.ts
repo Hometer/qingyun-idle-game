@@ -1099,6 +1099,7 @@ export function createGame(name: string, spiritRoot: SpiritRoot, aptitude: Aptit
     name,
     spiritRoot: validSpiritRoot(spiritRoot),
     spiritRoots: [validSpiritRoot(spiritRoot)],
+    legacyRootPending: false,
     meridians: "normal",
     comprehension: "normal",
     resonance: null,
@@ -1253,8 +1254,27 @@ export function availableResonances(s: SaveState): string[] {
 
 export function setResonance(state: SaveState, nowMs: number, resonance: string | null): Result<SaveState> {
   const s = settle(state, nowMs);
+  if (s.legacyRootPending) return fail("需先完成定根方可启用共鸣");
   if (resonance !== null && !s.spiritRoots.includes(resonance)) return fail("该共鸣不属于当前灵根");
   s.resonance = resonance;
+  s.revision += 1;
+  return { state: s, ok: true };
+}
+
+export function settleRoots(state: SaveState, nowMs: number, roots: string[]): Result<SaveState> {
+  const s = settle(state, nowMs);
+  if (!s.legacyRootPending) return fail("已完成过定根");
+  const pool = CONFIG.spiritRootPool as unknown as { elements: readonly string[]; variants: readonly string[] };
+  const valid = [...pool.elements, ...pool.variants];
+  if (!Array.isArray(roots) || roots.length === 0 || roots.some((r) => typeof r !== "string" || !valid.includes(r))) return fail("灵根选择无效");
+  if (new Set(roots).size !== roots.length) return fail("灵根重复无效");
+  const hasVariant = roots.some((r) => pool.variants.includes(r));
+  if (hasVariant && roots.length !== 1) return fail("变异灵根不能与其他灵根并存");
+  s.spiritRoots = roots;
+  s.legacyRootPending = false;
+  s.resonance = null;
+  s.recentLogs.push(`定根完成，灵根为${roots.join("、")}。`);
+  pushMilestone(s, "settleRoots", nowMs, `定根为${roots.join("、")}`);
   s.revision += 1;
   return { state: s, ok: true };
 }
@@ -2900,7 +2920,9 @@ export function migrateSave(raw: SaveState): SaveState {
   if (s.preparedPillTier === undefined) s.preparedPillTier = 1;
   if (!Array.isArray(s.quenched)) s.quenched = [];
   if (!Array.isArray(s.learnedNewTechs)) s.learnedNewTechs = [];
-  if (!Array.isArray(s.spiritRoots) || s.spiritRoots.length === 0) s.spiritRoots = [validSpiritRoot(s.spiritRoot)];
+  const hadRoots = Array.isArray(s.spiritRoots) && s.spiritRoots.length > 0;
+  if (!hadRoots) s.spiritRoots = [validSpiritRoot(s.spiritRoot)];
+  if (s.legacyRootPending === undefined) s.legacyRootPending = !hadRoots; // 旧档缺 spiritRoots 待免费定根
   if (typeof s.meridians !== "string" || !MERIDIAN_CFG[s.meridians]) s.meridians = "normal";
   if (typeof s.comprehension !== "string" || !COMPREHENSION_CFG[s.comprehension]) s.comprehension = "normal";
   if (s.resonance === undefined) s.resonance = null;
@@ -3775,6 +3797,7 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.quenched = Array.isArray(o.quenched) ? (o.quenched as string[]) : [];
   base.learnedNewTechs = Array.isArray(o.learnedNewTechs) ? (o.learnedNewTechs as string[]) : [];
   base.spiritRoots = Array.isArray(o.spiritRoots) && o.spiritRoots.length > 0 ? (o.spiritRoots as string[]) : [base.spiritRoot];
+  base.legacyRootPending = typeof o.legacyRootPending === "boolean" ? o.legacyRootPending : !(Array.isArray(o.spiritRoots) && o.spiritRoots.length > 0);
   base.meridians = typeof o.meridians === "string" && (o.meridians as string) in MERIDIAN_CFG ? (o.meridians as MeridianId) : "normal";
   base.comprehension = typeof o.comprehension === "string" && (o.comprehension as string) in COMPREHENSION_CFG ? (o.comprehension as ComprehensionId) : "normal";
   base.resonance = typeof o.resonance === "string" ? (o.resonance as string) : null;

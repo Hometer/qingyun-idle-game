@@ -21,13 +21,26 @@ const MAPS_CFG = CONFIG.maps as unknown as Record<
   { name: string; nodes: Record<string, { name: string; firstClear: { equipment: string | null } }> }
 >;
 
+const ELEMENTS = ["金", "木", "水", "火", "土"];
+const VARIANTS = ["雷", "冰", "风"];
+
+function toggleRoot(pick: string[], el: string): string[] {
+  if (pick.some((r) => VARIANTS.includes(r))) return [el];
+  if (pick.includes(el)) {
+    const next = pick.filter((r) => r !== el);
+    return next.length ? next : [el];
+  }
+  return [...pick, el];
+}
+
 export default function RenwuPage() {
-  const { state, doExport, doImport, doReset, doRestoreBackup, claimGoal, setResonance, marrow } = useGame();
+  const { state, doExport, doImport, doReset, doRestoreBackup, claimGoal, setResonance, settleRoots, marrow } = useGame();
   const fileRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState(() =>
     typeof localStorage !== "undefined" ? localStorage.getItem("qingyun_access_code") || "" : "",
   );
   const [saved, setSaved] = useState(false);
+  const [rootPick, setRootPick] = useState<string[]>(["金"]);
   const [theme, setThemeState] = useState<Theme>(getTheme());
   const [reduceMotion, setReduceMotionState] = useState<boolean>(getReduceMotion());
   const [copyMode, setCopyModeState] = useState<CopyMode>(getCopyMode());
@@ -135,6 +148,29 @@ export default function RenwuPage() {
       </Section>
 
       <Section title="灵根共鸣">
+        {state.legacyRootPending ? (
+          <div className="rounded-lg border border-gold/30 bg-gold/5 p-3">
+            <p className="text-sm">旧式灵根（{state.spiritRoots.join("、")}），尚未定根。</p>
+            <p className="mt-1 text-xs text-muted">定根前保持旧效果、不可启用共鸣；可免费自主定根一次，不占洗髓机会。</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {ELEMENTS.map((el) => (
+                <button key={el} onClick={() => setRootPick((p) => toggleRoot(p, el))} className={`rounded-lg border px-3 py-1.5 text-sm ${rootPick.includes(el) ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>
+                  {el}
+                </button>
+              ))}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {VARIANTS.map((v) => (
+                <button key={v} onClick={() => setRootPick([v])} className={`rounded-lg border px-3 py-1.5 text-sm ${rootPick.length === 1 && rootPick[0] === v ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>
+                  {v}（变异）
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-muted">当前选择：{rootPick.join("、")}</p>
+            <button onClick={() => settleRoots(rootPick)} className="mt-2 rounded-lg bg-cinnabar px-4 py-2 text-sm text-white">免费定根</button>
+          </div>
+        ) : (
+          <>
         <p className="mb-2 text-xs text-muted">同一时刻只启用一项；强度：单灵根 5%、双 4%、三 3%、四 2%、五 1%、变异 5%。</p>
         {state.spiritRoots.map((r) => (
           <div key={r} className="flex items-center justify-between border-b border-line/60 py-2 last:border-0">
@@ -149,6 +185,8 @@ export default function RenwuPage() {
         ))}
         {state.resonance && (
           <button onClick={() => setResonance(null)} className="mt-2 rounded-lg border border-line bg-paper px-3 py-1 text-xs">关闭共鸣</button>
+        )}
+          </>
         )}
       </Section>
 

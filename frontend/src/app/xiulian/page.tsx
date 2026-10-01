@@ -5,6 +5,7 @@ import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtPct, fmtTime, fmtDuration } from "@/lib/labels";
 import { productionBreakdown, predictLongTask, breakthroughCosts, breakthroughSuccessRate, canBreakthrough, isTrialRealm, crossStageTrialInfo, techniqueLockReason } from "@/engine/engine";
+import { CONFIG } from "@/engine/config";
 import type { TechniqueId, BreakthroughLayer } from "@/engine/types";
 
 function eff(id: string, lvl: number, aux: boolean): string {
@@ -203,7 +204,7 @@ export default function XiulianPage() {
                     <>
                       主修 {eff(id, lvl, false)}
                       {state.library >= 2 && `；辅修 ${eff(id, lvl, true)}`}
-                      {lvl > 0 && (nextLvl ? `；下级需残页 ${nextLvl.pageCost}` : "；已满级")}
+                      {lvl > 0 && (nextLvl ? `；下级需残页 ${Math.floor(nextLvl.pageCost * ((CONFIG.comprehensions as Record<string, { pageMult: number }>)[state.comprehension]?.pageMult ?? 1) + 0.5)}` : "；已满级")}
                     </>
                   )}
                 </p>

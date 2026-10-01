@@ -232,6 +232,7 @@ export interface SaveState {
   name: string;
   spiritRoot: SpiritRoot;
   spiritRoots: string[]; // 灵根组合（五行不重复；变异单元素）
+  legacyRootPending: boolean; // 旧档待免费定根（旧式灵根保持旧效果，定根后转新系统）
   meridians: MeridianId; // 经脉档
   comprehension: ComprehensionId; // 悟性档
   resonance: string | null; // 当前启用共鸣（五行或变异），未启用为 null
