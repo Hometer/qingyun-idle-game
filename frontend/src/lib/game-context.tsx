@@ -45,6 +45,9 @@ interface GameContextValue {
   view: SaveState | null;
   now: number;
   notice: string;
+  loadError: string | null;
+  retryLoad: () => void;
+  exportRawSave: () => void;
   battleLog: string[];
   encounter: EncounterCopy | null;
   encounterLoading: boolean;
@@ -173,6 +176,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [realmPending, setRealmPending] = useState<SecretRealmId | null>(null);
   const [realmNarrative, setRealmNarrative] = useState<{ title: string; body: string; source: string } | null>(null);
   const [realmNarrativeLoading, setRealmNarrativeLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   // baseRef：已持久化到 IndexedDB 的修订号（乐观并发基准）。只在读档/写档成功/重置/导入时更新，
   // 绝不从内存 state 推导，否则结算产生的内存修订号会被误当作已持久化基准，导致持续冲突。
   const baseRef = useRef(0);
@@ -184,63 +188,107 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      const loaded = await loadSave().catch((): LoadedSave => ({ state: null, generation: 0 }));
-      genRef.current = loaded.generation;
-      const saved = loaded.state;
-      if (saved) {
-        baseRef.current = saved.revision;
-        if (saved.schemaVersion < eng.SCHEMA_VERSION) {
-          let backupOk = true;
-          try {
-            await backupSave(saved);
-          } catch {
-            backupOk = false;
-          }
-          if (!backupOk) {
-            setNotice("存档备份失败，已保留原档；请刷新重试或先导出备份");
-            setReady(true);
-            return;
-          }
-        }
-        const nowMs = Date.now();
-        const hours = Math.max(0, (nowMs - saved.lastSettledAt) / 3600000);
-        const capped = Math.min(hours, CONFIG.offlineCapHours);
-        const migrated = eng.migrateSave(saved);
-        const settled = eng.settle(migrated, nowMs);
-        const delta = resourceGains(migrated, settled);
-        setState(settled);
-        try {
-          const res = await persistSave(settled, saved.revision, genRef.current);
-          if (res.conflict) {
-            const latest = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
-            genRef.current = latest.generation;
-            baseRef.current = latest.state ? latest.state.revision : 0;
-            setState(latest.state ? eng.settle(latest.state, Date.now()) : null);
-          } else {
-            baseRef.current = settled.revision;
-          }
-        } catch {
-          // 迁移后写回失败：保留原档与内存进度，提示恢复路径
-          baseRef.current = saved.revision;
-          setNotice("存档迁移保存失败，已保留当前进度；请尝试导出备份后重新导入");
-        }
-        try {
-          if (localStorage.getItem("qingyun_notice_shown") !== "1") setShowDataNotice(true);
-        } catch {}
-        if (hours > 0) {
-          const parts = Object.entries(delta)
-            .filter(([, v]) => v > 0)
-            .map(([k, v]) => `${RESOURCE_LABELS[k]} +${fmt(v)}`)
-            .join("、");
-          if (parts) {
-            setNotice(`离线 ${capped >= 1 ? fmt(capped) + " 小时" : Math.round(capped * 60) + " 分钟"}，收获 ${parts}${hours > CONFIG.offlineCapHours ? "（已按 12 小时封顶）" : ""}`);
-          }
-        }
-      }
+  const load = useCallback(async () => {
+    setLoadError(null);
+    let loaded: LoadedSave;
+    try {
+      loaded = await loadSave();
+    } catch {
+      setLoadError("读取存档失败：无法打开本地存档。可重试，或恢复备份");
       setReady(true);
-    })();
+      return;
+    }
+    genRef.current = loaded.generation;
+    const saved = loaded.state;
+    if (!saved) {
+      setReady(true);
+      return;
+    }
+    // 读到的档先校验：坏档不迁移、不结算，避免客户端崩溃，进入恢复提示
+    const verr = eng.validateSaveObject(structuredClone(saved as unknown as Record<string, unknown>));
+    if (verr) {
+      try { await backupSave(saved); } catch { /* 忽略备份失败 */ }
+      setLoadError(`存档损坏（${verr}），已保留原档未覆盖。可恢复备份或导出原档`);
+      setReady(true);
+      return;
+    }
+    baseRef.current = saved.revision;
+    if (saved.schemaVersion < eng.SCHEMA_VERSION) {
+      let backupOk = true;
+      try {
+        await backupSave(saved);
+      } catch {
+        backupOk = false;
+      }
+      if (!backupOk) {
+        setNotice("存档备份失败，已保留原档；请刷新重试或先导出备份");
+        setReady(true);
+        return;
+      }
+    }
+    const nowMs = Date.now();
+    const hours = Math.max(0, (nowMs - saved.lastSettledAt) / 3600000);
+    const capped = Math.min(hours, CONFIG.offlineCapHours);
+    const migrated = eng.migrateSave(saved);
+    const settled = eng.settle(migrated, nowMs);
+    const delta = resourceGains(migrated, settled);
+    setState(settled);
+    try {
+      const res = await persistSave(settled, saved.revision, genRef.current);
+      if (res.conflict) {
+        const latest = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
+        genRef.current = latest.generation;
+        baseRef.current = latest.state ? latest.state.revision : 0;
+        setState(latest.state ? eng.settle(latest.state, Date.now()) : null);
+      } else {
+        baseRef.current = settled.revision;
+      }
+    } catch {
+      baseRef.current = saved.revision;
+      setNotice("存档迁移保存失败，已保留当前进度；请尝试导出备份后重新导入");
+    }
+    try {
+      if (localStorage.getItem("qingyun_notice_shown") !== "1") setShowDataNotice(true);
+    } catch {}
+    if (hours > 0) {
+      const parts = Object.entries(delta)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => `${RESOURCE_LABELS[k]} +${fmt(v)}`)
+        .join("、");
+      if (parts) {
+        setNotice(`离线 ${capped >= 1 ? fmt(capped) + " 小时" : Math.round(capped * 60) + " 分钟"}，收获 ${parts}${hours > CONFIG.offlineCapHours ? "（已按 12 小时封顶）" : ""}`);
+      }
+    }
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const retryLoad = useCallback(() => {
+    setReady(false);
+    setState(null);
+    load();
+  }, [load]);
+
+  const exportRawSave = useCallback(async () => {
+    try {
+      const loaded = await loadSave();
+      if (!loaded.state) {
+        setNotice("没有可导出的原档");
+        return;
+      }
+      const blob = new Blob([eng.exportSave(loaded.state)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `青云修仙录原档-${loaded.state.name ?? "unknown"}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setNotice("导出原档失败");
+    }
   }, []);
 
   const pendingId = state?.encounter.pending?.eventId ?? null;
@@ -1138,6 +1186,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     view,
     now,
     notice,
+    loadError,
+    retryLoad,
+    exportRawSave,
     battleLog,
     encounter,
     encounterLoading,

@@ -75,7 +75,8 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
         return _template_response(req)
 
     prompt = _build_prompt(req)
-    if budget.budget_exceeded(budget.estimate_call_cost(prompt, 400)):
+    estimate = budget.estimate_call_cost(prompt, 400)
+    if budget.budget_exceeded(estimate):
         logger.info("fallback event=%s reason=budget", req.event_id)
         return _template_response(req)
 
@@ -92,8 +93,8 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
 
     reason = "unknown"
     for _ in range(_MAX_ATTEMPTS):
-        # 逐次检查/预留费用：前一次失败已记账，重试前需再次确认未越界
-        if budget.budget_exceeded(budget.estimate_call_cost(prompt, 400)):
+        # 逐次原子预留：越界则停止（前一次失败已按实际 usage 结算）
+        if not budget.reserve(estimate):
             reason = "budget"
             break
         start = time.perf_counter()
@@ -107,15 +108,18 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
             text = resp.choices[0].message.content or ""
             latency = time.perf_counter() - start
         except Exception as e:
+            budget.settle(estimate, 0.0)  # 失败：释放预留，无 usage 记账
             reason = f"call_error:{type(e).__name__}"
             continue
-        # 收到 usage 即记账：解析/审核失败同样产生了费用
         usage = getattr(resp, "usage", None)
+        usage_cost = 0.0
         if usage is not None:
-            budget.record_usage(
-                int(getattr(usage, "prompt_tokens", 0) or 0),
-                int(getattr(usage, "completion_tokens", 0) or 0),
-            )
+            usage_cost = (
+                int(getattr(usage, "prompt_tokens", 0) or 0) * settings.model_input_price_per_mtok
+                + int(getattr(usage, "completion_tokens", 0) or 0) * settings.model_output_price_per_mtok
+            ) / 1_000_000
+        # 释放预留并按实际 usage 记账（解析/审核失败同样产生费用）
+        budget.settle(estimate, usage_cost)
         parsed = _parse_json(text)
         if parsed is None:
             reason = "parse_fail"

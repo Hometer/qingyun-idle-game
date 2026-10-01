@@ -11,6 +11,7 @@ from app.core.config import settings
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 _SPEND_FILE = _DATA_DIR / "spend.json"
 _lock = threading.Lock()
+_pending = 0.0  # 已预留但尚未结算的估算费用（进程内并发保护）
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +26,11 @@ def _load() -> dict:
         data = json.loads(_SPEND_FILE.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
-    except Exception:
-        # 账本损坏不能静默清空：记日志并降级为 0，避免误以为有熔断额度
-        logger.warning("月度费用账本损坏，按 0 记账并继续")
-        return {}
+    except Exception as e:
+        # 账本损坏：失败关闭（不放行模型调用），而不是静默按 0 记账
+        raise RuntimeError("月度费用账本损坏") from e
     if not isinstance(data, dict):
-        logger.warning("月度费用账本结构异常，按 0 记账并继续")
-        return {}
+        raise RuntimeError("月度费用账本结构异常")
     return data
 
 
@@ -42,9 +41,18 @@ def _save(data: dict) -> None:
     tmp.replace(_SPEND_FILE)
 
 
+def _read_spend() -> float:
+    """读取当月累计；账本损坏/非法值时返回 inf（使预算检查失败关闭）。"""
+    try:
+        data = _load()
+        return float(data.get(_month_key(), 0.0))
+    except (RuntimeError, TypeError, ValueError):
+        return float("inf")
+
+
 def current_spend_rmb() -> float:
     with _lock:
-        return float(_load().get(_month_key(), 0.0))
+        return _read_spend()
 
 
 def estimate_call_cost(prompt: str, max_tokens: int) -> float:
@@ -57,14 +65,46 @@ def estimate_call_cost(prompt: str, max_tokens: int) -> float:
 
 
 def budget_exceeded(cost_rmb: float) -> bool:
-    """当月累计 + 本次预估成本是否超出预算。预算 ≤0 视为不启用熔断。"""
+    """当月累计 + 已预留 + 本次预估是否超出预算。预算 ≤0 视为不启用熔断。"""
     if settings.monthly_budget_rmb <= 0:
         return False
-    return current_spend_rmb() + cost_rmb > settings.monthly_budget_rmb
+    with _lock:
+        return _read_spend() + _pending + cost_rmb > settings.monthly_budget_rmb
+
+
+def reserve(cost_rmb: float) -> bool:
+    """原子地检查并预留本次估算费用；返回是否允许发起模型调用。"""
+    global _pending
+    if settings.monthly_budget_rmb <= 0:
+        return True
+    with _lock:
+        if _read_spend() + _pending + cost_rmb > settings.monthly_budget_rmb:
+            return False
+        _pending += cost_rmb
+        return True
+
+
+def settle(reserved_rmb: float, usage_rmb: float) -> None:
+    """调用结束后释放预留，并按实际 usage 记账。"""
+    global _pending
+    if usage_rmb <= 0:
+        usage_rmb = 0.0
+    with _lock:
+        _pending = max(0.0, _pending - reserved_rmb)
+        if usage_rmb <= 0:
+            return
+        try:
+            data = _load()
+        except (RuntimeError, TypeError, ValueError):
+            logger.warning("月度费用账本损坏，本次费用未记账")
+            return
+        key = _month_key()
+        data[key] = float(data.get(key, 0.0)) + usage_rmb
+        _save(data)
 
 
 def record_usage(prompt_tokens: int, completion_tokens: int) -> None:
-    """调用成功后按实际 token 数记账。"""
+    """兼容旧接口：按实际 token 数直接记账。"""
     cost = (
         prompt_tokens * settings.model_input_price_per_mtok
         + completion_tokens * settings.model_output_price_per_mtok
@@ -72,7 +112,11 @@ def record_usage(prompt_tokens: int, completion_tokens: int) -> None:
     if cost <= 0:
         return
     with _lock:
-        data = _load()
+        try:
+            data = _load()
+        except (RuntimeError, TypeError, ValueError):
+            logger.warning("月度费用账本损坏，本次费用未记账")
+            return
         key = _month_key()
         data[key] = float(data.get(key, 0.0)) + cost
         _save(data)

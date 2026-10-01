@@ -26,16 +26,20 @@ function fresh(nowMs = T0): SaveState {
 }
 
 // 首通野狼后的存档（有战斗候选可用）
-function withClear(): SaveState {
+function rich(): SaveState {
   const s = fresh();
-  return fightNode(s, T0, "map_qingyun", "node_wolf").state;
+  for (const k of Object.keys(s.resources)) (s.resources as unknown as Record<string, number>)[k] = 1e8;
+  return s;
+}
+
+function withClear(): SaveState {
+  return fightNode(rich(), T0, "map_qingyun", "node_wolf").state;
 }
 
 describe("v1.8 山河委托", () => {
-  it("新角色当天有候选（制作类）", () => {
+  it("新角色无资源时无制作候选（升级需资源）", () => {
     const s = fresh();
-    expect(s.commission.candidates.length).toBeGreaterThan(0);
-    expect(s.commission.candidates.every((c) => c.kind === "craft")).toBe(true);
+    expect(s.commission.candidates.length).toBe(0);
   });
 
   it("跨日重新生成两件候选（含战斗候选）", () => {
@@ -93,7 +97,7 @@ describe("v1.8 山河委托", () => {
   });
 
   it("目标被手动完成后接取会拒绝并刷新候选", () => {
-    const s = fresh();
+    const s = settle(rich(), T0 + DAY);
     const cand = s.commission.candidates.find((c) => c.action === "upgradeBuilding" && c.actionParam === "cultivationRoom");
     expect(cand).toBeTruthy();
     // 模拟玩家接取前已把修炼室升满

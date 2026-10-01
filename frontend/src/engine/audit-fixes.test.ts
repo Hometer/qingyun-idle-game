@@ -279,6 +279,20 @@ describe("全局审查回归（P1/P2 修复）", () => {
     expect(importSave(exportSave(c)).ok).toBe(false);
   });
 
+  it("R1 初始/旧装备空词条可导出导入两轮", () => {
+    const s = migrateSave(fresh()); // 初始装备迁移成空词条实例
+    const one = importSave(exportSave(s));
+    expect(one.ok).toBe(true);
+    const two = importSave(exportSave(one.state!));
+    expect(two.ok).toBe(true);
+    // v13 旧档（无 itemInstances）迁移后同样可导回
+    const old = fresh();
+    old.schemaVersion = 13;
+    delete (old as unknown as Record<string, unknown>).itemInstances;
+    const m = migrateSave(old);
+    expect(importSave(exportSave(m)).ok).toBe(true);
+  });
+
   it("P2-02 旧式灵根待免费定根，定根前不可共鸣，定根只提交一次", () => {
     const s = fresh();
     s.schemaVersion = 13;

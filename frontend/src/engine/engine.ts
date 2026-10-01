@@ -517,7 +517,8 @@ function commissionResponse(c: Commission): string {
 // 候选在生成后被玩家手动完成时可能不再可完成；接取前再验一次
 function commissionCompletable(s: SaveState, c: Commission): boolean {
   if (c.kind === "battle") {
-    return !!c.mapId && !!c.nodeId && !!s.maps[c.mapId]?.[c.nodeId]?.cleared;
+    if (!c.mapId || !c.nodeId || !s.maps[c.mapId]?.[c.nodeId]?.cleared) return false;
+    return predictFight(s, c.mapId, c.nodeId, c.difficulty ?? "challenge").won; // 当前挑战可胜
   }
   switch (c.action) {
     case "upgradeBuilding": {
@@ -525,24 +526,34 @@ function commissionCompletable(s: SaveState, c: Commission): boolean {
       if (!bid || s.buildings[bid] === undefined) return false;
       if (s.buildings[bid] >= CONFIG.buildings[bid].levels.length) return false;
       const gate = GROWTH_GATES[bid]?.[s.buildings[bid] + 1];
-      return !realmGateFail(s.realm, gate);
+      if (realmGateFail(s.realm, gate)) return false;
+      const cfg = CONFIG.buildings[bid].levels[s.buildings[bid]];
+      if (s.resources.spiritStone < cfg.cost) return false; // 资源费用纳入可完成判断
+      const pageCost = bid === "alchemyFurnace" ? (GROWTH_GATES.furnacePage[s.buildings[bid] + 1] ?? 0) : 0;
+      return s.resources.page >= pageCost;
     }
     case "upgradeTechnique": {
       const t = s.technique;
       if (!t) return false;
       if (s.techniqueLevel[t] >= CONFIG.techniques[t].levels.length) return false;
       const gate = GROWTH_GATES.technique[s.techniqueLevel[t] + 1];
-      return !realmGateFail(s.realm, gate);
+      if (realmGateFail(s.realm, gate)) return false;
+      const cost = Math.floor(CONFIG.techniques[t].levels[s.techniqueLevel[t]].pageCost * comprehensionPageMult(s) + 0.5);
+      return s.resources.page >= cost;
     }
     case "craftEquipment": {
       const id = c.actionParam;
       if (!id || !CRAFT_CFG[id]) return false;
       const forgeNeed = CRAFT_FORGE_LEVEL[id] ?? 1;
       if (s.forge < forgeNeed) return false;
-      return realmIndex(s.realm) >= realmIndex(CRAFT_CFG[id].gate as RealmId);
+      if (realmIndex(s.realm) < realmIndex(CRAFT_CFG[id].gate as RealmId)) return false;
+      const res = s.resources as unknown as Record<string, number>;
+      return Object.entries(CRAFT_CFG[id].cost).every(([k, v]) => v <= 0 || res[k] >= v);
     }
     case "craftPill": {
-      return s.buildings.alchemyFurnace >= 1;
+      if (s.buildings.alchemyFurnace < 1) return false;
+      const lv = CONFIG.buildings.alchemyFurnace.levels[s.buildings.alchemyFurnace - 1];
+      return s.resources.herb >= lv.pillHerbCost && s.resources.spiritStone >= lv.pillStoneCost;
     }
     case "useGainPill": {
       if (s.daily.rewardedDan >= 1) return false; // 今日已服用，明日再来
@@ -3180,7 +3191,7 @@ function validateSecretRealm(used: unknown, log: unknown, date: unknown, schemaV
 
 function validateAffixList(list: unknown): string | null {
   if (!Array.isArray(list)) return "词条列表无效";
-  if (list.length < 1 || list.length > 4) return "词条条数无效";
+  if (list.length > 4) return "词条条数无效"; // 允许 0 条（旧装备/初始装备空词条）；上限 4
   const seen = new Set<string>();
   for (const raw of list) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "词条无效";
@@ -3726,23 +3737,15 @@ function validateJindanTrial(v: unknown): string | null {
   return null;
 }
 
-export function importSave(json: string): Result<SaveState> {
-  let d: unknown;
-  try {
-    d = JSON.parse(json);
-  } catch {
-    return fail("文件不是有效 JSON");
-  }
-  if (!d || typeof d !== "object") return fail("存档结构无效");
-  const o = d as Record<string, unknown>;
+export function validateSaveObject(o: Record<string, unknown>): string | null {
   const ver = o.schemaVersion;
   if (typeof ver !== "number" || ver < 1 || ver > SCHEMA_VERSION) {
-    return fail(`存档版本不兼容（支持版本 1～${SCHEMA_VERSION}）`);
+    return `存档版本不兼容（支持版本 1～${SCHEMA_VERSION}）`;
   }
   migrateRealmRefs(o, ver);
-  if (typeof o.name !== "string" || !o.name.trim()) return fail("存档缺少姓名");
-  if (!realmOrder.includes(o.realm as RealmId)) return fail("境界无效");
-  if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt)) return fail("时间数据无效");
+  if (typeof o.name !== "string" || !o.name.trim()) return "存档缺少姓名";
+  if (!realmOrder.includes(o.realm as RealmId)) return "境界无效";
+  if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt)) return "时间数据无效";
 
   const checks: Array<string | null> = [
     validateResources(o.resources, ver),
@@ -3776,8 +3779,21 @@ export function importSave(json: string): Result<SaveState> {
     validateLastBattle(o.lastBattle, ver),
     validateCommission(o.commission, ver),
   ];
-  for (const c of checks) if (c) return fail(c);
+  for (const c of checks) if (c) return c;
+  return null;
+}
 
+export function importSave(json: string): Result<SaveState> {
+  let d: unknown;
+  try {
+    d = JSON.parse(json);
+  } catch {
+    return fail("文件不是有效 JSON");
+  }
+  if (!d || typeof d !== "object") return fail("存档结构无效");
+  const o = d as Record<string, unknown>;
+  const err = validateSaveObject(o);
+  if (err) return fail(err);
   const s = normalizeSave(o);
   return { state: s, ok: true };
 }

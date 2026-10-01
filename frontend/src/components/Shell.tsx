@@ -12,12 +12,28 @@ import { EncounterModal } from "./EncounterModal";
 import { CreateCharacter } from "./CreateCharacter";
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { ready, state, notice, clearNotice, lastResult, clearResult, targets, showDataNotice, dismissDataNotice, claimLong, abortLong, now } = useGame();
+  const { ready, state, notice, clearNotice, lastResult, clearResult, targets, showDataNotice, dismissDataNotice, claimLong, abortLong, now, loadError, retryLoad, exportRawSave, doRestoreBackup } = useGame();
   const [noticeMode, setNoticeMode] = useState<CopyMode>("ai");
   const pathname = usePathname();
 
   if (!ready) {
     return <div className="flex min-h-screen items-center justify-center text-muted">载入中…</div>;
+  }
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="w-full max-w-[420px] rounded-2xl border border-line bg-card p-5">
+          <h2 className="text-lg font-semibold">存档读取异常</h2>
+          <p className="mt-2 text-sm text-muted">{loadError}</p>
+          <div className="mt-4 flex flex-col gap-2">
+            <button onClick={retryLoad} className="rounded-lg bg-cinnabar px-4 py-2 text-white">重试读取</button>
+            <button onClick={exportRawSave} className="rounded-lg border border-line bg-paper px-4 py-2">导出原档</button>
+            <button onClick={doRestoreBackup} className="rounded-lg border border-line bg-paper px-4 py-2">恢复上次导入前的备份</button>
+          </div>
+          <p className="mt-3 text-xs text-muted">恢复与导出会保留当前 IndexedDB 中的原档，不会直接覆盖。</p>
+        </div>
+      </div>
+    );
   }
   if (!state) {
     return <CreateCharacter />;
