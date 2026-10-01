@@ -34,7 +34,7 @@ import type {
   TribulationWave,
 } from "./types";
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
@@ -339,13 +339,13 @@ function emptyDaily(dateStr: string): DailyState {
 
 function ensureDaily(s: SaveState, nowMs: number): void {
   const today = todayStr(nowMs);
-  if (s.daily.date !== today) s.daily = emptyDaily(today);
+  if (today > s.daily.date) s.daily = emptyDaily(today); // 回拨不刷新
   ensureSecretRealm(s, nowMs);
 }
 
 function ensureSecretRealm(s: SaveState, nowMs: number): void {
   const today = todayStr(nowMs);
-  if (s.secretRealmDate !== today) {
+  if (today > s.secretRealmDate) {
     s.secretRealmDate = today;
     s.secretRealmUsed = emptySecretRealmUsed();
   }
@@ -473,8 +473,8 @@ function generateCandidates(s: SaveState): Commission[] {
 
 function ensureCommission(s: SaveState, nowMs: number): void {
   const today = todayStr(nowMs);
-  if (!s.commission) s.commission = { date: today, candidates: [], active: null, history: [] };
-  if (s.commission.date === today) return;
+  if (!s.commission) s.commission = { date: "", candidates: [], active: null, history: [] };
+  if (!(today > s.commission.date)) return; // 同日或回拨不重新生成
   s.commission.date = today;
   s.commission.candidates = generateCandidates(s);
 }
@@ -686,10 +686,11 @@ export function reforgeEquipment(state: SaveState, nowMs: number, itemId: string
   const lockedId = s.lockedAffixes[itemId];
   const locked = lockedId ? inst.affixes.find((a) => a.id === lockedId) : undefined;
   const seed = hashSeed(baseId) + s.revision + 1;
-  const newAffixes = randomAffixes(seededRng(seed), maxAffixesForStage(currentStage(s)));
+  const maxCount = maxAffixesForStage(currentStage(s));
+  const newAffixes = randomAffixes(seededRng(seed), locked ? Math.max(1, maxCount - 1) : maxCount);
   const filtered = newAffixes.filter((a) => a.id !== lockedId);
   const oldAffixes = inst.affixes;
-  const nextAffixes = locked ? [locked, ...filtered] : newAffixes;
+  const nextAffixes = locked ? [locked, ...filtered].slice(0, maxCount) : newAffixes;
   const fmt = (list: Affix[]) => list.map((a) => `${AFFIX_CFG[a.id]?.name ?? a.id}+${a.value}`).join("、") || "无";
   s.resources.spiritStone -= cost.spiritStone;
   s.resources.iron -= cost.iron;
@@ -897,6 +898,7 @@ export function startLongTask(state: SaveState, nowMs: number, params: StartLong
     difficulty,
     protectionUsed: params.protection,
     durationMinutes: duration,
+    effectiveMinutes,
     startAt: nowMs,
     endAt: nowMs + effectiveMinutes * 60 * 1000,
     ruleVersion: LONG_TASK_CFG.ruleVersion,
@@ -1252,6 +1254,7 @@ export function marrow(state: SaveState, nowMs: number, choice: "meridian" | "co
     from = s.spiritRoots.join("、");
     s.spiritRoots = s.spiritRoots.filter((r) => r !== removeRoot);
     to = s.spiritRoots.join("、");
+    if (s.resonance === removeRoot) s.resonance = null; // 移除正在共鸣的灵根时清空共鸣
   }
   s.resources.spiritStone -= cost.spiritStone;
   s.resources.herb -= cost.herb;
@@ -1661,8 +1664,7 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
   for (const [k, v] of Object.entries(cost)) {
     if (v > 0) res[k] -= v;
   }
-  s.inventory[id] = (s.inventory[id] || 0) + 1;
-  createInstance(s, id);
+  createInstance(s, id); // 只创建独立实例，不再双写基础 ID 库存
   s.recentLogs.push(`炼得${EQUIP_CFG[id].name}。`);
   pushMilestone(s, "craft", nowMs, `炼得${EQUIP_CFG[id].name}`);
   commissionProgress(s, "craft", (c) => c.action === "craftEquipment" && c.actionParam === id);
@@ -2805,6 +2807,12 @@ export function migrateSave(raw: SaveState): SaveState {
   s.maps = maps;
   if (s.longTask === undefined) s.longTask = null;
   if (s.lastLongTaskResult === undefined) s.lastLongTaskResult = null;
+  if (s.longTask && typeof s.longTask === "object") {
+    const lt = s.longTask as unknown as Record<string, unknown>;
+    if (lt.effectiveMinutes === undefined && typeof lt.startAt === "number" && typeof lt.endAt === "number") {
+      lt.effectiveMinutes = Math.max(1, Math.round((lt.endAt - lt.startAt) / 60000)); // 从实际耗时回推，兼容风共鸣旧档
+    }
+  }
   if (s.jindanTrial === undefined) s.jindanTrial = null;
   if (s.yuanyingTrial === undefined) s.yuanyingTrial = null;
   if (s.preparedPillTier === undefined) s.preparedPillTier = 1;
@@ -2817,6 +2825,18 @@ export function migrateSave(raw: SaveState): SaveState {
   if (!Array.isArray(s.marrowHistory)) s.marrowHistory = [];
   if (!s.lockedAffixes || typeof s.lockedAffixes !== "object") s.lockedAffixes = {};
   migrateEquipmentInstances(s as unknown as SaveState);
+  // 清理 v1.8 前一次炼制双写：同一装备既写基础 ID 又写实例，只保留实例（未穿戴的基础 ID 视为重复）
+  {
+    const inv = (s.inventory ?? {}) as Record<string, number>;
+    const insts = (s.itemInstances ?? {}) as Record<string, { baseId: string }>;
+    const instBaseIds = new Set(Object.values(insts).map((i) => i.baseId));
+    const eq = (s.equipment ?? {}) as Record<string, unknown>;
+    for (const k of Object.keys(inv)) {
+      if (EQUIP_IDS.has(k) && instBaseIds.has(k) && eq.weapon !== k && eq.armor !== k && eq.accessory !== k) {
+        delete inv[k];
+      }
+    }
+  }
   delete s.equipmentAffixes;
   if (s.library === undefined) s.library = 0;
   if (s.auxiliaryTechnique === undefined) s.auxiliaryTechnique = null;
@@ -2857,13 +2877,13 @@ export function migrateSave(raw: SaveState): SaveState {
     (s.lastBattle as Record<string, unknown>).tactic = "normal";
   }
   if (!s.commission || typeof s.commission !== "object") {
-    s.commission = { date: todayStr(Date.now()), candidates: [], active: null, history: [] };
+    s.commission = { date: "", candidates: [], active: null, history: [] };
   } else {
     const comm = s.commission as unknown as Record<string, unknown>;
     if (!Array.isArray(comm.candidates)) comm.candidates = [];
     if (comm.active === undefined) comm.active = null;
     if (!Array.isArray(comm.history)) comm.history = [];
-    if (typeof comm.date !== "string") comm.date = todayStr(Date.now());
+    if (typeof comm.date !== "string") comm.date = "";
   }
   s.schemaVersion = SCHEMA_VERSION;
   const migrated = s as unknown as SaveState;
@@ -3093,7 +3113,7 @@ function validateEquipmentAndInventory(eq: unknown, inv: unknown, itemInstances:
   const i = (inv ?? {}) as Record<string, unknown>;
   for (const [k, x] of Object.entries(i)) {
     if (typeof x !== "number" || !Number.isFinite(x) || x < 0) return "库存数量无效";
-    if (k === "tribulationPill" || k.startsWith("tribulationPill_")) continue;
+    if (k === "tribulationPill" || k.startsWith("tribulationPill_") || k.startsWith("yangYuanDan_") || k.startsWith("juLingDan_")) continue;
     if (EQUIP_IDS.has(k) || insts[k]) continue;
     return "库存装备无效";
   }
@@ -3157,13 +3177,17 @@ function isNonNegFinite(x: unknown): x is number {
   return typeof x === "number" && Number.isFinite(x) && x >= 0;
 }
 
-function validateLastBattle(v: unknown): string | null {
+function validateLastBattle(v: unknown, ver: number): string | null {
   if (v === undefined || v === null) return null;
   if (typeof v !== "object") return "最近战报无效";
   const b = v as Record<string, unknown>;
   if (typeof b.won !== "boolean") return "最近战报胜负无效";
   if (b.kind !== "map" && b.kind !== "secret") return "最近战报类型无效";
-  if (b.tactic !== undefined && !["normal", "break", "guard"].includes(b.tactic as string)) return "最近战报战术无效";
+  if (b.tactic === undefined) {
+    if (ver >= 18) return "最近战报战术无效"; // v18 起战术为必填，缺则残缺新档
+  } else if (!["normal", "break", "guard"].includes(b.tactic as string)) {
+    return "最近战报战术无效";
+  }
   for (const k of ["mapName", "enemyName", "difficulty"]) {
     if (typeof b[k] !== "string") return "最近战报字段无效";
   }
@@ -3228,11 +3252,19 @@ function validateCommissionItem(c: unknown): string | null {
   if (o.rewardChoice !== undefined && o.rewardChoice !== "a" && o.rewardChoice !== "b") return "委托奖励选择无效";
   if (o.claimedAt !== undefined && !isNonNegFinite(o.claimedAt)) return "委托领奖时间无效";
   if (o.response !== undefined && typeof o.response !== "string") return "委托回应无效";
+  // 状态与领奖字段一致性：只有已领奖才允许携带奖励选择/时间
+  if (o.status === "claimed") {
+    if (o.rewardChoice === undefined || o.claimedAt === undefined) return "已领奖委托缺领奖信息";
+  } else if (o.rewardChoice !== undefined || o.claimedAt !== undefined) {
+    return "未领奖委托不应含领奖信息";
+  }
   return null;
 }
 
-function validateCommission(v: unknown): string | null {
-  if (v === undefined || v === null) return null;
+function validateCommission(v: unknown, ver: number): string | null {
+  if (v === undefined || v === null) {
+    return ver < 18 ? null : "委托数据缺失"; // v18 起委托为必填字段
+  }
   if (typeof v !== "object") return "委托数据无效";
   const o = v as Record<string, unknown>;
   if (typeof o.date !== "string" || !isValidDateStr(o.date)) return "委托日期无效";
@@ -3251,6 +3283,11 @@ function validateCommission(v: unknown): string | null {
   for (const c of history as unknown[]) {
     const err = validateCommissionItem(c);
     if (err) return err;
+  }
+  // 进行中与历史不得共用同一实例身份（防止把已领奖记录复制为 active 再领奖）
+  if (o.active && typeof o.active === "object") {
+    const aid = (o.active as Record<string, unknown>).id as string;
+    if (history.some((h) => (h as Record<string, unknown>).id === aid)) return "进行中与历史委托冲突";
   }
   return null;
 }
@@ -3271,6 +3308,37 @@ function validateMilestonesAndFirsts(milestones: unknown, firsts: unknown): stri
     for (const k of ["settledOnce", "suppressedFirstNodeOnce", "viewedTribPreviewOnce"]) {
       if (f[k] !== undefined && typeof f[k] !== "boolean") return "首玩目标数据无效";
     }
+  }
+  return null;
+}
+
+function validateMarrowHistory(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v)) return "洗髓历史数据无效";
+  for (const item of v) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return "洗髓历史记录无效";
+    const m = item as Record<string, unknown>;
+    if (typeof m.type !== "string" || typeof m.from !== "string" || typeof m.to !== "string") return "洗髓历史记录无效";
+    if (!Number.isFinite(m.spiritStone) || !Number.isFinite(m.herb) || !Number.isFinite(m.at)) return "洗髓历史记录无效";
+  }
+  return null;
+}
+
+function validateSpiritRoots(roots: unknown, spiritRoot: unknown, resonance: unknown): string | null {
+  if (roots === undefined || roots === null) return null;
+  if (!Array.isArray(roots) || roots.length === 0) return "灵根数据无效";
+  const pool = CONFIG.spiritRootPool as unknown as { elements: readonly string[]; variants: readonly string[] };
+  const valid = [...pool.elements, ...pool.variants];
+  const seen = new Set<string>();
+  for (const r of roots) {
+    if (typeof r !== "string" || !valid.includes(r)) return "灵根数据无效";
+    if (seen.has(r)) return "灵根重复无效";
+    seen.add(r);
+  }
+  const hasVariant = (roots as string[]).some((r) => pool.variants.includes(r));
+  if (hasVariant && roots.length !== 1) return "变异灵根不能与其他灵根并存";
+  if (resonance !== null && resonance !== undefined) {
+    if (typeof resonance !== "string" || !(roots as string[]).includes(resonance)) return "共鸣不属于当前灵根";
   }
   return null;
 }
@@ -3334,9 +3402,11 @@ function validateLongTask(v: unknown): string | null {
     return "长期任务时长无效";
   }
   if (typeof t.ruleVersion !== "number" || t.ruleVersion !== LONG_TASK_CFG.ruleVersion) return "长期任务规则版本无效";
+  const effMin = t.effectiveMinutes;
+  if (typeof effMin !== "number" || !Number.isInteger(effMin) || effMin < 1) return "长期任务实际耗时无效";
   if (!isNonNegNum(t.startAt)) return "长期任务开始时间无效";
   if (!isNonNegNum(t.endAt)) return "长期任务结束时间无效";
-  const expectedEnd = (t.startAt as number) + (t.durationMinutes as number) * 60 * 1000;
+  const expectedEnd = (t.startAt as number) + effMin * 60 * 1000;
   if ((t.endAt as number) !== expectedEnd) return "长期任务起止时间与时长不符";
 
   if (t.type === "training") {
@@ -3483,6 +3553,8 @@ export function importSave(json: string): Result<SaveState> {
     validateMaps(o.maps, o.suppression, ver),
     validateEncounter(o.encounter),
     validateMilestonesAndFirsts(o.milestones, o.firsts),
+    validateMarrowHistory(o.marrowHistory),
+    validateSpiritRoots(o.spiritRoots, o.spiritRoot, o.resonance),
     validateRecentLogs(o.recentLogs),
     validateDaily(o.daily, ver),
     validateSuppressionSince(o.suppressionSince),
@@ -3492,8 +3564,8 @@ export function importSave(json: string): Result<SaveState> {
     validateBreakthroughFails(o.breakthroughFails),
     validateBreakthroughRecords(o.breakthroughRecords),
     validateJindanTrial(o.jindanTrial),
-    validateLastBattle(o.lastBattle),
-    validateCommission(o.commission),
+    validateLastBattle(o.lastBattle, ver),
+    validateCommission(o.commission, ver),
   ];
   for (const c of checks) if (c) return fail(c);
 

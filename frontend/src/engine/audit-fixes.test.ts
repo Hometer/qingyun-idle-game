@@ -1,0 +1,162 @@
+import { describe, expect, it } from "vitest";
+import {
+  SCHEMA_VERSION,
+  createGame,
+  settle,
+  importSave,
+  exportSave,
+  craftGainPill,
+  startLongTask,
+  craftEquipment,
+  lockAffix,
+  reforgeEquipment,
+  marrow,
+  acceptCommission,
+  claimCommission,
+  fightNode,
+  migrateSave,
+} from "./engine";
+import type { SaveState } from "./types";
+
+const H = 3600_000;
+const DAY = 24 * H;
+const T0 = 1_700_000_000_000;
+
+function fresh(nowMs = T0): SaveState {
+  const s = createGame("林青", "金", "balanced", nowMs);
+  s.daily.weather = { id: "none", used: false };
+  s.daily.astrology = { id: "none", used: false };
+  s.daily.goals = { battle: { progress: 0, claimed: false }, suppress: { progress: 0, claimed: false } };
+  return s;
+}
+
+function rich(): SaveState {
+  const s = fresh();
+  for (const k of Object.keys(s.resources)) (s.resources as unknown as Record<string, number>)[k] = 1e8;
+  s.encounter.guideDone = true;
+  return s;
+}
+
+describe("全局审查回归（P1/P2 修复）", () => {
+  it("P1-01 收益丹库存可导出导入（含零数量残留）", () => {
+    const s = rich();
+    s.realm = "zhuji1";
+    s.buildings.alchemyFurnace = 1;
+    const r = craftGainPill(s, T0, "yangYuan", 1);
+    expect(r.ok).toBe(true);
+    // 服用后残留 0 数量也应可导入
+    const used = { ...r.state! } as unknown as Record<string, unknown>;
+    (used.resources as Record<string, number>).nothing = 0;
+    const exported = exportSave(r.state!);
+    const imported = importSave(exported);
+    expect(imported.ok).toBe(true);
+  });
+
+  it("P1-01 风共鸣闭关合法耗时可导出导入", () => {
+    const s = rich();
+    s.spiritRoots = ["风"];
+    s.resonance = "风";
+    s.firsts.suppressedFirstNodeOnce = true;
+    const r = startLongTask(s, T0, { type: "seclusion", durationMinutes: 30, protection: false });
+    expect(r.ok).toBe(true);
+    expect(r.state!.longTask!.effectiveMinutes).toBeLessThan(30);
+    const imported = importSave(exportSave(r.state!));
+    expect(imported.ok).toBe(true);
+  });
+
+  it("P1-01 封存词条反复重铸不超上限", () => {
+    let s = rich();
+    s.realm = "hunyuan_daluo2";
+    s.forge = 1;
+    const r = craftEquipment(s, T0, "w_hunyuan");
+    expect(r.ok).toBe(true);
+    s = r.state!;
+    const id = Object.keys(s.itemInstances).find((k) => s.itemInstances[k].baseId === "w_hunyuan")!;
+    const lock = lockAffix(s, T0, id, s.itemInstances[id].affixes[0].id);
+    expect(lock.ok).toBe(true);
+    s = lock.state!;
+    for (let i = 0; i < 30; i++) {
+      const rr = reforgeEquipment(s, T0, id);
+      expect(rr.ok).toBe(true);
+      s = rr.state!;
+      expect(s.itemInstances[id].affixes.length).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it("P1-02 坏洗髓历史/重复灵根/越界共鸣拒绝导入", () => {
+    const a = fresh();
+    (a.marrowHistory as unknown) = [null];
+    expect(importSave(exportSave(a)).ok).toBe(false);
+
+    const b = fresh();
+    b.spiritRoots = ["金", "金"];
+    expect(importSave(exportSave(b)).ok).toBe(false);
+
+    const c = fresh();
+    c.spiritRoots = ["金", "水"];
+    c.resonance = "雷";
+    expect(importSave(exportSave(c)).ok).toBe(false);
+  });
+
+  it("P1-02 已领奖历史复制为 active 后拒绝导入", () => {
+    let s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.encounter.guideDone = true;
+    s = settle(s, T0 + DAY);
+    const c = s.commission.candidates.find((x) => x.kind === "battle")!;
+    s = acceptCommission(s, T0 + DAY, c.id).state!;
+    const f = fightNode(s, T0 + DAY + 1000, c.mapId!, c.nodeId!, "challenge");
+    const claimed = claimCommission(f.state, f.state.lastSettledAt, "b").state!;
+    const edited = structuredClone(claimed);
+    edited.commission.active = structuredClone(edited.commission.history[0]);
+    edited.commission.active.status = "ready";
+    expect(importSave(exportSave(edited)).ok).toBe(false);
+  });
+
+  it("P1-05 日期回拨不重新生成候选", () => {
+    let s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.encounter.guideDone = true;
+    s = settle(s, T0 + 2 * DAY); // 前进到第 3 天
+    const count3 = s.commission.candidates.length;
+    const rollback = settle(s, T0 + DAY); // 回拨到第 2 天
+    expect(rollback.commission.date).toBe(s.commission.date);
+    expect(rollback.commission.candidates.length).toBe(count3);
+  });
+
+  it("P2-01 一次炼制只产生一个实例", () => {
+    const s = rich();
+    s.realm = "zhuji1";
+    s.forge = 1;
+    const r = craftEquipment(s, T0, "w_steel");
+    expect(r.ok).toBe(true);
+    const inv = r.state!.inventory;
+    const steelKeys = Object.keys(inv).filter((k) => k === "w_steel" || k.startsWith("w_steel#"));
+    expect(steelKeys.length).toBe(1);
+  });
+
+  it("P2-02 洗髓移除共鸣中的灵根后清空共鸣", () => {
+    const s = rich();
+    s.realm = "zhuji1";
+    s.spiritRoots = ["金", "水"];
+    s.resonance = "金";
+    const r = marrow(s, T0, "removeRoot", "金");
+    expect(r.ok).toBe(true);
+    expect(r.state!.resonance).toBe(null);
+  });
+
+  it("P2-07 schema 为 v18，缺委托的新档拒绝导入", () => {
+    expect(SCHEMA_VERSION).toBe(18);
+    const s = fresh();
+    s.schemaVersion = 18;
+    (s as unknown as Record<string, unknown>).commission = undefined;
+    expect(importSave(exportSave(s)).ok).toBe(false);
+    // v17 旧档缺委托仍可迁移导入
+    const old = fresh();
+    old.schemaVersion = 17;
+    (old as unknown as Record<string, unknown>).commission = undefined;
+    const imported = importSave(exportSave(old));
+    expect(imported.ok).toBe(true);
+    expect(migrateSave(old).commission).toBeTruthy();
+  });
+});

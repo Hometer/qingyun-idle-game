@@ -84,6 +84,7 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
             api_key=settings.model_api_key,
             base_url=settings.model_api_base,
             timeout=settings.model_timeout_seconds,
+            max_retries=0,
         )
     except Exception:
         logger.info("fallback event=%s reason=sdk_init", req.event_id)
@@ -104,6 +105,13 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
         except Exception as e:
             reason = f"call_error:{type(e).__name__}"
             continue
+        # 收到 usage 即记账：解析/审核失败同样产生了费用
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            budget.record_usage(
+                int(getattr(usage, "prompt_tokens", 0) or 0),
+                int(getattr(usage, "completion_tokens", 0) or 0),
+            )
         parsed = _parse_json(text)
         if parsed is None:
             reason = "parse_fail"
@@ -119,12 +127,6 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
             latency,
             getattr(getattr(resp, "usage", None), "total_tokens", None),
         )
-        usage = getattr(resp, "usage", None)
-        if usage is not None:
-            budget.record_usage(
-                int(getattr(usage, "prompt_tokens", 0) or 0),
-                int(getattr(usage, "completion_tokens", 0) or 0),
-            )
         return GenerateResponse(
             source="model",
             event_id=req.event_id,

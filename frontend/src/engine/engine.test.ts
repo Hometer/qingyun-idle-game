@@ -1607,7 +1607,8 @@ describe("v1.0 炼器", () => {
     const st = r.state as SaveState;
     expect(st.resources.iron).toBe(0);
     expect(st.resources.spiritStone).toBe(0);
-    expect(st.inventory.w_steel).toBe(1);
+    const instId = Object.keys(st.itemInstances).find((k) => st.itemInstances[k].baseId === "w_steel")!;
+    expect(st.inventory[instId]).toBe(1);
   });
 
   it("镇压产玄铁、秘境成功掉玄铁", () => {
@@ -1935,10 +1936,11 @@ describe("二十境内容与日常节奏", () => {
     expect(owned.resources.iron).toBe(0);
     expect(owned.resources.spiritStone).toBe(0);
     expect(owned.resources.page).toBe(0);
-    expect(owned.inventory.w_yuanying).toBe(1);
-    const equipped = equipItem(owned, T0, "w_yuanying");
+    const instId = Object.keys(owned.itemInstances).find((k) => owned.itemInstances[k].baseId === "w_yuanying")!;
+    expect(owned.inventory[instId]).toBe(1);
+    const equipped = equipItem(owned, T0, instId);
     expect(equipped.ok).toBe(true);
-    expect((equipped.state as SaveState).equipment.weapon).toBe("w_yuanying");
+    expect((equipped.state as SaveState).equipment.weapon).toBe(instId);
   });
 
   it("新增五处秘境按境界开放，每日一次，奖励与记录一致", () => {

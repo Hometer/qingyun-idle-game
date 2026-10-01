@@ -1,6 +1,7 @@
 """月度费用熔断：按自然月累计估算费用并持久化，超出预算即停止模型调用、降级模板。"""
 
 import json
+import logging
 import threading
 import time
 from pathlib import Path
@@ -11,6 +12,8 @@ _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 _SPEND_FILE = _DATA_DIR / "spend.json"
 _lock = threading.Lock()
 
+logger = logging.getLogger(__name__)
+
 
 def _month_key() -> str:
     t = time.localtime()
@@ -20,7 +23,11 @@ def _month_key() -> str:
 def _load() -> dict:
     try:
         return json.loads(_SPEND_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
     except Exception:
+        # 账本损坏不能静默清空：记日志并降级为 0，避免误以为有熔断额度
+        logger.warning("月度费用账本损坏，按 0 记账并继续")
         return {}
 
 

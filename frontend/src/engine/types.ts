@@ -121,6 +121,7 @@ export interface LongTask {
   difficulty: LongTaskDifficulty;
   protectionUsed: boolean;
   durationMinutes: number;
+  effectiveMinutes: number;
   startAt: number;
   endAt: number;
   ruleVersion: number;
