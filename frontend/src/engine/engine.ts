@@ -451,6 +451,7 @@ function craftCandidate(s: SaveState): Commission | null {
     return makeCraftCommission(s, "craft:upgradeTechnique", `精进 1 次「${CONFIG.techniques[s.technique].name}」`, "upgradeTechnique", undefined);
   }
   for (const t of ["yangYuan", "juLing"] as const) {
+    if (s.daily.rewardedDan >= 1) break; // 今日已服用，不生成无法当天完成的候选
     for (let tier = 1; tier <= 4; tier++) {
       const pillId = t === "yangYuan" ? `yangYuanDan_${tier}` : `juLingDan_${tier}`;
       if ((s.inventory[pillId] || 0) > 0) {
@@ -485,12 +486,41 @@ function commissionResponse(c: Commission): string {
     : `${npc} 传话：炉火已熄，这份心意我记下了，改日再叙。`;
 }
 
+// 候选在生成后被玩家手动完成（如把目标建筑升满）时可能不再可完成；接取前再验一次
+function commissionCompletable(s: SaveState, c: Commission): boolean {
+  if (c.kind === "battle") {
+    return !!c.mapId && !!c.nodeId && !!s.maps[c.mapId]?.[c.nodeId]?.cleared;
+  }
+  switch (c.action) {
+    case "upgradeBuilding": {
+      const bid = c.actionParam as BuildingId | undefined;
+      return !!bid && s.buildings[bid] !== undefined && s.buildings[bid] < CONFIG.buildings[bid].levels.length;
+    }
+    case "upgradeTechnique": {
+      const t = s.technique;
+      return !!t && s.techniqueLevel[t] < CONFIG.techniques[t].levels.length;
+    }
+    case "useGainPill": {
+      if (s.daily.rewardedDan >= 1) return false; // 今日已服用，明日再来
+      const [type, tier] = (c.actionParam ?? "").split(":");
+      const pillId = type === "yangYuan" ? `yangYuanDan_${tier}` : `juLingDan_${tier}`;
+      return (s.inventory[pillId] || 0) > 0;
+    }
+    default:
+      return true; // craftEquipment / craftPill 等可重复动作
+  }
+}
+
 export function acceptCommission(state: SaveState, nowMs: number, id: string): Result<SaveState> {
   const s = settle(state, nowMs);
   const idx = s.commission.candidates.findIndex((c) => c.id === id);
   if (idx < 0) return fail("无此委托");
   if (s.commission.active) return fail("已有进行中的委托");
   const c = s.commission.candidates[idx];
+  if (!commissionCompletable(s, c)) {
+    s.commission.candidates = generateCandidates(s); // 目标已变化，刷新候选
+    return fail("该委托目标已变化，已刷新候选，请重新选择");
+  }
   c.status = "accepted";
   s.commission.active = c;
   s.commission.candidates = [];
@@ -3179,8 +3209,12 @@ function validateCommissionItem(c: unknown): string | null {
   if (o.kind === "battle") {
     if (typeof o.mapId !== "string" || !MAP_CFG[o.mapId as MapId]) return "委托地图无效";
     if (typeof o.nodeId !== "string" || !MAP_CFG[o.mapId as MapId]?.nodes[o.nodeId]) return "委托节点无效";
+    if (o.difficulty !== undefined && o.difficulty !== "normal" && o.difficulty !== "challenge") return "委托难度无效";
   }
-  if (o.kind === "craft" && typeof o.action !== "string") return "委托动作无效";
+  if (o.kind === "craft") {
+    if (typeof o.action !== "string") return "委托动作无效";
+    if (o.actionParam !== undefined && typeof o.actionParam !== "string") return "委托动作参数无效";
+  }
   if (!Number.isInteger(o.target) || (o.target as number) < 1) return "委托目标无效";
   if (!Number.isInteger(o.progress) || (o.progress as number) < 0 || (o.progress as number) > (o.target as number)) return "委托进度无效";
   if (!["accepted", "ready", "claimed"].includes(o.status as string)) return "委托状态无效";

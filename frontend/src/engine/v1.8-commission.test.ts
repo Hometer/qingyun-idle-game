@@ -10,6 +10,7 @@ import {
   importSave,
   migrateSave,
 } from "./engine";
+import { CONFIG } from "./config";
 import type { SaveState } from "./types";
 
 const H = 3600_000;
@@ -89,6 +90,18 @@ describe("v1.8 山河委托", () => {
     expect(claim.ok).toBe(true);
     expect(claim.state!.commission.history.length).toBe(1);
     expect(claim.state!.commission.history[0].rewardChoice).toBe("b");
+  });
+
+  it("目标被手动完成后接取会拒绝并刷新候选", () => {
+    const s = fresh();
+    const cand = s.commission.candidates.find((c) => c.action === "upgradeBuilding" && c.actionParam === "cultivationRoom");
+    expect(cand).toBeTruthy();
+    // 模拟玩家接取前已把修炼室升满
+    s.buildings.cultivationRoom = (CONFIG.buildings as unknown as Record<string, { levels: unknown[] }>).cultivationRoom.levels.length;
+    const acc = acceptCommission(s, s.lastSettledAt, cand!.id);
+    expect(acc.ok).toBe(false);
+    if (acc.ok) throw new Error("expected failure");
+    expect(acc.reason).toContain("已变化");
   });
 
   it("领奖后不可重复领", () => {
