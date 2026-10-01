@@ -120,6 +120,7 @@ export function CreateCharacter() {
                 <p>灵根：{fortune.spiritRoots.join("、")}（{fortune.spiritRoots.length === 1 && ["雷", "冰", "风"].includes(fortune.spiritRoots[0]) ? "变异" : `${fortune.spiritRoots.length}灵根`}）</p>
                 <p>经脉：{MERIDIAN_CFG[fortune.meridians].name}（产速 ×{MERIDIAN_CFG[fortune.meridians].productionMult}）</p>
                 <p>悟性：{COMPREHENSION_CFG[fortune.comprehension].name}（功法费用 ×{COMPREHENSION_CFG[fortune.comprehension].pageMult}）</p>
+                <p className="text-xs text-muted">概率：变异灵根 5%；五灵根 12%、四 18%、三 30%、二 25%、一 10%。功法精进按「基础残页 × 悟性费用倍率」实扣，通明档（×0.94）比平常档更省。</p>
               </div>
             </div>
           ) : (

@@ -459,7 +459,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setNotice("暂无可用洗髓机会");
         return;
       }
-      if (!window.confirm(`洗髓将花费灵石${cost.spiritStone}、灵草${cost.herb}，确定？`)) return;
+      // 效果预览
+      let preview = "";
+      const mCfg = CONFIG.meridians as unknown as Record<string, { name: string; productionMult: number }>;
+      const cCfg = CONFIG.comprehensions as unknown as Record<string, { name: string; pageMult: number }>;
+      const mOrder = ["blocked", "sluggish", "normal", "smooth", "innate"];
+      const cOrder = ["dull", "slow", "normal", "clever", "genius"];
+      if (choice === "meridian") {
+        const idx = mOrder.indexOf(state.meridians);
+        if (idx < mOrder.length - 1) {
+          const to = mOrder[idx + 1];
+          preview = `经脉 ${mCfg[state.meridians].name}（产速 ×${mCfg[state.meridians].productionMult}）→ ${mCfg[to].name}（产速 ×${mCfg[to].productionMult}）`;
+        }
+      } else if (choice === "comprehension") {
+        const idx = cOrder.indexOf(state.comprehension);
+        if (idx < cOrder.length - 1) {
+          const to = cOrder[idx + 1];
+          preview = `悟性 ${cCfg[state.comprehension].name}（费用 ×${cCfg[state.comprehension].pageMult}）→ ${cCfg[to].name}（费用 ×${cCfg[to].pageMult}）`;
+        }
+      } else {
+        preview = `移除灵根「${removeRoot}」后灵根：${state.spiritRoots.filter((r) => r !== removeRoot).join("、") || "（无）"}${state.resonance === removeRoot ? "（将清空当前共鸣）" : ""}`;
+      }
+      if (!window.confirm(`洗髓将花费灵石${cost.spiritStone}、灵草${cost.herb}。\n${preview}\n确定？`)) return;
       const r = eng.marrow(state, Date.now(), choice, removeRoot);
       if (!r.ok || !r.state) {
         setNotice(r.reason);
@@ -478,7 +499,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setNotice(r.reason);
         return;
       }
-      await apply(r.state, "重铸装备词条");
+      const detail = r.state.recentLogs.at(-1) ?? "重铸装备词条";
+      await apply(r.state, detail);
     },
     [state, apply],
   );
@@ -512,6 +534,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const setResonance = useCallback(
     async (resonance: string | null) => {
       if (!state) return;
+      const before = eng.buildSummary(state);
+      const next = structuredClone(state);
+      next.resonance = resonance;
+      const after = eng.buildSummary(next);
+      const cmp = `切换共鸣前后：\n修为 ${fmt(before.cultivationPerSec)} → ${fmt(after.cultivationPerSec)}/秒\n灵气 ${fmt(before.spiritPerSec)} → ${fmt(after.spiritPerSec)}/秒\n攻击 ${before.attack} → ${after.attack}\n护劫减伤 ${fmtPct(before.reduction)}% → ${fmtPct(after.reduction)}%`;
+      if (!window.confirm(`确定切换共鸣？\n${cmp}`)) return;
       const r = eng.setResonance(state, Date.now(), resonance);
       if (!r.ok || !r.state) {
         setNotice(r.reason);
@@ -538,6 +566,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const setAptitude = useCallback(
     async (aptitude: AptitudeId) => {
       if (!state) return;
+      const before = eng.buildSummary(state);
+      const next = structuredClone(state);
+      next.aptitude = aptitude;
+      const after = eng.buildSummary(next);
+      const cmp = `切换侧重前后：\n修为 ${fmt(before.cultivationPerSec)} → ${fmt(after.cultivationPerSec)}/秒\n灵气 ${fmt(before.spiritPerSec)} → ${fmt(after.spiritPerSec)}/秒`;
+      if (!window.confirm(`确定切换修炼侧重？\n${cmp}`)) return;
       const r = eng.setAptitude(state, Date.now(), aptitude);
       if (!r.ok || !r.state) {
         setNotice(r.reason);
