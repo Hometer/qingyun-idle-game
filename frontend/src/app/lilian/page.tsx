@@ -246,12 +246,15 @@ export default function LilianPage() {
                 <p className="text-xs text-muted">今日暂无可接的委托，明日再来。</p>
               )}
               {state.commission.candidates.map((c) => (
-                <div key={c.id} className="flex items-center justify-between gap-2 border-b border-line/60 py-2 last:border-0">
-                  <div className="min-w-0 text-sm">
-                    <span>{c.title}</span>
-                    <span className="ml-1 text-xs text-muted">{c.kind === "battle" ? "· 战斗" : "· 制作"}</span>
+                <div key={c.id} className="border-b border-line/60 py-2 last:border-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 text-sm">
+                      <span>{c.title}</span>
+                      <span className="ml-1 text-xs text-muted">{c.kind === "battle" ? "· 战斗" : "· 制作"}</span>
+                    </div>
+                    <button onClick={() => acceptCommission(c.id)} className="shrink-0 rounded-lg border border-line bg-paper px-3 py-1.5 text-sm hover:bg-cinnabar/10">接取</button>
                   </div>
-                  <button onClick={() => acceptCommission(c.id)} className="shrink-0 rounded-lg border border-line bg-paper px-3 py-1.5 text-sm hover:bg-cinnabar/10">接取</button>
+                  <p className="mt-0.5 text-xs text-muted">完成奖励二选一：{rewardParts(c.rewardA)} ／ {rewardParts(c.rewardB)}</p>
                 </div>
               ))}
             </>

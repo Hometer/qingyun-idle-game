@@ -1535,7 +1535,7 @@ const BASE_CONFIG = {
   commission: {
     fixedNpcName: "青崖",
     dailyCandidates: 2,
-    rewardShare: 0.4,
+    rewardShare: 0.15,
   } as const,
 
   tribulation: {

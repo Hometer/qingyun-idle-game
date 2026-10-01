@@ -123,6 +123,19 @@ describe("v1.8 山河委托", () => {
     expect(Array.isArray(m.commission.history)).toBe(true);
   });
 
+  it("旧档导入按真实境界重新生成候选（含战斗候选）", () => {
+    const s = fresh();
+    s.realm = "zhuji1";
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.maps.map_qingyun.node_wolf.unlocked = true;
+    s.schemaVersion = 17;
+    (s as unknown as Record<string, unknown>).commission = undefined;
+    const imported = importSave(JSON.stringify(s));
+    expect(imported.ok).toBe(true);
+    const st = imported.state!;
+    expect(st.commission.candidates.some((c) => c.kind === "battle")).toBe(true);
+  });
+
   it("坏委托档拒绝导入", () => {
     const good = fresh();
     const bad = structuredClone(good) as unknown as Record<string, unknown>;

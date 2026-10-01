@@ -3513,6 +3513,10 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.lastLongTaskResult = (o.lastLongTaskResult as LongTaskResult | null) ?? null;
   base.lastBattle = (o.lastBattle as LastBattle | null) ?? null;
   base.commission = { ...base.commission, ...((o.commission as Partial<SaveState["commission"]>) || {}) };
+  if (o.commission === undefined || o.commission === null) {
+    // 旧档（v17 及更早）没有委托：按导入后的真实境界/地图重新生成候选，而不是沿用新建角色的默认候选
+    base.commission.candidates = generateCandidates(base);
+  }
   base.aptitude = validAptitude(o.aptitude);
   base.breakthroughFails = { ...base.breakthroughFails, ...((o.breakthroughFails as Record<string, number>) || {}) };
   base.breakthroughRecords = Array.isArray(o.breakthroughRecords) ? (o.breakthroughRecords as BreakthroughRecord[]) : [];
