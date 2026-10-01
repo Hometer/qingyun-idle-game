@@ -88,6 +88,17 @@ def reserve(cost_rmb: float) -> bool:
         return True
 
 
+def _safe_month_value(data: dict) -> float:
+    """读取当月累计值；非法/NaN/负数时按 0 处理（避免写坏账本）。"""
+    try:
+        v = float(data.get(_month_key(), 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(v) or v < 0:
+        return 0.0
+    return v
+
+
 def settle(reserved_rmb: float, usage_rmb: float) -> None:
     """调用结束后释放预留，并按实际 usage 记账。"""
     global _pending
@@ -103,7 +114,7 @@ def settle(reserved_rmb: float, usage_rmb: float) -> None:
             logger.warning("月度费用账本损坏，本次费用未记账")
             return
         key = _month_key()
-        data[key] = float(data.get(key, 0.0)) + usage_rmb
+        data[key] = _safe_month_value(data) + usage_rmb
         _save(data)
 
 
@@ -122,5 +133,5 @@ def record_usage(prompt_tokens: int, completion_tokens: int) -> None:
             logger.warning("月度费用账本损坏，本次费用未记账")
             return
         key = _month_key()
-        data[key] = float(data.get(key, 0.0)) + cost
+        data[key] = _safe_month_value(data) + cost
         _save(data)
