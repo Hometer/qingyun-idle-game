@@ -204,10 +204,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setReady(true);
       return;
     }
-    // 读到的档先校验：坏档不迁移、不结算，避免客户端崩溃，进入恢复提示
+    // 读到的档先校验：坏档不迁移、不结算，避免客户端崩溃，进入恢复提示；不覆盖健康备份
     const verr = eng.validateSaveObject(structuredClone(saved as unknown as Record<string, unknown>));
     if (verr) {
-      try { await backupSave(saved); } catch { /* 忽略备份失败 */ }
       setLoadError(`存档损坏（${verr}），已保留原档未覆盖。可恢复备份或导出原档`);
       setReady(true);
       return;
@@ -1160,25 +1159,35 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const backup = await loadBackup().catch(() => null);
     if (!backup) {
       setNotice("没有可恢复的备份");
+      if (loadError) setLoadError("没有可恢复的备份，请导出原档或重试读取");
       return;
     }
     if (!window.confirm("恢复导入前的存档？当前进度将被替换。")) return;
+    // 恢复前校验/迁移备份，失败信息要显示在恢复页
+    const verr = eng.validateSaveObject(structuredClone(backup as unknown as Record<string, unknown>));
+    if (verr) {
+      setLoadError(`备份损坏（${verr}），无法恢复`);
+      return;
+    }
+    const migrated = eng.migrateSave(backup);
+    const settled = eng.settle(migrated, Date.now());
     try {
-      const res = await replaceSave(backup, genRef.current);
+      const res = await replaceSave(settled, genRef.current);
       if (res.conflict) {
-        setNotice("恢复失败：存档已在其他标签页被修改，请刷新后重试");
+        setLoadError("恢复失败：存档已在其他标签页被修改，请刷新后重试");
         return;
       }
       genRef.current = res.generation;
     } catch {
-      setNotice("写入失败，已保留当前进度");
+      setLoadError("恢复失败：写入出错，已保留当前进度");
       return;
     }
-    baseRef.current = backup.revision;
-    setState(backup);
+    baseRef.current = settled.revision;
+    setState(settled);
     setEncounter(null);
+    setLoadError(null);
     setNotice("已恢复导入前的存档");
-  }, []);
+  }, [loadError]);
 
   const value: GameContextValue = {
     ready,

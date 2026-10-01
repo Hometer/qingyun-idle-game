@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import threading
 import time
 from pathlib import Path
@@ -42,12 +43,15 @@ def _save(data: dict) -> None:
 
 
 def _read_spend() -> float:
-    """读取当月累计；账本损坏/非法值时返回 inf（使预算检查失败关闭）。"""
+    """读取当月累计；账本损坏/NaN/负数/非法值时返回 inf（使预算检查失败关闭）。"""
     try:
         data = _load()
-        return float(data.get(_month_key(), 0.0))
+        value = float(data.get(_month_key(), 0.0))
     except (RuntimeError, TypeError, ValueError):
         return float("inf")
+    if not math.isfinite(value) or value < 0:
+        return float("inf")
+    return value
 
 
 def current_spend_rmb() -> float:

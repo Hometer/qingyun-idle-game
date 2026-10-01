@@ -11,6 +11,7 @@ class Settings:
         self.model_api_base: str = os.getenv("MODEL_API_BASE", "https://api.deepseek.com/v1")
         self.model_name: str = os.getenv("MODEL_NAME", "deepseek-chat")
         self.model_timeout_seconds: float = float(os.getenv("MODEL_TIMEOUT_SECONDS", "1.8"))
+        self.model_total_budget_seconds: float = float(os.getenv("MODEL_TOTAL_BUDGET_SECONDS", "3.5"))
         self.access_code: str = os.getenv("ACCESS_CODE", "")
         self.rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "20"))
         # development：本地验收，空访问码放行；production：公网，空访问码一律拒绝（fail-closed）

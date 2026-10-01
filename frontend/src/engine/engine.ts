@@ -431,22 +431,26 @@ function battleCandidate(s: SaveState, dateStr: string): Commission | null {
     return realmIndex(s.realm) >= realmIndex(MAP_CFG[mid].nodes[firstNode].gate as RealmId);
   });
   const preferred = cleared.filter((c) => c.mid === current);
-  const pick = (preferred.length ? preferred : cleared)[0];
-  const node = MAP_CFG[pick.mid].nodes[pick.nid];
+  const ordered = [...preferred, ...cleared.filter((c) => c.mid !== current)];
   const r = commissionRewards(s);
-  return {
-    id: `battle:${pick.mid}:${pick.nid}:${dateStr}`,
-    kind: "battle",
-    title: `在「${MAP_CFG[pick.mid].name}·${node.name}」赢得一场挑战`,
-    mapId: pick.mid,
-    nodeId: pick.nid,
-    difficulty: "challenge",
-    target: 1,
-    progress: 0,
-    rewardA: r.a,
-    rewardB: r.b,
-    status: "accepted",
-  };
+  for (const pick of ordered) {
+    const node = MAP_CFG[pick.mid].nodes[pick.nid];
+    const cand: Commission = {
+      id: `battle:${pick.mid}:${pick.nid}:${dateStr}`,
+      kind: "battle",
+      title: `在「${MAP_CFG[pick.mid].name}·${node.name}」赢得一场挑战`,
+      mapId: pick.mid,
+      nodeId: pick.nid,
+      difficulty: "challenge",
+      target: 1,
+      progress: 0,
+      rewardA: r.a,
+      rewardB: r.b,
+      status: "accepted",
+    };
+    if (commissionCompletable(s, cand)) return cand; // 只生成当前可胜的挑战目标
+  }
+  return null;
 }
 
 function craftCandidate(s: SaveState, dateStr: string): Commission | null {
@@ -487,7 +491,9 @@ function craftCandidate(s: SaveState, dateStr: string): Commission | null {
       }
     }
   }
-  return null;
+  // 兜底：领取 1 次收益（始终可完成），保证与战斗候选构成两件不同目标
+  const settleC = makeCraftCommission(s, dateStr, "craft:settle", "领取 1 次收益", "settle", undefined);
+  return commissionCompletable(s, settleC) ? settleC : null;
 }
 
 function generateCandidates(s: SaveState, dateStr: string): Commission[] {
@@ -561,6 +567,8 @@ function commissionCompletable(s: SaveState, c: Commission): boolean {
       const pillId = type === "yangYuan" ? `yangYuanDan_${tier}` : `juLingDan_${tier}`;
       return (s.inventory[pillId] || 0) > 0;
     }
+    case "settle":
+      return true; // 领取收益始终可完成
     default:
       return false; // 未知动作不可接取
   }
@@ -569,7 +577,7 @@ function commissionCompletable(s: SaveState, c: Commission): boolean {
 export function acceptCommission(state: SaveState, nowMs: number, id: string): Result<SaveState> {
   const s = settle(state, nowMs);
   const today = todayStr(nowMs);
-  if (s.commission.acceptedDate === today) return fail("今日已接取过委托，明日再来");
+  if (s.commission.acceptedDate && today <= s.commission.acceptedDate) return fail("今日已接取过委托，明日再来");
   if (s.commission.active) return fail("已有进行中的委托");
   const idx = s.commission.candidates.findIndex((c) => c.id === id);
   if (idx < 0) return fail("无此委托");
@@ -797,6 +805,7 @@ export function recordDailySettle(state: SaveState, nowMs: number): SaveState {
     };
     applyReward(s, cfg.reward ?? {});
   }
+  commissionProgress(s, "craft", (c) => c.action === "settle");
   s.revision += 1;
   return s;
 }
@@ -3024,6 +3033,9 @@ export function migrateSave(raw: SaveState): SaveState {
     if (typeof comm.date !== "string") comm.date = "";
   }
   s.schemaVersion = SCHEMA_VERSION;
+  if (typeof (s as Record<string, unknown>).revision !== "number" || !Number.isFinite((s as Record<string, unknown>).revision as number)) {
+    (s as Record<string, unknown>).revision = 0; // 旧档缺修订号补 0
+  }
   const migrated = s as unknown as SaveState;
   syncRealmMaps(migrated);
   // 补记已首通的新功法（旧档）与鸿蒙印
@@ -3375,12 +3387,18 @@ function validateCommissionItem(c: unknown): string | null {
   }
   if (o.kind === "craft") {
     if (typeof o.action !== "string") return "委托动作无效";
-    if (!["craftEquipment", "craftPill", "upgradeBuilding", "upgradeTechnique", "buildLibrary", "buildForge", "useGainPill"].includes(o.action)) return "委托动作无效";
+    if (!["craftEquipment", "craftPill", "upgradeBuilding", "upgradeTechnique", "buildLibrary", "buildForge", "useGainPill", "settle"].includes(o.action)) return "委托动作无效";
     if (o.actionParam !== undefined && typeof o.actionParam !== "string") return "委托动作参数无效";
   }
   if (!Number.isInteger(o.target) || (o.target as number) < 1) return "委托目标无效";
   if (!Number.isInteger(o.progress) || (o.progress as number) < 0 || (o.progress as number) > (o.target as number)) return "委托进度无效";
   if (!["accepted", "ready", "claimed"].includes(o.status as string)) return "委托状态无效";
+  // 状态与进度一致性：未完成不得 ready/claimed，已完成不得仍为 accepted
+  if (o.status === "accepted") {
+    if ((o.progress as number) >= (o.target as number)) return "进行中委托进度不应达标";
+  } else if ((o.progress as number) < (o.target as number)) {
+    return "完成/已领奖委托进度未达标";
+  }
   for (const key of ["rewardA", "rewardB"]) {
     const r = o[key] as Record<string, unknown> | undefined;
     if (!r || typeof r !== "object") return "委托奖励无效";
@@ -3746,6 +3764,9 @@ export function validateSaveObject(o: Record<string, unknown>): string | null {
   if (typeof o.name !== "string" || !o.name.trim()) return "存档缺少姓名";
   if (!realmOrder.includes(o.realm as RealmId)) return "境界无效";
   if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt)) return "时间数据无效";
+  if (ver >= 18) {
+    if (typeof o.revision !== "number" || !Number.isInteger(o.revision) || o.revision < 0) return "修订号无效";
+  }
 
   const checks: Array<string | null> = [
     validateResources(o.resources, ver),

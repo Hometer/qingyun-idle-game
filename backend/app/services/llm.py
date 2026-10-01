@@ -92,7 +92,12 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
         return _template_response(req)
 
     reason = "unknown"
+    deadline = time.perf_counter() + settings.model_total_budget_seconds
     for _ in range(_MAX_ATTEMPTS):
+        # 端到端总截止：前端约 4 秒放弃，后端不超总预算发起新重试
+        if time.perf_counter() >= deadline:
+            reason = "deadline"
+            break
         # 逐次原子预留：越界则停止（前一次失败已按实际 usage 结算）
         if not budget.reserve(estimate):
             reason = "budget"
@@ -118,6 +123,8 @@ def generate_encounter(req: GenerateRequest) -> GenerateResponse:
                 int(getattr(usage, "prompt_tokens", 0) or 0) * settings.model_input_price_per_mtok
                 + int(getattr(usage, "completion_tokens", 0) or 0) * settings.model_output_price_per_mtok
             ) / 1_000_000
+        else:
+            usage_cost = estimate  # usage 缺失但调用已发出：保守按预留上限记账，不当免费
         # 释放预留并按实际 usage 记账（解析/审核失败同样产生费用）
         budget.settle(estimate, usage_cost)
         parsed = _parse_json(text)

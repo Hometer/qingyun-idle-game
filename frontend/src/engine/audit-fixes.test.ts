@@ -293,6 +293,47 @@ describe("全局审查回归（P1/P2 修复）", () => {
     expect(importSave(exportSave(m)).ok).toBe(true);
   });
 
+  it("A2 v18 缺修订号拒绝导入；旧档迁移补修订号", () => {
+    const s = fresh();
+    delete (s as unknown as Record<string, unknown>).revision;
+    expect(importSave(exportSave(s)).ok).toBe(false);
+    const old = fresh();
+    old.schemaVersion = 17;
+    delete (old as unknown as Record<string, unknown>).revision;
+    const m = migrateSave(old);
+    expect(typeof m.revision).toBe("number");
+    expect(Number.isFinite(m.revision)).toBe(true);
+  });
+
+  it("A3 委托时间回拨不能再接取", () => {
+    let s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.encounter.guideDone = true;
+    for (const k of Object.keys(s.resources)) (s.resources as unknown as Record<string, number>)[k] = 1e7;
+    s = settle(s, T0 + 2 * DAY);
+    const c = s.commission.candidates.find((x) => x.kind === "battle")!;
+    s = acceptCommission(s, T0 + 2 * DAY, c.id).state!;
+    // 回拨到更早日期
+    const back = fightNode(s, T0 + DAY, "map_qingyun", "node_side_1");
+    const backCandidate = back.state.commission.candidates.find((x) => x.kind === "battle");
+    if (backCandidate) {
+      expect(acceptCommission(back.state, T0 + DAY, backCandidate.id).ok).toBe(false);
+    }
+  });
+
+  it("B3 矛盾委托进度（ready 但 progress=0）拒绝导入", () => {
+    const s = fresh();
+    s.maps.map_qingyun.node_wolf.cleared = true;
+    s.encounter.guideDone = true;
+    for (const k of Object.keys(s.resources)) (s.resources as unknown as Record<string, number>)[k] = 1e7;
+    const day = settle(s, T0 + DAY);
+    const c = day.commission.candidates[0];
+    c.status = "ready";
+    c.progress = 0;
+    c.target = 1;
+    expect(importSave(exportSave(day)).ok).toBe(false);
+  });
+
   it("P2-02 旧式灵根待免费定根，定根前不可共鸣，定根只提交一次", () => {
     const s = fresh();
     s.schemaVersion = 13;

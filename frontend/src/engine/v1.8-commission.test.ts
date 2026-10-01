@@ -37,9 +37,10 @@ function withClear(): SaveState {
 }
 
 describe("v1.8 山河委托", () => {
-  it("新角色无资源时无制作候选（升级需资源）", () => {
+  it("新角色无资源时仍有可完成的「领取收益」候选", () => {
     const s = fresh();
-    expect(s.commission.candidates.length).toBe(0);
+    expect(s.commission.candidates.length).toBe(1);
+    expect(s.commission.candidates[0].action).toBe("settle");
   });
 
   it("跨日重新生成两件候选（含战斗候选）", () => {
