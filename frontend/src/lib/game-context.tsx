@@ -441,6 +441,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const marrow = useCallback(
     async (choice: "meridian" | "comprehension" | "removeRoot", removeRoot?: string) => {
       if (!state) return;
+      const cost = eng.marrowCost(state);
+      if (!cost) {
+        setNotice("暂无可用洗髓机会");
+        return;
+      }
+      if (!window.confirm(`洗髓将花费灵石${cost.spiritStone}、灵草${cost.herb}，确定？`)) return;
       const r = eng.marrow(state, Date.now(), choice, removeRoot);
       if (!r.ok || !r.state) {
         setNotice(r.reason);
@@ -881,6 +887,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const claimCommission = useCallback(
     async (choice: "a" | "b") => {
       if (!state) return;
+      const active = state.commission?.active;
+      if (!active) return;
+      const reward = choice === "a" ? active.rewardA : active.rewardB;
+      const parts = ["cultivation", "spirit", "spiritStone", "herb", "page", "iron"]
+        .filter((k) => (reward as unknown as Record<string, number>)[k] > 0)
+        .map((k) => `${RESOURCE_LABELS[k]} ${(reward as unknown as Record<string, number>)[k]}`)
+        .join("、");
+      if (!window.confirm(`确认领取该奖励（${parts}）？领取后委托关闭。`)) return;
       const r = eng.claimCommission(state, Date.now(), choice);
       if (!r.ok || !r.state) {
         setNotice(r.reason);

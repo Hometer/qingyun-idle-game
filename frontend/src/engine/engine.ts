@@ -416,7 +416,7 @@ function makeCraftCommission(s: SaveState, id: string, title: string, action: st
 function clearedNodes(s: SaveState): Array<{ mid: MapId; nid: string }> {
   const out: Array<{ mid: MapId; nid: string }> = [];
   for (const mid of MAP_ORDER) {
-    for (const nid of mainNodeIds(mid)) {
+    for (const nid of Object.keys(MAP_CFG[mid].nodes)) {
       if (s.maps[mid]?.[nid]?.cleared) out.push({ mid, nid });
     }
   }
@@ -2189,6 +2189,10 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
       s.recentLogs.push(`再胜${nodeCfg.name}，今日重复历练奖励已领尽。`);
       noRewardNote = "本次无重复奖励";
     }
+  }
+
+  if (first && !s.commission.active) {
+    s.commission.candidates = generateCandidates(s); // 首胜后即时刷新候选（补入战斗候选）
   }
 
   let encounterTriggered = false;

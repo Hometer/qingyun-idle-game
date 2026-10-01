@@ -23,6 +23,8 @@ function randomName(): string {
 
 const MERIDIAN_CFG = CONFIG.meridians as unknown as Record<string, { name: string; probability: number; productionMult: number }>;
 const COMPREHENSION_CFG = CONFIG.comprehensions as unknown as Record<string, { name: string; probability: number; pageMult: number }>;
+const ELEMENTS = ["金", "木", "水", "火", "土"];
+const VARIANTS = ["雷", "冰", "风"];
 
 export function CreateCharacter() {
   const { createWithFortune } = useGame();
@@ -33,6 +35,18 @@ export function CreateCharacter() {
   const [aptitude, setAptitude] = useState<AptitudeId>("balanced");
   const [meridian, setMeridian] = useState("normal");
   const [comprehension, setComprehension] = useState("normal");
+  const [roots, setRoots] = useState<string[]>(["金"]);
+
+  const toggleElement = (el: string) => {
+    setRoots((prev) => {
+      if (prev.some((r) => VARIANTS.includes(r))) return [el]; // 从变异切到五行
+      if (prev.includes(el)) {
+        const next = prev.filter((r) => r !== el);
+        return next.length ? next : [el];
+      }
+      return [...prev, el];
+    });
+  };
 
   const toggleCopy = (m: CopyMode) => {
     setCopyModeState(m);
@@ -42,7 +56,7 @@ export function CreateCharacter() {
   const reroll = () => setFortune(randomFortune());
 
   const finalFortune: Fortune =
-    mode === "random" ? fortune : { spiritRoots: ["金"], meridians: meridian as Fortune["meridians"], comprehension: comprehension as Fortune["comprehension"] };
+    mode === "random" ? fortune : { spiritRoots: roots, meridians: meridian as Fortune["meridians"], comprehension: comprehension as Fortune["comprehension"] };
 
   const m = MERIDIAN_CFG[finalFortune.meridians];
   const mult = m.productionMult * (CONFIG.aptitudes[aptitude] as unknown as { cultivationMult: number }).cultivationMult;
@@ -110,6 +124,24 @@ export function CreateCharacter() {
             </div>
           ) : (
             <>
+              <div>
+                <span className="text-sm text-muted">灵根（可多选五行，或单选变异）</span>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {ELEMENTS.map((el) => (
+                    <button key={el} onClick={() => toggleElement(el)} className={`rounded-lg border px-3 py-1.5 text-sm ${roots.includes(el) ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>
+                      {el}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {VARIANTS.map((v) => (
+                    <button key={v} onClick={() => setRoots([v])} className={`rounded-lg border px-3 py-1.5 text-sm ${roots.length === 1 && roots[0] === v ? "border-cinnabar bg-cinnabar/10 text-cinnabar" : "border-line bg-paper"}`}>
+                      {v}（变异）
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-muted">当前灵根：{roots.join("、")}（{roots.length === 1 && VARIANTS.includes(roots[0]) ? "变异" : `${roots.length}灵根`}）</p>
+              </div>
               <div>
                 <span className="text-sm text-muted">经脉（定修炼产速）</span>
                 <div className="mt-1 flex flex-wrap gap-2">

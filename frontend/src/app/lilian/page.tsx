@@ -172,7 +172,7 @@ export default function LilianPage() {
                   </div>
                   <div className="flex gap-2">
                     {ns.unlocked && <button onClick={() => setSelected(`${mid}|${nid}`)} className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-sm">详情</button>}
-                    {ns.unlocked && <button onClick={() => fight(mid, nid, difficulty)} disabled={!pred.ok} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40">战斗</button>}
+                    {ns.unlocked && <button onClick={() => (difficulty === "challenge" ? setSelected(`${mid}|${nid}`) : fight(mid, nid, difficulty))} disabled={!pred.ok} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm disabled:opacity-40">{difficulty === "challenge" ? "备战" : "战斗"}</button>}
                     {ns.cleared && !supped && <button onClick={() => suppress(mid, nid)} className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">镇压</button>}
                   </div>
                 </div>
