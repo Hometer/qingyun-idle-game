@@ -591,6 +591,7 @@ export function claimCommission(state: SaveState, nowMs: number, choice: "a" | "
   c.rewardChoice = choice;
   c.claimedAt = nowMs;
   c.response = commissionResponse(c);
+  c.responseDate = todayStr(nowMs + 86400000); // 次日回应
   s.commission.history.push(c);
   s.commission.active = null;
   s.recentLogs.push(`委托「${c.title}」完成，得${fmtReward(reward)}。`);
@@ -1737,10 +1738,16 @@ export function craftEquipment(state: SaveState, nowMs: number, id: string): Res
 
 export function quenchEquipment(state: SaveState, nowMs: number, equipId: string): Result<SaveState> {
   const s = settle(state, nowMs);
-  const eq = EQUIP_CFG[baseIdOf(s, equipId)];
+  const baseId = baseIdOf(s, equipId);
+  const eq = EQUIP_CFG[baseId];
   if (!eq) return fail("无此装备");
-  const craft = CRAFT_CFG[baseIdOf(s, equipId)];
+  const craft = CRAFT_CFG[baseId];
   if (!craft) return fail("此装备不可淬炼");
+  if (eq.slot === "accessory") return fail("佩饰不可淬炼");
+  // 剑/法衣在下一境一层开放淬炼（v1.3 第 2/7 节）
+  const stage = stageOfGate(craft.gate as string);
+  const quenchGate = REALMS.find((r) => r.stage === stage + 1 && r.layer === 1);
+  if (quenchGate && realmIndex(s.realm) < realmIndex(quenchGate.id as RealmId)) return fail(`需${realmName(quenchGate.id as RealmId)}方可淬炼`);
   if (s.quenched.includes(equipId)) return fail("已淬炼过该装备");
   const owned = (s.inventory[equipId] || 0) > 0 || s.equipment.weapon === equipId || s.equipment.armor === equipId || s.equipment.accessory === equipId;
   if (!owned) return fail("未拥有此装备");
@@ -2809,7 +2816,7 @@ function migrateEquipmentInstances(s: SaveState): void {
         const instId = makeInstanceId(instances, key);
         const affixes = (i === 0 && Array.isArray(oldAffixes?.[key]))
           ? (oldAffixes as Record<string, Affix[]>)[key]
-          : randomAffixes(seededRng(hashSeed(key) + Object.keys(instances).length + 1), maxAffixesForStage(currentStage(s)));
+          : []; // 旧装备补空词条，不随机加词条（保留原基础效果）
         instances[instId] = { baseId: key, affixes };
         newInventory[instId] = 1;
         if (i === 0) baseToFirst[key] = instId;
@@ -3352,6 +3359,7 @@ function validateCommissionItem(c: unknown): string | null {
   if (o.rewardChoice !== undefined && o.rewardChoice !== "a" && o.rewardChoice !== "b") return "委托奖励选择无效";
   if (o.claimedAt !== undefined && !isNonNegFinite(o.claimedAt)) return "委托领奖时间无效";
   if (o.response !== undefined && typeof o.response !== "string") return "委托回应无效";
+  if (o.responseDate !== undefined && (typeof o.responseDate !== "string" || !isValidDateStr(o.responseDate))) return "委托回应日期无效";
   // 状态与领奖字段一致性：只有已领奖才允许携带奖励选择/时间
   if (o.status === "claimed") {
     if (o.rewardChoice === undefined || o.claimedAt === undefined) return "已领奖委托缺领奖信息";

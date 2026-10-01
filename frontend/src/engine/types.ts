@@ -185,6 +185,7 @@ export interface Commission {
   rewardChoice?: "a" | "b";
   claimedAt?: number;
   response?: string;        // 固定人物后续回应
+  responseDate?: string;    // 回应可见日期（次日），YYYY-MM-DD
 }
 
 export interface CommissionState {

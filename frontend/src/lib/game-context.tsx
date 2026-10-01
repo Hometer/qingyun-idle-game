@@ -257,7 +257,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       character: {
         name: state.name,
         realm: REALM_NAMES[state.realm] ?? state.realm,
-        spirit_root: state.spiritRoot,
+        spirit_root: state.spiritRoots.join("、"),
       },
       map_id: state.encounter.pending!.mapId,
       options,
@@ -716,7 +716,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       } catch {}
       const body = {
         event_id: `event_${realmId}`,
-        character: { name: state.name, realm: REALM_NAMES[state.realm] ?? state.realm, spirit_root: state.spiritRoot },
+        character: { name: state.name, realm: REALM_NAMES[state.realm] ?? state.realm, spirit_root: state.spiritRoots.join("、") },
         map_id: "map_yunling",
         options: [{ option_id: "enter", label: "进入秘境", meaning: `进入${cfg.name}一探` }],
         recent_logs: state.recentLogs.slice(-2),

@@ -1417,6 +1417,7 @@ const BASE_CONFIG = {
     event_well: {
       minStage: 1,
       title: "古井奇遇",
+      body: "山径尽头，荒草丛中现一口古井，井口苔痕斑驳，隐有冷气丝丝上浮。你驻足良久，见井壁青藤垂落，深处幽黑，似有极轻的嗡鸣自井底传来。",
       options: {
         well_a: { label: "探查井底", meaning: "冒险下井一探", result: "你缘索下井，于井底见旧刻残文，若有所悟。", reward: { spiritStone: 30, herb: 5 } },
         well_b: { label: "绕行而去", meaning: "不理会，绕路离开", result: "你绕井而行，心境渐澄，修行略有精进。", reward: { cultivation: 15 } },
@@ -1425,6 +1426,7 @@ const BASE_CONFIG = {
     event_beast: {
       minStage: 1,
       title: "灵兽现踪",
+      body: "林间忽闻低鸣，一只幼小灵鹿陷于荆棘之中，挣扎不得，见你行来，目中似有哀求。四周草木微动，隐有窥伺之意，天色亦渐渐沉了下来。",
       options: {
         beast_a: { label: "出手相救", meaning: "救下被困的幼鹿", result: "你救下幼鹿，灵鹿衔来几页残卷相谢。", reward: { page: 3 } },
         beast_b: { label: "静观其变", meaning: "不插手，远远观察", result: "你静观其变，待灵兽自去，拾得几块遗落灵石。", reward: { spiritStone: 20 } },
@@ -1433,6 +1435,7 @@ const BASE_CONFIG = {
     event_cave: {
       minStage: 1,
       title: "残破洞府",
+      body: "行至崖下，忽见一座残破洞府，石门半掩，内里晦暗难辨。门楣上的字迹早已漫漶，只余几道刻痕。阶前积尘甚厚，似已久无人至。",
       options: {
         cave_a: { label: "推门而入", meaning: "进入洞府查探", result: "你推门而入，于洞中得见前人札记，略有所得。", reward: { cultivation: 30, page: 2 } },
         cave_b: { label: "记下位置", meaning: "记下位置，日后再来", result: "你记下方位，先在洞外采得几株灵草。", reward: { herb: 8 } },
@@ -1441,6 +1444,7 @@ const BASE_CONFIG = {
     event_star: {
       minStage: 4,
       title: "星盘余辉",
+      body: "山道旁有半埋的星盘，铜环虽旧，刻度仍清晰。盘面映着当夜星光，似在指向远处的岔路。",
       options: {
         star_a: { label: "观星", meaning: "静看盘中星轨", result: "你循星轨辨认旧日方位，心中对前路多了一分把握。", reward: { page: 300 } },
         star_b: { label: "收起星盘", meaning: "妥善收起散落星盘", result: "你收好星盘，沿原路退回，避开了渐起的星尘。", reward: { spiritStone: 1000 } },
@@ -1449,6 +1453,7 @@ const BASE_CONFIG = {
     event_wanderer: {
       minStage: 8,
       title: "云游散修",
+      body: "山口遇见一位云游散修，衣袍沾尘，神色从容。他也正要穿过前方的旧道，便停步与你招呼。",
       options: {
         wanderer_a: { label: "交换见闻", meaning: "与散修聊各地奇闻", result: "二人谈及行路所见，散修指给你一处隐蔽的山径。", reward: { herb: 300 } },
         wanderer_b: { label: "结伴同行", meaning: "同行一段山路", result: "你们并肩穿过山口，沿途避开了几处坍塌的旧道。", reward: { iron: 50 } },
@@ -1457,6 +1462,7 @@ const BASE_CONFIG = {
     event_mirror: {
       minStage: 12,
       title: "玄镜旧影",
+      body: "石室深处立着一面玄镜，镜中不照眼前山色，却映出旧日行路的片段。镜光明灭，等你作出选择。",
       options: {
         mirror_a: { label: "照见旧影", meaning: "正视镜中的修行往事", result: "镜面映出旧日身影，你看见自己的犹疑，也看见未曾放下的坚持。", reward: { cultivation: 5000 } },
         mirror_b: { label: "避开镜面", meaning: "先稳住气息再离开", result: "你敛神绕行，镜光渐远，周身灵息重新归于平稳。", reward: { spirit: 1000 } },
@@ -1465,6 +1471,7 @@ const BASE_CONFIG = {
     event_inscription: {
       minStage: 16,
       title: "道纹石刻",
+      body: "断崖上有一方石刻，古老道纹被风雨磨去大半，余下几笔仍隐隐相连。四周无人，只有松声作响。",
       options: {
         inscription_a: { label: "临摹纹路", meaning: "记下石上残缺道纹", result: "你逐笔记下纹路，虽未尽解其意，却已知该从何处查起。", reward: { page: 10000 } },
         inscription_b: { label: "先行封存", meaning: "护住石刻待日后重访", result: "你布下护持之法，石刻不再受风雨侵蚀。", reward: { spiritStone: 50000 } },
@@ -1473,6 +1480,7 @@ const BASE_CONFIG = {
     event_origin: {
       minStage: 19,
       title: "太初回声",
+      body: "鸿蒙紫气从石阶尽头缓缓升起，耳边似有极远的回声。你停在阶前，脚下仍是来时走过的路。",
       options: {
         origin_a: { label: "静听回声", meaning: "停步聆听初元余音", result: "万籁俱寂，你听见极远处的一声回应，仿佛在提醒你记住来路。", reward: { cultivation: 100000 } },
         origin_b: { label: "继续前行", meaning: "沿紫气指引向前", result: "你没有停步，紫气随行，前方的石阶渐渐清晰。", reward: { iron: 500 } },

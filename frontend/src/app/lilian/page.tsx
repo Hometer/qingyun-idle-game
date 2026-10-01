@@ -23,6 +23,13 @@ const MAPS_CFG = CONFIG.maps as unknown as Record<MapId, { name: string; nodes: 
 const TACTIC_CFG = CONFIG.tactics as unknown as Record<TacticId, { name: string; note: string }>;
 const COMMISSION_NPC = (CONFIG.commission as unknown as { fixedNpcName: string }).fixedNpcName;
 
+function todayStr(ms: number): string {
+  const d = new Date(ms);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${d.getFullYear()}-${m < 10 ? "0" + m : m}-${day < 10 ? "0" + day : day}`;
+}
+
 function rewardParts(r: { cultivation: number; spirit: number; spiritStone: number; herb: number; page: number; iron: number }): string {
   const parts: string[] = [];
   if (r.cultivation) parts.push(`修为 ${r.cultivation}`);
@@ -265,7 +272,11 @@ export default function LilianPage() {
               {[...state.commission.history].reverse().slice(0, 5).map((c) => (
                 <div key={c.id} className="mt-1 text-xs text-muted">
                   <span className="text-ink/75">{c.title}</span>
-                  {c.response && <span className="ml-1">{c.response}</span>}
+                  {c.response && c.responseDate && todayStr(now) >= c.responseDate ? (
+                    <span className="ml-1">{c.response}</span>
+                  ) : c.response ? (
+                    <span className="ml-1">（青崖明日回应）</span>
+                  ) : null}
                 </div>
               ))}
             </div>

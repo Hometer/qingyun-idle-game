@@ -67,7 +67,15 @@ export default function RenwuPage() {
       if (n.firstClear.equipment) equipSource[n.firstClear.equipment] = `${MAPS_CFG[mid].name}·${n.name}首通`;
     }
   }
-  const ownedEquip = Object.keys(EQUIPMENT).filter((id) => (state.inventory[id] || 0) > 0);
+  const ownedEquip = Object.keys(EQUIPMENT).filter((id) => {
+    if ((state.inventory[id] || 0) > 0) return true;
+    for (const [instId, inst] of Object.entries(state.itemInstances || {})) {
+      if (inst.baseId !== id) continue;
+      if ((state.inventory[instId] || 0) > 0) return true;
+      if (state.equipment.weapon === instId || state.equipment.armor === instId || state.equipment.accessory === instId) return true;
+    }
+    return false;
+  });
   const learnedTech = (Object.keys(TECHNIQUES) as string[]).filter((id) => state.techniqueLevel[id as "qingYun" | "xuanGui"] > 0);
   const built = (Object.keys(BUILDINGS) as string[]).filter((id) => state.buildings[id as keyof typeof state.buildings] > 0);
   const currentStage = CONFIG.realms.find((r) => r.id === state.realm)?.stage ?? 1;
