@@ -1,0 +1,16 @@
+{
+  "startupValidationError": null,
+  "persistedRevision": "NaN",
+  "startupWrite": {
+    "ok": true,
+    "conflict": false
+  },
+  "firstAction": {
+    "ok": false,
+    "conflict": true
+  },
+  "nextAction": {
+    "ok": false,
+    "conflict": true
+  }
+}

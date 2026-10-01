@@ -1,0 +1,585 @@
+{
+  "earlyCandidates": {
+    "realm": "qi1",
+    "candidates": [
+      {
+        "title": "在「青云山·野狼」赢得一场挑战",
+        "accept": {
+          "ok": true
+        },
+        "pred": true
+      }
+    ]
+  },
+  "clockRollback": {
+    "futureHistory": 1,
+    "backAccept": {
+      "ok": true
+    },
+    "historyAfter": 2,
+    "dates": [
+      "2026-10-02T02:00:00.000Z",
+      "2026-10-01T02:00:00.000Z"
+    ],
+    "acceptedDate": "2026-10-01",
+    "validation": true
+  },
+  "inconsistentProgress": {
+    "import": {
+      "ok": true
+    },
+    "claim": {
+      "ok": true
+    }
+  },
+  "roundtrip": {
+    "fresh": {
+      "ok": true
+    },
+    "migrated": {
+      "ok": true
+    }
+  },
+  "unwinnableCandidates": [
+    {
+      "realm": "yuanying2",
+      "title": "在「元婴秘境·灵胎游光」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "yuanying3",
+      "title": "在「元婴秘境·灵胎游光」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "yuanying4",
+      "title": "在「元婴秘境·灵胎游光」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "huashen2",
+      "title": "在「化神秘境·神念残印」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "huashen3",
+      "title": "在「化神秘境·神念残印」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "huashen4",
+      "title": "在「化神秘境·神念残印」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "huashen5",
+      "title": "在「化神秘境·神念残印」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "lianxu2",
+      "title": "在「炼虚秘境·虚空游鳞」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "lianxu3",
+      "title": "在「炼虚秘境·虚空游鳞」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "lianxu4",
+      "title": "在「炼虚秘境·虚空游鳞」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "lianxu5",
+      "title": "在「炼虚秘境·虚空游鳞」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "heti2",
+      "title": "在「合体秘境·阴阳双影」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "heti3",
+      "title": "在「合体秘境·阴阳双影」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "heti4",
+      "title": "在「合体秘境·阴阳双影」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "heti5",
+      "title": "在「合体秘境·阴阳双影」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dacheng2",
+      "title": "在「大乘秘境·云海问道者」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dacheng3",
+      "title": "在「大乘秘境·云海问道者」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dacheng4",
+      "title": "在「大乘秘境·云海问道者」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dacheng5",
+      "title": "在「大乘秘境·云海问道者」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dujie2",
+      "title": "在「渡劫秘境·雷云游火」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dujie3",
+      "title": "在「渡劫秘境·雷云游火」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dujie4",
+      "title": "在「渡劫秘境·雷云游火」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dujie5",
+      "title": "在「渡劫秘境·雷云游火」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "zhenxian2",
+      "title": "在「真仙秘境·洗尘仙鹿」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "zhenxian3",
+      "title": "在「真仙秘境·洗尘仙鹿」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "zhenxian4",
+      "title": "在「真仙秘境·洗尘仙鹿」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "zhenxian5",
+      "title": "在「真仙秘境·洗尘仙鹿」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "xuanxian2",
+      "title": "在「玄仙秘境·玄光羽蛇」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "xuanxian3",
+      "title": "在「玄仙秘境·玄光羽蛇」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "xuanxian4",
+      "title": "在「玄仙秘境·玄光羽蛇」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "xuanxian5",
+      "title": "在「玄仙秘境·玄光羽蛇」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "jinxian2",
+      "title": "在「金仙秘境·金霞剑侍」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "jinxian3",
+      "title": "在「金仙秘境·金霞剑侍」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "jinxian4",
+      "title": "在「金仙秘境·金霞剑侍」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "jinxian5",
+      "title": "在「金仙秘境·金霞剑侍」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "taiyi2",
+      "title": "在「太乙金仙秘境·太乙星使」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "taiyi3",
+      "title": "在「太乙金仙秘境·太乙星使」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "taiyi4",
+      "title": "在「太乙金仙秘境·太乙星使」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "taiyi5",
+      "title": "在「太乙金仙秘境·太乙星使」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "daluo2",
+      "title": "在「大罗金仙秘境·三花莲影」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "daluo3",
+      "title": "在「大罗金仙秘境·三花莲影」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "daluo4",
+      "title": "在「大罗金仙秘境·三花莲影」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "daluo5",
+      "title": "在「大罗金仙秘境·三花莲影」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan2",
+      "title": "在「混元金仙秘境·混元气灵」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan3",
+      "title": "在「混元金仙秘境·混元气灵」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan4",
+      "title": "在「混元金仙秘境·混元气灵」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan5",
+      "title": "在「混元金仙秘境·混元气灵」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan_daluo2",
+      "title": "在「混元大罗秘境·太虚金乌」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan_daluo3",
+      "title": "在「混元大罗秘境·太虚金乌」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan_daluo4",
+      "title": "在「混元大罗秘境·太虚金乌」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan_daluo5",
+      "title": "在「混元大罗秘境·太虚金乌」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan_wuji2",
+      "title": "在「混元无极秘境·无极清光」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan_wuji3",
+      "title": "在「混元无极秘境·无极清光」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan_wuji4",
+      "title": "在「混元无极秘境·无极清光」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hunyuan_wuji5",
+      "title": "在「混元无极秘境·无极清光」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "tiandao2",
+      "title": "在「天道圣人秘境·天则司辰」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "tiandao3",
+      "title": "在「天道圣人秘境·天则司辰」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "tiandao4",
+      "title": "在「天道圣人秘境·天则司辰」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "tiandao5",
+      "title": "在「天道圣人秘境·天则司辰」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dadao2",
+      "title": "在「大道圣人秘境·乾坤道痕」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dadao3",
+      "title": "在「大道圣人秘境·乾坤道痕」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dadao4",
+      "title": "在「大道圣人秘境·乾坤道痕」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "dadao5",
+      "title": "在「大道圣人秘境·乾坤道痕」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hongmeng2",
+      "title": "在「鸿蒙道祖秘境·鸿蒙紫气」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hongmeng3",
+      "title": "在「鸿蒙道祖秘境·鸿蒙紫气」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hongmeng4",
+      "title": "在「鸿蒙道祖秘境·鸿蒙紫气」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    },
+    {
+      "realm": "hongmeng5",
+      "title": "在「鸿蒙道祖秘境·鸿蒙紫气」赢得一场挑战",
+      "accept": {
+        "ok": false,
+        "reason": "该委托目标已变化，请重新选择"
+      }
+    }
+  ],
+  "missingRevision": {
+    "validation": null,
+    "settledRevision": "NaN"
+  }
+}

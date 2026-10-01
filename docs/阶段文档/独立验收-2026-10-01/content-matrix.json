@@ -1,0 +1,40 @@
+{
+  "content": {
+    "realms": 200,
+    "maps": 21,
+    "sideNodes": 42,
+    "bosses": 21
+  },
+  "crafts": {
+    "count": 26,
+    "failures": []
+  },
+  "buildings": {
+    "count": 6,
+    "failures": []
+  },
+  "battles": {
+    "count": 588,
+    "failures": []
+  },
+  "pills": {
+    "count": 12,
+    "failures": []
+  },
+  "techniques": {
+    "count": 9,
+    "failures": []
+  },
+  "secretRealms": {
+    "count": 8,
+    "failures": []
+  },
+  "trials": {
+    "count": 19,
+    "failures": []
+  },
+  "storyPaths": {
+    "count": 12,
+    "failures": []
+  }
+}

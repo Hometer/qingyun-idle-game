@@ -1,0 +1,98 @@
+[
+  {
+    "source": "model",
+    "event_id": "event_well_down",
+    "title": "古井回响",
+    "body": "旧地重来，苔痕深了几分。古井幽然，井壁残文如故，唯井底之声较前更清，若金玉相击，又若有人隔世低诵。风过荒草，四野寂寂，唯此声不绝，牵人心神。前番所择，今已应于此间。",
+    "options": [
+      {
+        "option_id": "well_down_a",
+        "option_text": "循线再探"
+      },
+      {
+        "option_id": "well_down_b",
+        "option_text": "封存残文"
+      }
+    ]
+  },
+  {
+    "source": "model",
+    "event_id": "event_well_around",
+    "title": "井畔旧事",
+    "body": "重返青云旧地，古井苔色如故，井沿残痕犹在。昔日抉择，今朝回响，井中似有微光浮动，照见前尘影影绰绰。风过处，似有人低语，又似只是水声。",
+    "options": [
+      {
+        "option_id": "well_around_a",
+        "option_text": "细问旧事"
+      },
+      {
+        "option_id": "well_around_b",
+        "option_text": "一笑置之"
+      }
+    ]
+  },
+  {
+    "source": "model",
+    "event_id": "event_beast_saved",
+    "title": "灵鹿再逢",
+    "body": "青云旧径，苔石犹湿。昔时援手处，今见灵鹿独立，角挂松露，目含清光。金灵根微动，炼气二层之息与山岚相融。鹿不惊，亦不去，似候一诺。",
+    "options": [
+      {
+        "option_id": "beast_saved_a",
+        "option_text": "任它靠近"
+      },
+      {
+        "option_id": "beast_saved_b",
+        "option_text": "留食而去"
+      }
+    ]
+  },
+  {
+    "source": "model",
+    "event_id": "event_beast_watch",
+    "title": "再逢灵鹿",
+    "body": "复行旧径，青云未改，松风如昨。遥见林间白鹿，角挂浅霞，踏苔徐行，似识故人，又似不识。昔日一念之择，今朝回响在此。",
+    "options": [
+      {
+        "option_id": "beast_watch_a",
+        "option_text": "静观其行"
+      },
+      {
+        "option_id": "beast_watch_b",
+        "option_text": "绕道而行"
+      }
+    ]
+  },
+  {
+    "source": "model",
+    "event_id": "event_cave_enter",
+    "title": "洞中札记",
+    "body": "旧径苔深，洞府门扉半掩，石案上那卷札记仍摊开如故。金灵根微动，字里行间似有残响未散，恰如《南华》所言“旧国旧都，望之畅然”。然洞外风过林梢，隐有异响，似有人窥伺。",
+    "options": [
+      {
+        "option_id": "cave_enter_a",
+        "option_text": "再读札记"
+      },
+      {
+        "option_id": "cave_enter_b",
+        "option_text": "护住洞府"
+      }
+    ]
+  },
+  {
+    "source": "model",
+    "event_id": "event_cave_note",
+    "title": "洞外重访",
+    "body": "青云山旧径苔深，复核修士金灵根微振，炼气二层步履轻缓。昔日洞门已掩，藤蔓垂垂，石上残痕犹在。风过林隙，似有低语相询：前番抉择，今日可曾回响？静立片刻，洞外气息如故，只待细察或补全，以观后应。",
+    "options": [
+      {
+        "option_id": "cave_note_a",
+        "option_text": "细察洞外"
+      },
+      {
+        "option_id": "cave_note_b",
+        "option_text": "补全方位"
+      }
+    ]
+  }
+]

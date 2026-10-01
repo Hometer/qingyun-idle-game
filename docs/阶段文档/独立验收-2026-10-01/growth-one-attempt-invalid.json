@@ -1,0 +1,161 @@
+{
+  "mode": "seeded-random",
+  "oneLogin": {
+    "total": 108,
+    "unfinished": 3,
+    "min": 43,
+    "max": 71,
+    "under42": 0,
+    "over56": 34,
+    "samplesOutside": [
+      {
+        "key": "balanced/blocked/dull/五行/risky/1登录",
+        "days": 57
+      },
+      {
+        "key": "balanced/blocked/dull/变异/risky/1登录",
+        "days": 57
+      },
+      {
+        "key": "balanced/blocked/normal/五行/risky/1登录",
+        "days": 58
+      },
+      {
+        "key": "balanced/blocked/normal/变异/risky/1登录",
+        "days": 59
+      },
+      {
+        "key": "balanced/normal/dull/五行/risky/1登录",
+        "days": 60
+      }
+    ]
+  },
+  "twoLogins": {
+    "total": 108,
+    "unfinished": 4,
+    "min": 22,
+    "max": 37,
+    "under42": 104,
+    "over56": 0,
+    "samplesOutside": [
+      {
+        "key": "balanced/blocked/dull/五行/steady/2登录",
+        "days": 26
+      },
+      {
+        "key": "balanced/blocked/dull/五行/risky/2登录",
+        "days": 33
+      },
+      {
+        "key": "balanced/blocked/dull/变异/steady/2登录",
+        "days": 26
+      },
+      {
+        "key": "balanced/blocked/dull/变异/risky/2登录",
+        "days": 32
+      },
+      {
+        "key": "balanced/blocked/normal/五行/steady/2登录",
+        "days": 26
+      }
+    ]
+  },
+  "oneSteady": {
+    "total": 54,
+    "unfinished": 0,
+    "min": 43,
+    "max": 52,
+    "under42": 0,
+    "over56": 0,
+    "samplesOutside": []
+  },
+  "oneRisky": {
+    "total": 54,
+    "unfinished": 3,
+    "min": 52,
+    "max": 71,
+    "under42": 0,
+    "over56": 34,
+    "samplesOutside": [
+      {
+        "key": "balanced/blocked/dull/五行/risky/1登录",
+        "days": 57
+      },
+      {
+        "key": "balanced/blocked/dull/变异/risky/1登录",
+        "days": 57
+      },
+      {
+        "key": "balanced/blocked/normal/五行/risky/1登录",
+        "days": 58
+      },
+      {
+        "key": "balanced/blocked/normal/变异/risky/1登录",
+        "days": 59
+      },
+      {
+        "key": "balanced/normal/dull/五行/risky/1登录",
+        "days": 60
+      }
+    ]
+  },
+  "total": 216,
+  "completed": 209,
+  "unfinished": 7,
+  "inTarget42to56": 71,
+  "under42": 104,
+  "over56": 34,
+  "min": 22,
+  "median": 43,
+  "max": 71,
+  "sampleInTarget": [
+    {
+      "key": "balanced/blocked/dull/五行/steady/1登录",
+      "days": 50
+    },
+    {
+      "key": "balanced/blocked/dull/变异/steady/1登录",
+      "days": 50
+    },
+    {
+      "key": "balanced/blocked/normal/五行/steady/1登录",
+      "days": 50
+    },
+    {
+      "key": "balanced/blocked/normal/变异/steady/1登录",
+      "days": 50
+    },
+    {
+      "key": "balanced/blocked/genius/五行/steady/1登录",
+      "days": 50
+    }
+  ],
+  "sampleUnder": [
+    {
+      "key": "balanced/blocked/dull/五行/steady/2登录",
+      "days": 26
+    },
+    {
+      "key": "balanced/blocked/dull/五行/risky/2登录",
+      "days": 33
+    },
+    {
+      "key": "balanced/blocked/dull/变异/steady/2登录",
+      "days": 26
+    }
+  ],
+  "sampleOver": [
+    {
+      "key": "balanced/blocked/dull/五行/risky/1登录",
+      "days": 57
+    },
+    {
+      "key": "balanced/blocked/dull/变异/risky/1登录",
+      "days": 57
+    },
+    {
+      "key": "balanced/blocked/normal/五行/risky/1登录",
+      "days": 58
+    }
+  ]
+}
