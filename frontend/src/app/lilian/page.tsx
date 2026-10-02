@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Modal } from "@/components/Modal";
+import { commissionTarget } from "@/lib/commission-target";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { MAPS, REALM_NAMES, REALM_ORDER, EQUIPMENT, RESOURCE_LABELS, WORLD_TEXT, SUPPRESSION_DURATION_HOURS, SECRET_REALMS, fmt, fmtCombat, fmtTime, fmtDuration } from "@/lib/labels";
@@ -56,7 +59,7 @@ function rewardText(fc: NodeCfg["firstClear"], rc: NodeCfg["repeat"], material: 
 }
 
 export default function LilianPage() {
-  const { state, view, now, fight, suppress, startLong, acceptCommission, claimCommission, realmPending, realmNarrative, realmNarrativeLoading, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
+  const { state, view, now, showDataNotice, lastResult, fight, suppress, startLong, acceptCommission, claimCommission, realmPending, realmNarrative, realmNarrativeLoading, startSecretRealm, confirmSecretRealm, cancelSecretRealm } = useGame();
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedMap, setSelectedMap] = useState<MapId | null>(null);
   const [difficulty, setDifficulty] = useState<BattleDifficulty>("normal");
@@ -65,6 +68,17 @@ export default function LilianPage() {
   const [trainDifficulty, setTrainDifficulty] = useState<"steady" | "risky">("steady");
   const [trainDuration, setTrainDuration] = useState(30);
   const [trainProtection, setTrainProtection] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mid = params.get("map") as MapId;
+    const nid = params.get("node");
+    if (MAPS_CFG[mid]?.nodes[nid ?? ""]) {
+      setSelectedMap(mid);
+      setSelected(`${mid}|${nid}`);
+      setDifficulty(params.get("difficulty") === "challenge" ? "challenge" : "normal");
+    }
+  }, []);
 
   const clearedList = useMemo(() => {
     if (!state) return [] as { mid: MapId; nid: string; name: string }[];
@@ -102,6 +116,12 @@ export default function LilianPage() {
   const selCfg = sel ? MAPS_CFG[sel[0]]?.nodes[sel[1]] : null;
   const selPred = sel ? predictFight(state, sel[0], sel[1], difficulty, tactic) : null;
   const selRepeat = sel ? repeatRewardFor(sel[0], sel[1], difficulty) : null;
+  const targetLink = (c: import("@/engine/types").Commission) => {
+    const target = commissionTarget(c);
+    return <Link href={target.href} className="mt-1 inline-block text-xs text-cinnabar underline" onClick={() => {
+      if (c.kind === "battle" && c.mapId && c.nodeId) { setSelectedMap(c.mapId); setSelected(`${c.mapId}|${c.nodeId}`); setDifficulty(c.difficulty ?? "challenge"); setTactic("normal"); }
+    }}>{target.label}</Link>;
+  };
   const hasAnyClear = Object.values(state.maps).some((m) => Object.values(m).some((n) => n.cleared));
 
   return (
@@ -233,6 +253,7 @@ export default function LilianPage() {
                 进度 {state.commission.active.progress}/{state.commission.active.target}
                 {state.commission.active.status === "ready" ? " · 已完成，待领奖" : " · 进行中"}
               </p>
+              {state.commission.active.status !== "ready" && targetLink(state.commission.active)}
               {state.commission.active.status === "ready" && (
                 <div className="mt-2">
                   <p className="text-xs font-medium text-muted">选择奖励（二选一，领取后关闭）</p>
@@ -261,6 +282,7 @@ export default function LilianPage() {
                     </div>
                     <button onClick={() => acceptCommission(c.id)} className="shrink-0 rounded-lg border border-line bg-paper px-3 py-1.5 text-sm hover:bg-cinnabar/10">接取</button>
                   </div>
+                  {targetLink(c)}
                   <p className="mt-0.5 text-xs text-muted">完成奖励二选一：{rewardParts(c.rewardA)} ／ {rewardParts(c.rewardB)}</p>
                 </div>
               ))}
@@ -386,9 +408,8 @@ export default function LilianPage() {
         })}
       </Section>
 
-      {sel && selCfg && selPred && (
-        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setSelected(null)}>
-          <div className="w-full max-w-[520px] rounded-t-2xl border border-line bg-card p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      {sel && selCfg && selPred && !showDataNotice && !lastResult && !state.encounter.pending && (
+        <Modal title={`${selCfg.name} · 备战`} onClose={() => setSelected(null)}>
             <h2 className="text-lg font-semibold">
               {selCfg.name}
               <span className="ml-1 text-xs text-muted">（需{REALM_NAMES[selCfg.gate]}）</span>
@@ -439,13 +460,11 @@ export default function LilianPage() {
                 关闭
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {realmPending && (
-        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center">
-          <div className="w-full max-w-[520px] rounded-t-2xl border border-line bg-card p-5 sm:rounded-2xl">
+      {realmPending && !showDataNotice && !lastResult && !state.encounter.pending && (
+        <Modal title="秘境探索" onClose={cancelSecretRealm}>
             <h2 className="text-lg font-semibold">{realmNarrative?.title ?? SECRET_REALMS[realmPending].name}</h2>
             <p className="mt-1 text-xs text-muted">{realmNarrativeLoading ? "叙事加载中…" : realmNarrative?.source}</p>
             <p className="mt-2 text-sm leading-relaxed">
@@ -459,8 +478,7 @@ export default function LilianPage() {
                 取消
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

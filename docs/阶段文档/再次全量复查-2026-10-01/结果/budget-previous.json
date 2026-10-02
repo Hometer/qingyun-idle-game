@@ -1,0 +1,30 @@
+{
+  "broken": {
+    "blocked": true,
+    "reserveAllowed": false
+  },
+  "array": {
+    "blocked": true,
+    "reserveAllowed": false
+  },
+  "nan": {
+    "blocked": true,
+    "reserveAllowed": false
+  },
+  "negative": {
+    "blocked": true,
+    "reserveAllowed": false
+  },
+  "missingUsage": {
+    "source": "model",
+    "calls": 1,
+    "spend": 0.004584,
+    "pending": 0.0
+  },
+  "slowLocalSdk": {
+    "elapsedSeconds": 5.12,
+    "frontendTimeoutSeconds": 4,
+    "source": "model",
+    "spend": 0.0006
+  }
+}

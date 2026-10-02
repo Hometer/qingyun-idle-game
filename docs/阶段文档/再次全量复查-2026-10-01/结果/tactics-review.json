@@ -1,0 +1,159 @@
+{
+  "cases": 4410,
+  "breakOnly": [
+    {
+      "stage": 16,
+      "map": "map_hunyuan_daluo",
+      "node": "node_5",
+      "realm": "hunyuan_wuji1",
+      "tech": null,
+      "won": [
+        false,
+        true,
+        false
+      ],
+      "rounds": [
+        12,
+        10,
+        12
+      ],
+      "range": "late"
+    },
+    {
+      "stage": 16,
+      "map": "map_hunyuan_daluo",
+      "node": "node_5",
+      "realm": "hunyuan_wuji1",
+      "tech": "qingYun",
+      "won": [
+        false,
+        true,
+        false
+      ],
+      "rounds": [
+        12,
+        10,
+        12
+      ],
+      "range": "late"
+    }
+  ],
+  "guardOnly": [
+    {
+      "stage": 3,
+      "map": "map_jindan",
+      "node": "node_side_2",
+      "realm": "yuanying1",
+      "tech": null,
+      "won": [
+        false,
+        false,
+        true
+      ],
+      "rounds": [
+        22,
+        16,
+        30
+      ],
+      "range": "early"
+    },
+    {
+      "stage": 3,
+      "map": "map_jindan",
+      "node": "node_side_2",
+      "realm": "yuanying1",
+      "tech": "qingYun",
+      "won": [
+        false,
+        false,
+        true
+      ],
+      "rounds": [
+        22,
+        16,
+        30
+      ],
+      "range": "early"
+    },
+    {
+      "stage": 4,
+      "map": "map_yuanying",
+      "node": "node_1",
+      "realm": "yuanying3",
+      "tech": null,
+      "won": [
+        false,
+        false,
+        true
+      ],
+      "rounds": [
+        13,
+        10,
+        18
+      ],
+      "range": "middle"
+    },
+    {
+      "stage": 4,
+      "map": "map_yuanying",
+      "node": "node_1",
+      "realm": "yuanying3",
+      "tech": "qingYun",
+      "won": [
+        false,
+        false,
+        true
+      ],
+      "rounds": [
+        13,
+        10,
+        18
+      ],
+      "range": "middle"
+    },
+    {
+      "stage": 17,
+      "map": "map_hunyuan_wuji",
+      "node": "node_side_1",
+      "realm": "hunyuan_wuji2",
+      "tech": null,
+      "won": [
+        false,
+        false,
+        true
+      ],
+      "rounds": [
+        14,
+        10,
+        19
+      ],
+      "range": "late"
+    },
+    {
+      "stage": 17,
+      "map": "map_hunyuan_wuji",
+      "node": "node_side_1",
+      "realm": "hunyuan_wuji2",
+      "tech": "qingYun",
+      "won": [
+        false,
+        false,
+        true
+      ],
+      "rounds": [
+        14,
+        10,
+        19
+      ],
+      "range": "late"
+    }
+  ],
+  "differences": {
+    "true/true/true": 1419,
+    "false/false/false": 2364,
+    "false/false/true": 75,
+    "true/false/true": 120,
+    "true/true/false": 408,
+    "false/true/false": 24
+  }
+}

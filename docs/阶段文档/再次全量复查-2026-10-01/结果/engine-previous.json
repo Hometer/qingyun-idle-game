@@ -1,0 +1,53 @@
+{
+  "earlyCandidates": {
+    "realm": "qi1",
+    "candidates": [
+      {
+        "title": "在「青云山·野狼」赢得一场挑战",
+        "accept": {
+          "ok": true
+        },
+        "pred": true
+      },
+      {
+        "title": "领取 1 次收益",
+        "accept": {
+          "ok": true
+        }
+      }
+    ]
+  },
+  "clockRollback": {
+    "futureHistory": 1,
+    "backAccept": {
+      "ok": false,
+      "reason": "今日已接取过委托，明日再来"
+    },
+    "historyAfter": 1,
+    "dates": [
+      "2026-10-02T02:00:00.000Z"
+    ],
+    "acceptedDate": "2026-10-02",
+    "validation": true
+  },
+  "inconsistentProgress": {
+    "import": {
+      "ok": false,
+      "reason": "完成/已领奖委托进度未达标"
+    },
+    "claim": null
+  },
+  "roundtrip": {
+    "fresh": {
+      "ok": true
+    },
+    "migrated": {
+      "ok": true
+    }
+  },
+  "unwinnableCandidates": [],
+  "missingRevision": {
+    "validation": "修订号无效",
+    "settledRevision": "1"
+  }
+}

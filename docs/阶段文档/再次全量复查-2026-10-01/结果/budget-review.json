@@ -1,0 +1,49 @@
+{
+  "sentButTimeout": {
+    "source": "template",
+    "calls": 2,
+    "spend": 0.0,
+    "pending": 0.0
+  },
+  "concurrentReservation": {
+    "results": [
+      true,
+      false
+    ],
+    "allowedCount": 1
+  },
+  "restartReservation": {
+    "processBefore": {
+      "first": true,
+      "second": false,
+      "pending": 0.006
+    },
+    "newProcessAfter": {
+      "first": true,
+      "second": false,
+      "pending": 0.006
+    },
+    "ledger": {}
+  },
+  "diskFailure": {
+    "exception": "OSError",
+    "calls": 1,
+    "pending": 0.0
+  },
+  "followingDiskFailure": {
+    "reserveAllowed": true,
+    "spend": 0.0
+  },
+  "nanBudget": {
+    "estimate": 0.0052,
+    "reserveActualEstimateAllowed": true,
+    "pending": 0.0052,
+    "additionalOverBudgetAllowed": true
+  },
+  "negativePrice": {
+    "estimate": -0.0068,
+    "reserveActualEstimateAllowed": true,
+    "pending": -0.0068,
+    "additionalOverBudgetAllowed": false
+  }
+}

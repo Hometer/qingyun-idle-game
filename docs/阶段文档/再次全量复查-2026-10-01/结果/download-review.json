@@ -1,0 +1,24 @@
+[
+  {
+    "file": "actual-export.json",
+    "bytes": 20664,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  },
+  {
+    "file": "completed-export.json",
+    "bytes": 24769,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  }
+]

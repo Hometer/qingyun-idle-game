@@ -1,0 +1,55 @@
+{
+  "keyboard": [
+    {
+      "inside": true,
+      "text": "关闭"
+    },
+    {
+      "inside": true,
+      "text": "开战"
+    },
+    {
+      "inside": true,
+      "text": "关闭"
+    },
+    {
+      "inside": true,
+      "text": "开战"
+    },
+    {
+      "inside": true,
+      "text": "关闭"
+    },
+    {
+      "inside": true,
+      "text": "开战"
+    },
+    {
+      "inside": true,
+      "text": "关闭"
+    },
+    {
+      "inside": true,
+      "text": "开战"
+    },
+    {
+      "inside": true,
+      "text": "关闭"
+    },
+    {
+      "inside": true,
+      "text": "开战"
+    },
+    {
+      "inside": true,
+      "text": "关闭"
+    },
+    {
+      "inside": true,
+      "text": "开战"
+    }
+  ],
+  "returned": "详情",
+  "badSaveRecovered": true,
+  "errors": []
+}

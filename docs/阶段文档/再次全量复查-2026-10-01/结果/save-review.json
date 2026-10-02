@@ -1,0 +1,158 @@
+{
+  "validationExceptions": [],
+  "acceptedStartupFailures": [
+    {
+      "path": "buildings",
+      "value": "missing",
+      "error": "TypeError: Cannot read properties of undefined (reading 'cultivationRoom')"
+    },
+    {
+      "path": "buildings",
+      "value": null,
+      "error": "TypeError: Cannot read properties of null (reading 'cultivationRoom')"
+    },
+    {
+      "path": "equipment",
+      "value": "missing",
+      "error": "TypeError: Cannot read properties of undefined (reading 'weapon')"
+    },
+    {
+      "path": "equipment",
+      "value": null,
+      "error": "TypeError: Cannot read properties of null (reading 'weapon')"
+    },
+    {
+      "path": "suppression",
+      "value": "missing",
+      "error": "TypeError: Cannot set properties of undefined (setting 'map_qingyun')"
+    },
+    {
+      "path": "suppression",
+      "value": null,
+      "error": "TypeError: Cannot set properties of null (setting 'map_qingyun')"
+    },
+    {
+      "path": "suppression",
+      "value": -1,
+      "error": "TypeError: Cannot create property 'map_qingyun' on number '-1'"
+    },
+    {
+      "path": "encounter",
+      "value": "invalid",
+      "error": "TypeError: Cannot create property 'continuity' on string 'invalid'"
+    },
+    {
+      "path": "encounter",
+      "value": -1,
+      "error": "TypeError: Cannot create property 'continuity' on number '-1'"
+    }
+  ],
+  "acceptedRoundtripFailures": [],
+  "mutations": 2094,
+  "futureCandidateRollback": {
+    "date": "2026-10-02",
+    "acceptedDate": null,
+    "ok": true,
+    "firstClaim": true,
+    "acceptAfterClockRestore": true,
+    "historyCount": 2
+  },
+  "commissionValidation": [
+    {
+      "name": "acceptedDate无效",
+      "ok": true
+    },
+    {
+      "name": "acceptedDate缺失",
+      "ok": true
+    },
+    {
+      "name": "候选ready",
+      "ok": true
+    },
+    {
+      "name": "history未领奖",
+      "ok": true
+    },
+    {
+      "name": "无效制作参数",
+      "ok": true
+    }
+  ],
+  "unknownWeather": {
+    "importOk": true,
+    "actionError": "TypeError: Cannot read properties of undefined (reading 'reward')"
+  },
+  "meta": [
+    {
+      "input": "bad",
+      "loaded": "bad",
+      "write": {
+        "ok": true,
+        "conflict": false
+      },
+      "replacement": {
+        "ok": true,
+        "conflict": false,
+        "generation": "bad1"
+      },
+      "persistedGeneration": "bad1"
+    },
+    {
+      "input": "-1",
+      "loaded": "-1",
+      "write": {
+        "ok": true,
+        "conflict": false
+      },
+      "replacement": {
+        "ok": true,
+        "conflict": false,
+        "generation": "0"
+      },
+      "persistedGeneration": "0"
+    },
+    {
+      "input": "NaN",
+      "loaded": "NaN",
+      "write": {
+        "ok": false,
+        "conflict": true
+      },
+      "replacement": {
+        "ok": false,
+        "conflict": true,
+        "generation": "NaN"
+      },
+      "persistedGeneration": "NaN"
+    },
+    {
+      "input": "1.5",
+      "loaded": "1.5",
+      "write": {
+        "ok": true,
+        "conflict": false
+      },
+      "replacement": {
+        "ok": true,
+        "conflict": false,
+        "generation": "2.5"
+      },
+      "persistedGeneration": "2.5"
+    },
+    {
+      "input": "undefined",
+      "loaded": "undefined",
+      "write": {
+        "ok": true,
+        "conflict": false
+      },
+      "replacement": {
+        "ok": true,
+        "conflict": false,
+        "generation": "NaN"
+      },
+      "persistedGeneration": "NaN"
+    }
+  ]
+}

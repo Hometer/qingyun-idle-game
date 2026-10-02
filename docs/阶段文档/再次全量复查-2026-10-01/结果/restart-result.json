@@ -1,0 +1,7 @@
+{
+  "identity": true,
+  "realm": true,
+  "history": true,
+  "tactic": true,
+  "resourcesNotReduced": true
+}

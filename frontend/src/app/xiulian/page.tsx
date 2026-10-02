@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CommissionTargetFocus } from "@/components/CommissionTargetFocus";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { REALM_NAMES, REALM_LIST, TECHNIQUES, fmt, fmtPct, fmtTime, fmtDuration } from "@/lib/labels";
@@ -71,6 +72,7 @@ export default function XiulianPage() {
 
   return (
     <>
+      <CommissionTargetFocus />
       <Section title="境界" variant="featured">
         <div className="text-xl font-semibold">{REALM_NAMES[state.realm]}</div>
         {isMax && <p className="mt-2 text-sm text-cinnabar">二十境修行已圆满。仍可历练秘境、收集装备，并在人物页回看修行经历。</p>}
@@ -213,7 +215,7 @@ export default function XiulianPage() {
           })}
         </div>
         {state.technique && state.techniqueLevel[state.technique] < TECHNIQUES[state.technique].levels.length && (
-          <button onClick={upgradeTechnique} className="mt-2 rounded-lg bg-cinnabar px-4 py-2 text-white">
+          <button id="commission-technique" onClick={upgradeTechnique} className="mt-2 rounded-lg bg-cinnabar px-4 py-2 text-white">
             升级功法
           </button>
         )}

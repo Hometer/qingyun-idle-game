@@ -13,7 +13,7 @@ import {
 import * as eng from "@/engine/engine";
 import { CONFIG } from "@/engine/config";
 import type { SaveState, BuildingId, MapId, SpiritRoot, TechniqueId, AptitudeId, BreakthroughMethod, SecretRealmId, BattleDifficulty, TacticId } from "@/engine/types";
-import { loadSave, persistSave, replaceSave, backupSave, loadBackup, clearSave, type LoadedSave } from "@/engine/storage";
+import { loadSave, loadRawSave, repairSaveMetadata, SaveMetadataError, persistSave, replaceSave, backupSave, loadBackup, clearSave, type LoadedSave } from "@/engine/storage";
 import { generateEncounter, type EncounterResponse } from "@/lib/api";
 import { getCopyMode, setCopyMode, type CopyMode } from "@/lib/prefs";
 import { RESOURCE_LABELS, REALM_ORDER, fmt, fmtPct, resourceGains } from "@/lib/labels";
@@ -48,6 +48,8 @@ interface GameContextValue {
   loadError: string | null;
   retryLoad: () => void;
   exportRawSave: () => void;
+  metadataError: boolean;
+  repairMetadata: () => void;
   battleLog: string[];
   encounter: EncounterCopy | null;
   encounterLoading: boolean;
@@ -176,6 +178,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [realmPending, setRealmPending] = useState<SecretRealmId | null>(null);
   const [realmNarrative, setRealmNarrative] = useState<{ title: string; body: string; source: string } | null>(null);
   const [realmNarrativeLoading, setRealmNarrativeLoading] = useState(false);
+  const [metadataError, setMetadataError] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   // baseRef：已持久化到 IndexedDB 的修订号（乐观并发基准）。只在读档/写档成功/重置/导入时更新，
   // 绝不从内存 state 推导，否则结算产生的内存修订号会被误当作已持久化基准，导致持续冲突。
@@ -189,12 +192,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const load = useCallback(async () => {
+    setReady(false);
     setLoadError(null);
+    setMetadataError(false);
     let loaded: LoadedSave;
     try {
       loaded = await loadSave();
-    } catch {
-      setLoadError("读取存档失败：无法打开本地存档。可重试，或恢复备份");
+    } catch (error) {
+      setMetadataError(error instanceof SaveMetadataError);
+      setLoadError(error instanceof SaveMetadataError ? error.message : "存档读取失败，已保留原档；请重试读取或导出原档");
       setReady(true);
       return;
     }
@@ -205,13 +211,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       return;
     }
     // 读到的档先校验：坏档不迁移、不结算，避免客户端崩溃，进入恢复提示；不覆盖健康备份
-    const verr = eng.validateSaveObject(structuredClone(saved as unknown as Record<string, unknown>));
-    if (verr) {
-      setLoadError(`存档损坏（${verr}），已保留原档未覆盖。可恢复备份或导出原档`);
+    const prepared = eng.readSave(saved, Date.now());
+    if (!prepared.ok || !prepared.state) {
+      setLoadError(`存档损坏（${prepared.reason}），已保留原档未覆盖。可恢复备份或导出原档`);
       setReady(true);
       return;
     }
-    baseRef.current = saved.revision;
+    baseRef.current = saved.revision ?? 0;
     if (saved.schemaVersion < eng.SCHEMA_VERSION) {
       let backupOk = true;
       try {
@@ -220,7 +226,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         backupOk = false;
       }
       if (!backupOk) {
-        setNotice("存档备份失败，已保留原档；请刷新重试或先导出备份");
+        setLoadError("存档备份失败，已保留原档；请刷新重试或先导出原档");
         setReady(true);
         return;
       }
@@ -228,22 +234,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const nowMs = Date.now();
     const hours = Math.max(0, (nowMs - saved.lastSettledAt) / 3600000);
     const capped = Math.min(hours, CONFIG.offlineCapHours);
-    const migrated = eng.migrateSave(saved);
-    const settled = eng.settle(migrated, nowMs);
+    const migrated = eng.readSave(saved).state!;
+    const settled = prepared.state;
     const delta = resourceGains(migrated, settled);
     setState(settled);
     try {
-      const res = await persistSave(settled, saved.revision, genRef.current);
+      const res = await persistSave(settled, saved.revision ?? 0, genRef.current);
       if (res.conflict) {
-        const latest = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
+        const latest = await loadSave();
         genRef.current = latest.generation;
-        baseRef.current = latest.state ? latest.state.revision : 0;
-        setState(latest.state ? eng.settle(latest.state, Date.now()) : null);
+        baseRef.current = latest.state?.revision ?? 0;
+        const checked = latest.state ? eng.readSave(latest.state, Date.now()) : null;
+        if (checked && !checked.ok) { setState(null); setLoadError(`最新存档无法读取（${checked.reason}），已保留原档`); }
+        else setState(checked?.state ?? null);
       } else {
         baseRef.current = settled.revision;
       }
-    } catch {
-      baseRef.current = saved.revision;
+    } catch (error) {
+      if (error instanceof SaveMetadataError) { setMetadataError(true); setLoadError(error.message); }
+      baseRef.current = saved.revision ?? 0;
       setNotice("存档迁移保存失败，已保留当前进度；请尝试导出备份后重新导入");
     }
     try {
@@ -273,16 +282,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const exportRawSave = useCallback(async () => {
     try {
-      const loaded = await loadSave();
-      if (!loaded.state) {
+      const raw = await loadRawSave();
+      if (!raw) {
         setNotice("没有可导出的原档");
         return;
       }
-      const blob = new Blob([eng.exportSave(loaded.state)], { type: "application/json" });
+      const blob = new Blob([eng.exportSave(raw)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `青云修仙录原档-${loaded.state.name ?? "unknown"}.json`;
+      a.download = `青云修仙录原档-${raw.name ?? "unknown"}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -290,8 +299,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // 挂起事件身份不变时沿用请求快照，日常进度写入不重复触发付费请求。
+  const encounterStateRef = useRef(state);
+  useEffect(() => { encounterStateRef.current = state; }, [state]);
   const pendingId = state?.encounter.pending?.eventId ?? null;
+  const pendingMapId = state?.encounter.pending?.mapId ?? null;
   useEffect(() => {
+    const state = encounterStateRef.current;
     if (!state || !pendingId) {
       setEncounter(null);
       setEncounterLoading(false);
@@ -337,7 +351,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [pendingId, state?.encounter?.pending?.mapId]);
+  }, [pendingId, pendingMapId]);
 
   const view = useMemo(() => (state ? eng.settle(state, now) : null), [state, now]);
 
@@ -362,17 +376,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
     let res;
     try {
       res = await persistSave(next, baseRef.current, genRef.current);
-    } catch {
+    } catch (error) {
+      if (error instanceof SaveMetadataError) { setMetadataError(true); setLoadError(error.message); }
       setNotice("保存失败，进度未变更，请重试或先导出备份");
       return false;
     }
     if (res.conflict) {
-      const loaded = await loadSave().catch((): LoadedSave => ({ state: null, generation: genRef.current }));
-      genRef.current = loaded.generation;
-      const latest = loaded.state;
-      baseRef.current = latest ? latest.revision : 0;
-      setState(latest ? eng.settle(latest, Date.now()) : null);
-      setNotice(latest ? "检测到另一标签页正在运行，已刷新为最新进度" : "存档已在其他标签页被重置");
+      try {
+        const loaded = await loadSave();
+        genRef.current = loaded.generation;
+        const latest = loaded.state;
+        const checked = latest ? eng.readSave(latest, Date.now()) : null;
+        if (checked && !checked.ok) throw new Error(checked.reason);
+        baseRef.current = latest?.revision ?? 0;
+        setState(checked?.state ?? null);
+        setNotice(latest ? "检测到另一标签页正在运行，已刷新为最新进度" : "存档已在其他标签页被重置");
+      } catch (error) {
+        setMetadataError(error instanceof SaveMetadataError);
+        setLoadError("冲突后重读失败，已保留原档，请重试读取或导出原档");
+      }
       return false;
     }
     baseRef.current = next.revision;
@@ -1156,7 +1178,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const doRestoreBackup = useCallback(async () => {
-    const backup = await loadBackup().catch(() => null);
+    let backup: SaveState | null;
+    try { backup = await loadBackup(); } catch { setLoadError("备份读取失败，已保留角色和备份，请重试"); return; }
     if (!backup) {
       setNotice("没有可恢复的备份");
       if (loadError) setLoadError("没有可恢复的备份，请导出原档或重试读取");
@@ -1164,13 +1187,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     if (!window.confirm("恢复导入前的存档？当前进度将被替换。")) return;
     // 恢复前校验/迁移备份，失败信息要显示在恢复页
-    const verr = eng.validateSaveObject(structuredClone(backup as unknown as Record<string, unknown>));
-    if (verr) {
-      setLoadError(`备份损坏（${verr}），无法恢复`);
+    const prepared = eng.readSave(backup, Date.now());
+    if (!prepared.ok || !prepared.state) {
+      setLoadError(`备份损坏（${prepared.reason}），无法恢复`);
       return;
     }
-    const migrated = eng.migrateSave(backup);
-    const settled = eng.settle(migrated, Date.now());
+    const settled = prepared.state;
     try {
       const res = await replaceSave(settled, genRef.current);
       if (res.conflict) {
@@ -1189,6 +1211,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setNotice("已恢复导入前的存档");
   }, [loadError]);
 
+  const repairMetadata = useCallback(async () => {
+    if (!window.confirm("仅修复存档元数据，角色原档和备份均保留。已打开的旧标签页会失效，确定继续？")) return;
+    try { genRef.current = await repairSaveMetadata(); await load(); }
+    catch { setLoadError("元数据修复失败，角色和备份未删除，请导出原档后重试"); }
+  }, [load]);
+
   const value: GameContextValue = {
     ready,
     state,
@@ -1198,6 +1226,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     loadError,
     retryLoad,
     exportRawSave,
+    metadataError,
+    repairMetadata,
     battleLog,
     encounter,
     encounterLoading,

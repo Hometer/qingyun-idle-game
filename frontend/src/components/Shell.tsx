@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Modal } from "./Modal";
 import { useGame } from "@/lib/game-context";
 import type { CopyMode } from "@/lib/prefs";
 import { fmtTime, fmtDuration, fmtRemaining } from "@/lib/labels";
@@ -12,7 +13,7 @@ import { EncounterModal } from "./EncounterModal";
 import { CreateCharacter } from "./CreateCharacter";
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { ready, state, notice, clearNotice, lastResult, clearResult, targets, showDataNotice, dismissDataNotice, claimLong, abortLong, now, loadError, retryLoad, exportRawSave, doRestoreBackup } = useGame();
+  const { ready, state, notice, clearNotice, lastResult, clearResult, targets, showDataNotice, dismissDataNotice, claimLong, abortLong, now, loadError, retryLoad, exportRawSave, metadataError, repairMetadata, doRestoreBackup } = useGame();
   const [noticeMode, setNoticeMode] = useState<CopyMode>("ai");
   const pathname = usePathname();
 
@@ -25,12 +26,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="w-full max-w-[420px] rounded-2xl border border-line bg-card p-5">
           <h2 className="text-lg font-semibold">存档读取异常</h2>
           <p className="mt-2 text-sm text-muted">{loadError}</p>
+          {notice && <p role="status" className="mt-2 text-sm">{notice}</p>}
           <div className="mt-4 flex flex-col gap-2">
             <button onClick={retryLoad} className="rounded-lg bg-cinnabar px-4 py-2 text-white">重试读取</button>
             <button onClick={exportRawSave} className="rounded-lg border border-line bg-paper px-4 py-2">导出原档</button>
+            {metadataError && <button onClick={repairMetadata} className="rounded-lg border border-line bg-paper px-4 py-2">修复存档元数据</button>}
             <button onClick={doRestoreBackup} className="rounded-lg border border-line bg-paper px-4 py-2">恢复上次导入前的备份</button>
           </div>
-          <p className="mt-3 text-xs text-muted">恢复与导出会保留当前 IndexedDB 中的原档，不会直接覆盖。</p>
+          <p className="mt-3 text-xs text-muted">导出不会修改原档；恢复须确认，将用备份替换当前进度。元数据修复不改角色和备份。</p>
         </div>
       </div>
     );
@@ -138,7 +141,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="game-main mx-auto w-full max-w-[1100px] px-4 pb-4 sm:px-5 lg:px-0">
+      <main tabIndex={-1} className="game-main mx-auto w-full max-w-[1100px] px-4 pb-4 sm:px-5 lg:px-0">
         <div className="page-intro mb-4 mt-6 flex items-end justify-between gap-4">
           <div><p className="text-[11px] font-semibold tracking-[.26em] text-gold">青云纪 · {pageInfo[0]}篇</p>
           <h2 className="display-font mt-1 text-[31px] font-semibold leading-tight tracking-[.12em] text-ink sm:text-[37px]">{pageInfo[0]}</h2>
@@ -150,9 +153,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <EncounterModal />
 
-      {lastResult && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center">
-          <div className="w-full max-w-[520px] rounded-t-2xl border border-line bg-card p-5 sm:rounded-2xl">
+      {lastResult && !showDataNotice && (
+        <Modal title={lastResult.title}>
             <h2 className="text-lg font-semibold">{lastResult.title}</h2>
             <div className="mt-2 space-y-0.5">
               {lastResult.lines.map((l, i) => (
@@ -164,13 +166,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <button onClick={clearResult} className="mt-4 w-full rounded-lg bg-cinnabar py-2 text-white">
               继续修行
             </button>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {showDataNotice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-[480px] rounded-2xl border border-line bg-card p-5">
+        <Modal title="开始前说明">
             <h2 className="text-lg font-semibold">开始前说明</h2>
             <p className="mt-2 text-sm leading-relaxed text-ink/80">
               游戏进度保存在当前浏览器本地，清理浏览器数据或换设备会丢失，请定期导出存档。
@@ -193,8 +193,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <button onClick={() => dismissDataNotice(noticeMode)} className="mt-4 w-full rounded-lg bg-cinnabar py-2 text-white">
               确认并继续
             </button>
-          </div>
-        </div>
+        </Modal>
       )}
 
       <BottomNav />

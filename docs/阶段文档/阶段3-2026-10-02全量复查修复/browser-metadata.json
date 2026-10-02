@@ -1,0 +1,37 @@
+[
+  {
+    "input": "NaN",
+    "id": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "backupId": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "healthyBuildings": true,
+    "generation": 1833899490184174
+  },
+  {
+    "input": "missing",
+    "id": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "backupId": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "healthyBuildings": true,
+    "generation": 1833899490493137
+  },
+  {
+    "input": "bad",
+    "id": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "backupId": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "healthyBuildings": true,
+    "generation": 1833899490750275
+  },
+  {
+    "input": "-1",
+    "id": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "backupId": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "healthyBuildings": true,
+    "generation": 1833899491004499
+  },
+  {
+    "input": "1.5",
+    "id": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "backupId": "a99cb671-fa50-419b-b06e-b1ec3ffa9e2b",
+    "healthyBuildings": true,
+    "generation": 1833899491261041
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "identity": true,
+  "realm": true,
+  "inventory": true,
+  "commissionHistory": true,
+  "resourcesNondecreasing": true
+}

@@ -1,0 +1,126 @@
+{
+  "retryPolicy": "retry-while-affordable",
+  "mode": "seeded-random",
+  "oneLogin": {
+    "total": 432,
+    "unfinished": 0,
+    "min": 39,
+    "max": 52,
+    "under42": 24,
+    "over56": 0,
+    "samplesOutside": [
+      {
+        "key": "spirit/innate/dull/单金/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/单火/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/单水/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/五杂/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/雷/risky/1登录",
+        "days": 40
+      }
+    ]
+  },
+  "twoLogins": {
+    "total": 0,
+    "unfinished": 0,
+    "under42": 0,
+    "over56": 0,
+    "samplesOutside": []
+  },
+  "oneSteady": {
+    "total": 216,
+    "unfinished": 0,
+    "min": 43,
+    "max": 52,
+    "under42": 0,
+    "over56": 0,
+    "samplesOutside": []
+  },
+  "oneRisky": {
+    "total": 216,
+    "unfinished": 0,
+    "min": 39,
+    "max": 49,
+    "under42": 24,
+    "over56": 0,
+    "samplesOutside": [
+      {
+        "key": "spirit/innate/dull/单金/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/单火/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/单水/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/五杂/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/雷/risky/1登录",
+        "days": 40
+      }
+    ]
+  },
+  "total": 432,
+  "completed": 432,
+  "unfinished": 0,
+  "inTarget42to56": 408,
+  "under42": 24,
+  "over56": 0,
+  "min": 39,
+  "median": 46,
+  "max": 52,
+  "sampleInTarget": [
+    {
+      "key": "balanced/blocked/dull/单金/steady/1登录",
+      "days": 50
+    },
+    {
+      "key": "balanced/blocked/dull/单金/risky/1登录",
+      "days": 46
+    },
+    {
+      "key": "balanced/blocked/dull/单火/steady/1登录",
+      "days": 50
+    },
+    {
+      "key": "balanced/blocked/dull/单火/risky/1登录",
+      "days": 47
+    },
+    {
+      "key": "balanced/blocked/dull/单水/steady/1登录",
+      "days": 50
+    }
+  ],
+  "sampleUnder": [
+    {
+      "key": "spirit/innate/dull/单金/risky/1登录",
+      "days": 40
+    },
+    {
+      "key": "spirit/innate/dull/单火/risky/1登录",
+      "days": 40
+    },
+    {
+      "key": "spirit/innate/dull/单水/risky/1登录",
+      "days": 40
+    }
+  ],
+  "sampleOver": []
+}

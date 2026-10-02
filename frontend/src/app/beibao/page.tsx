@@ -1,5 +1,6 @@
 "use client";
 
+import { CommissionTargetFocus } from "@/components/CommissionTargetFocus";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { EQUIPMENT, BUILDINGS, REALM_NAMES, REALM_ORDER, RESOURCE_LABELS } from "@/lib/labels";
@@ -14,6 +15,10 @@ function affixText(affixes: Array<{ id: string; value: number }> | undefined): s
     const v = c?.type === "flat" ? `${a.value}` : `${Math.round(a.value * 100)}%`;
     return `${c?.name ?? a.id} +${v}`;
   }).join("、");
+}
+
+function rateDelta(value: number): string {
+  return Math.abs(value) >= 0.1 ? value.toFixed(1) : value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 export default function BeibaoPage() {
@@ -34,6 +39,7 @@ export default function BeibaoPage() {
 
   return (
     <>
+      <CommissionTargetFocus />
       <Section title="装备" variant="featured">
         <p className="mb-2 text-xs text-muted">下列装备加成为基础值；战斗时随当前境界放大。“穿上后”显示当前实际属性变化。</p>
         {ownedEquip.length === 0 ? (
@@ -48,18 +54,14 @@ export default function BeibaoPage() {
             const dAtk = nextStats.attack - equippedStats.attack;
             const dDef = nextStats.defense - equippedStats.defense;
             const dHp = nextStats.hp - equippedStats.hp;
-            const dCult = affixes.length > 0
-              ? productionBreakdown({ ...current, equipment: { ...current.equipment, [e.slot]: id } }).cultivationPerSec - productionBreakdown(current).cultivationPerSec
-              : 0;
-            const dSpirit = affixes.length > 0
-              ? productionBreakdown({ ...current, equipment: { ...current.equipment, [e.slot]: id } }).spiritPerSec - productionBreakdown(current).spiritPerSec
-              : 0;
+            const dCult = productionBreakdown({ ...current, equipment: { ...current.equipment, [e.slot]: id } }).cultivationPerSec - productionBreakdown(current).cultivationPerSec;
+            const dSpirit = productionBreakdown({ ...current, equipment: { ...current.equipment, [e.slot]: id } }).spiritPerSec - productionBreakdown(current).spiritPerSec;
             const delta: string[] = [];
             if (dAtk) delta.push(`${dAtk > 0 ? "+" : ""}${dAtk} 攻`);
             if (dDef) delta.push(`${dDef > 0 ? "+" : ""}${dDef} 防`);
             if (dHp) delta.push(`${dHp > 0 ? "+" : ""}${dHp} 气血`);
-            if (dCult) delta.push(`修为 ${dCult > 0 ? "+" : ""}${dCult.toFixed(1)}/秒`);
-            if (dSpirit) delta.push(`灵气 ${dSpirit > 0 ? "+" : ""}${dSpirit.toFixed(1)}/秒`);
+            if (dCult) delta.push(`修为 ${dCult > 0 ? "+" : ""}${rateDelta(dCult)}/秒`);
+            if (dSpirit) delta.push(`灵气 ${dSpirit > 0 ? "+" : ""}${rateDelta(dSpirit)}/秒`);
             return (
               <div key={id} className="border-b border-line/60 py-2 last:border-0">
                 <div className="flex items-center justify-between">
@@ -137,7 +139,7 @@ export default function BeibaoPage() {
           const canCraft = recipe !== null && furnaceLvl >= needFurnace && current.resources.herb >= herb && current.resources.spiritStone >= stone && current.resources.page >= page;
           const isPrepared = state.preparedPill && state.preparedPillTier === tier;
           return (
-            <div key={`t_${tier}`} className="border-b border-line/60 py-2 last:border-0">
+            <div id={`commission-pill-${tier}`} tabIndex={-1} key={`t_${tier}`} className="border-b border-line/60 py-2 last:border-0">
               <div className="flex items-center justify-between">
                 <div className="text-sm">
                   护劫丹·{tierName}品（回血 {healPct}%）
@@ -170,7 +172,7 @@ export default function BeibaoPage() {
             const canCraft = furnaceLvl >= needFurnace && current.resources.herb >= herb && current.resources.spiritStone >= stone && current.resources.page >= page;
             const danUsed = current.daily.rewardedDan >= 1;
             return (
-              <div key={`g_${type}_${tier}`} className="border-b border-line/60 py-2 last:border-0">
+              <div id={`commission-gain-${type}:${tier}`} tabIndex={-1} key={`g_${type}_${tier}`} className="border-b border-line/60 py-2 last:border-0">
                 <div className="flex items-center justify-between">
                   <div className="text-sm">
                     {name}·{tierName}品（{minutes} 分钟）
@@ -212,7 +214,7 @@ export default function BeibaoPage() {
               eq.tribulationReduction ? `护劫减伤+${Math.round(eq.tribulationReduction * 100)}%` : "",
             ].filter(Boolean).join("、");
             return (
-              <div key={id} className="border-b border-line/60 py-2 last:border-0">
+              <div id={`commission-craft-${id}`} tabIndex={-1} key={id} className="border-b border-line/60 py-2 last:border-0">
                 <div className="flex items-center justify-between">
                   <div className="text-sm">
                     {eq.name} <span className="text-xs text-muted">{attrs}</span>

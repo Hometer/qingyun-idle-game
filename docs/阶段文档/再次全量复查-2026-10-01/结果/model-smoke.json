@@ -1,0 +1,161 @@
+{
+  "keyConfigured": true,
+  "events": [
+    {
+      "event": "event_well",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.86
+    },
+    {
+      "event": "event_beast",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.63
+    },
+    {
+      "event": "event_cave",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.56
+    },
+    {
+      "event": "event_well_down",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 2.26
+    },
+    {
+      "event": "event_well_around",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.2
+    },
+    {
+      "event": "event_beast_saved",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.4
+    },
+    {
+      "event": "event_beast_watch",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.66
+    },
+    {
+      "event": "event_cave_enter",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.16
+    },
+    {
+      "event": "event_cave_note",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.64
+    },
+    {
+      "event": "event_star",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.37
+    },
+    {
+      "event": "event_wanderer",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.71
+    },
+    {
+      "event": "event_mirror",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.34
+    },
+    {
+      "event": "event_inscription",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.61
+    },
+    {
+      "event": "event_origin",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.59
+    },
+    {
+      "event": "event_realm_herb",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.63
+    },
+    {
+      "event": "event_realm_relic",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.34
+    },
+    {
+      "event": "event_realm_deep",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.73
+    },
+    {
+      "event": "event_realm_soul",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.07
+    },
+    {
+      "event": "event_realm_cloud",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.49
+    },
+    {
+      "event": "event_realm_lotus",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.58
+    },
+    {
+      "event": "event_realm_origin",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 0.97
+    },
+    {
+      "event": "event_realm_hongmeng",
+      "http": 200,
+      "source": "model",
+      "modelValidated": true,
+      "elapsedSeconds": 1.63
+    }
+  ],
+  "estimatedCeilingRmb": 0.204236,
+  "note": "两批覆盖22事件；结构/内容程序校验通过不等同人工全语义评分。"
+}

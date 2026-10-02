@@ -36,6 +36,10 @@ import type {
 
 export const SCHEMA_VERSION = 18;
 
+const SAVE_FIELD_NAMES: Record<string, string> = {
+  resources: "资源", buildings: "建筑", techniqueLevel: "功法等级", equipment: "穿戴装备", inventory: "行囊", maps: "地图", suppression: "镇压", encounter: "际遇", daily: "每日状态", firsts: "首玩目标", suppressionSince: "镇压时间", secretRealmUsed: "秘境次数", breakthroughFails: "突破保底", itemInstances: "装备实例", lockedAffixes: "封存词条", commission: "委托", recentLogs: "修行记录", milestones: "修仙录", marrowHistory: "洗髓历史", quenched: "淬炼记录", learnedNewTechs: "已学功法", secretRealmLog: "秘境记录", breakthroughRecords: "突破记录",
+};
+
 // ---- 配置的类型化视图（便于用 string 键索引） ----
 
 const REALMS = CONFIG.realms as unknown as ReadonlyArray<{
@@ -497,6 +501,7 @@ function craftCandidate(s: SaveState, dateStr: string): Commission | null {
 }
 
 function generateCandidates(s: SaveState, dateStr: string): Commission[] {
+  if (s.commission && (dateStr < s.commission.date || (s.commission.acceptedDate && dateStr <= s.commission.acceptedDate))) return [];
   const out: Commission[] = [];
   const battle = battleCandidate(s, dateStr);
   if (battle) out.push(battle);
@@ -524,7 +529,7 @@ function commissionResponse(c: Commission): string {
 function commissionCompletable(s: SaveState, c: Commission): boolean {
   if (c.kind === "battle") {
     if (!c.mapId || !c.nodeId || !s.maps[c.mapId]?.[c.nodeId]?.cleared) return false;
-    return predictFight(s, c.mapId, c.nodeId, c.difficulty ?? "challenge").won; // 当前挑战可胜
+    return predictFight(s, c.mapId, c.nodeId, c.difficulty ?? "challenge", "normal", () => 1).won; // 当前挑战可胜
   }
   switch (c.action) {
     case "upgradeBuilding": {
@@ -577,11 +582,13 @@ function commissionCompletable(s: SaveState, c: Commission): boolean {
 export function acceptCommission(state: SaveState, nowMs: number, id: string): Result<SaveState> {
   const s = settle(state, nowMs);
   const today = todayStr(nowMs);
+  if (today !== s.commission.date) return fail("系统日期早于委托记录，请恢复日期后再接取");
   if (s.commission.acceptedDate && today <= s.commission.acceptedDate) return fail("今日已接取过委托，明日再来");
   if (s.commission.active) return fail("已有进行中的委托");
   const idx = s.commission.candidates.findIndex((c) => c.id === id);
   if (idx < 0) return fail("无此委托");
   const c = s.commission.candidates[idx];
+  if (!c.id.endsWith(`:${today}`)) return fail("委托日期不匹配，请刷新候选");
   if (!commissionCompletable(s, c)) return fail("该委托目标已变化，请重新选择");
   c.status = "accepted";
   s.commission.active = c;
@@ -594,7 +601,7 @@ export function acceptCommission(state: SaveState, nowMs: number, id: string): R
 
 export function refreshCommissionCandidates(state: SaveState, nowMs: number): SaveState {
   const s = settle(state, nowMs);
-  s.commission.candidates = generateCandidates(s, todayStr(nowMs));
+  if (todayStr(nowMs) === s.commission.date) s.commission.candidates = generateCandidates(s, s.commission.date);
   s.revision += 1;
   return s;
 }
@@ -603,7 +610,9 @@ export function claimCommission(state: SaveState, nowMs: number, choice: "a" | "
   const s = settle(state, nowMs);
   const c = s.commission.active;
   if (!c) return fail("无进行中的委托");
-  if (c.status !== "ready") return fail("委托尚未完成");
+  if (c.status !== "ready" || c.progress < c.target) return fail("委托尚未完成");
+  if (choice !== "a" && choice !== "b") return fail("奖励选择无效");
+  if (s.commission.history.some((h) => h.id === c.id)) return fail("该委托已领奖");
   const reward = choice === "a" ? c.rewardA : c.rewardB;
   applyReward(s, reward);
   c.status = "claimed";
@@ -2154,7 +2163,7 @@ export interface FightPrediction {
   player: { attack: number; defense: number; hp: number };
 }
 
-export function predictFight(state: SaveState, mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal", tactic: TacticId = "normal"): FightPrediction {
+export function predictFight(state: SaveState, mapId: MapId, nodeId: string, difficulty: BattleDifficulty = "normal", tactic: TacticId = "normal", rng: () => number = Math.random): FightPrediction {
   const mapCfg = MAP_CFG[mapId];
   const nodeCfg = mapCfg?.nodes[nodeId];
   const nodeState = state.maps[mapId]?.[nodeId];
@@ -2168,7 +2177,7 @@ export function predictFight(state: SaveState, mapId: MapId, nodeId: string, dif
   const stats = playerStats(state);
   const rules = fightRules(mapId, nodeId, difficulty);
   const t = difficulty === "challenge" ? TACTIC_CFG[tactic] : TACTIC_CFG.normal;
-  const battle = runBattle(stats, rules.enemy, battleDamageMult(state) * t.damageMult, battleTakenMult(state) * t.takenMult, rules.maxRounds, battleMods(state));
+  const battle = runBattle(stats, rules.enemy, battleDamageMult(state) * t.damageMult, battleTakenMult(state) * t.takenMult, rules.maxRounds, battleMods(state), rng);
   return { ok: true, reason: "", won: battle.won, log: battle.log, enemy: rules.enemy, player: stats };
 }
 
@@ -2272,7 +2281,7 @@ export function fightNode(state: SaveState, nowMs: number, mapId: MapId, nodeId:
   }
 
   if (first && !s.commission.active) {
-    s.commission.candidates = generateCandidates(s, todayStr(nowMs)); // 首胜后即时刷新候选（补入战斗候选）
+    if (todayStr(nowMs) === s.commission.date) s.commission.candidates = generateCandidates(s, s.commission.date); // 首胜后即时刷新候选（补入战斗候选）
   }
 
   let encounterTriggered = false;
@@ -3223,7 +3232,7 @@ function validateItemInstances(o: Record<string, unknown>, ver: number): string 
   const locked = o.lockedAffixes as Record<string, unknown> | undefined;
   if (ver >= 16) {
     if (!insts || typeof insts !== "object") return "装备实例无效";
-    for (const [instId, raw] of Object.entries(insts)) {
+    for (const raw of Object.values(insts)) {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "装备实例无效";
       const inst = raw as Record<string, unknown>;
       if (typeof inst.baseId !== "string" || !EQUIP_IDS.has(inst.baseId)) return "装备实例基础装备无效";
@@ -3304,7 +3313,7 @@ function validateEncounter(v: unknown): string | null {
   const e = (v ?? {}) as Record<string, unknown>;
   const pending = e.pending as Record<string, unknown> | null | undefined;
   if (pending !== null && pending !== undefined) {
-    if (!ENC_CFG[pending.eventId as string]) return "际遇事件无效";
+    if (typeof pending.eventId !== "string" || !Object.hasOwn(ENC_CFG, pending.eventId)) return "际遇事件无效";
   }
   const cont = e.continuity as Record<string, unknown> | null | undefined;
   if (cont !== null && cont !== undefined) {
@@ -3383,14 +3392,19 @@ function validateCommissionItem(c: unknown): string | null {
   if (o.kind === "battle") {
     if (typeof o.mapId !== "string" || !MAP_CFG[o.mapId as MapId]) return "委托地图无效";
     if (typeof o.nodeId !== "string" || !MAP_CFG[o.mapId as MapId]?.nodes[o.nodeId]) return "委托节点无效";
-    if (o.difficulty !== undefined && o.difficulty !== "normal" && o.difficulty !== "challenge") return "委托难度无效";
+    if (o.difficulty !== "normal" && o.difficulty !== "challenge") return "委托难度无效";
   }
   if (o.kind === "craft") {
     if (typeof o.action !== "string") return "委托动作无效";
     if (!["craftEquipment", "craftPill", "upgradeBuilding", "upgradeTechnique", "buildLibrary", "buildForge", "useGainPill", "settle"].includes(o.action)) return "委托动作无效";
     if (o.actionParam !== undefined && typeof o.actionParam !== "string") return "委托动作参数无效";
+    if (o.action === "upgradeBuilding" && (typeof o.actionParam !== "string" || !Object.hasOwn(CONFIG.buildings, o.actionParam))) return "委托建筑参数无效";
+    if (o.action === "craftEquipment" && (typeof o.actionParam !== "string" || !Object.hasOwn(CRAFT_CFG, o.actionParam))) return "委托配方参数无效";
+    if (o.action === "craftPill" && !["1", "2", "3", "4"].includes(o.actionParam as string)) return "委托丹药参数无效";
+    if (o.action === "useGainPill" && (typeof o.actionParam !== "string" || !/^(yangYuan|juLing):[1-4]$/.test(o.actionParam))) return "委托服丹参数无效";
+    if (["upgradeTechnique", "buildLibrary", "buildForge", "settle"].includes(o.action as string) && o.actionParam !== undefined) return "委托动作不应含参数";
   }
-  if (!Number.isInteger(o.target) || (o.target as number) < 1) return "委托目标无效";
+  if (o.target !== 1) return "委托目标无效";
   if (!Number.isInteger(o.progress) || (o.progress as number) < 0 || (o.progress as number) > (o.target as number)) return "委托进度无效";
   if (!["accepted", "ready", "claimed"].includes(o.status as string)) return "委托状态无效";
   // 状态与进度一致性：未完成不得 ready/claimed，已完成不得仍为 accepted
@@ -3401,7 +3415,7 @@ function validateCommissionItem(c: unknown): string | null {
   }
   for (const key of ["rewardA", "rewardB"]) {
     const r = o[key] as Record<string, unknown> | undefined;
-    if (!r || typeof r !== "object") return "委托奖励无效";
+    if (!isRecord(r)) return "委托奖励无效";
     for (const k of [...["cultivation", "spirit", "spiritStone", "herb", "page", "iron"], ...MATERIAL_RESOURCES]) {
       const x = r[k];
       if (x !== undefined && x !== null && (!isNonNegFinite(x) || (x as number) > 1e12)) return "委托奖励无效";
@@ -3424,9 +3438,11 @@ function validateCommission(v: unknown, ver: number): string | null {
   if (v === undefined || v === null) {
     return ver < 18 ? null : "委托数据缺失"; // v18 起委托为必填字段
   }
-  if (typeof v !== "object") return "委托数据无效";
+  if (!isRecord(v)) return "委托数据无效";
   const o = v as Record<string, unknown>;
   if (typeof o.date !== "string" || !isValidDateStr(o.date)) return "委托日期无效";
+  if (o.acceptedDate !== null && (typeof o.acceptedDate !== "string" || !isValidDateStr(o.acceptedDate) || o.acceptedDate > o.date)) return "委托接取日期无效";
+  if (o.active === undefined) return "委托进行中字段缺失";
   const candidates = o.candidates;
   if (!Array.isArray(candidates) || candidates.length > COMMISSION_CFG.dailyCandidates) return "委托候选无效";
   for (const c of candidates as unknown[]) {
@@ -3442,6 +3458,22 @@ function validateCommission(v: unknown, ver: number): string | null {
   for (const c of history as unknown[]) {
     const err = validateCommissionItem(c);
     if (err) return err;
+  }
+  const all = [...candidates, ...history, ...(o.active ? [o.active] : [])] as Record<string, unknown>[];
+  if (new Set(all.map((c) => c.id)).size !== all.length) return "委托实例身份重复";
+  for (const c of all) {
+    const date = (c.id as string).slice(-10);
+    if (!(c.id as string).endsWith(`:${date}`) || !isValidDateStr(date) || date > o.date) return "委托实例日期无效";
+  }
+  if (history.length > 0 && o.acceptedDate === null) return "委托历史缺接取日期";
+  for (const c of candidates as Record<string, unknown>[]) {
+    if (c.status !== "accepted" || c.progress !== 0 || !(c.id as string).endsWith(`:${o.date}`)) return "委托候选状态或日期无效";
+  }
+  for (const c of history as Record<string, unknown>[]) {
+    if (c.status !== "claimed") return "委托历史须已领奖";
+  }
+  if (o.active && isRecord(o.active)) {
+    if (o.active.status === "claimed" || !o.acceptedDate || !(o.active.id as string).endsWith(`:${o.acceptedDate}`)) return "进行中委托状态或日期无效";
   }
   // 进行中与历史不得共用同一实例身份（防止把已领奖记录复制为 active 再领奖）
   if (o.active && typeof o.active === "object") {
@@ -3564,10 +3596,12 @@ function validateRecentLogs(value: unknown): string | null {
 function validateDaily(v: unknown, schemaVersion: number): string | null {
   if (v === undefined || v === null) return schemaVersion >= REPEAT_REWARDS_INTRO_VERSION ? "每日数据无效" : null;
   const d = v as Record<string, unknown>;
-  if (typeof d.date !== "string") return "每日数据日期无效";
+  if (typeof d.date !== "string" || !isValidDateStr(d.date)) return "每日数据日期无效";
   const weather = d.weather as Record<string, unknown> | undefined;
   const astrology = d.astrology as Record<string, unknown> | undefined;
   const goals = d.goals as Record<string, unknown> | undefined;
+  if (weather && (!isRecord(weather) || typeof weather.id !== "string" || !Object.hasOwn(CONFIG.weathers, weather.id))) return "天气数据无效";
+  if (astrology && (!isRecord(astrology) || typeof astrology.id !== "string" || !Object.hasOwn(CONFIG.astrologies, astrology.id))) return "星象数据无效";
   const rewardedRepeats = d.rewardedRepeats;
   if (schemaVersion >= REPEAT_REWARDS_INTRO_VERSION || rewardedRepeats !== undefined) {
     if (!Number.isInteger(rewardedRepeats) || (rewardedRepeats as number) < 0 ||
@@ -3581,7 +3615,7 @@ function validateDaily(v: unknown, schemaVersion: number): string | null {
     if (!goals || typeof goals !== "object") return "每日目标数据无效";
     for (const gid of ["battle", "suppress"]) {
       const g = goals[gid] as Record<string, unknown> | undefined;
-      if (!g || typeof g !== "object" || typeof g.progress !== "number" || typeof g.claimed !== "boolean") return "每日目标数据无效";
+      if (!g || typeof g !== "object" || !isNonNegFinite(g.progress) || typeof g.claimed !== "boolean") return "每日目标数据无效";
     }
   } else {
     if (weather && (typeof weather.id !== "string" || typeof weather.used !== "boolean")) return "天气数据无效";
@@ -3589,7 +3623,7 @@ function validateDaily(v: unknown, schemaVersion: number): string | null {
     if (goals) {
       for (const gid of ["battle", "suppress"]) {
         const g = goals[gid] as Record<string, unknown> | undefined;
-        if (g && (typeof g.progress !== "number" || typeof g.claimed !== "boolean")) return "每日目标数据无效";
+        if (g && (!isNonNegFinite(g.progress) || typeof g.claimed !== "boolean")) return "每日目标数据无效";
       }
     }
   }
@@ -3755,17 +3789,35 @@ function validateJindanTrial(v: unknown): string | null {
   return null;
 }
 
-export function validateSaveObject(o: Record<string, unknown>): string | null {
+function validateSaveFields(o: Record<string, unknown>): string | null {
   const ver = o.schemaVersion;
-  if (typeof ver !== "number" || ver < 1 || ver > SCHEMA_VERSION) {
+  if (typeof ver !== "number" || !Number.isInteger(ver) || ver < 1 || ver > SCHEMA_VERSION) {
     return `存档版本不兼容（支持版本 1～${SCHEMA_VERSION}）`;
+  }
+  const objectFields = ["resources", "buildings", "techniqueLevel", "equipment", "inventory", "maps", "suppression", "encounter", "daily", "firsts", "suppressionSince", "secretRealmUsed", "breakthroughFails", "itemInstances", "lockedAffixes", "commission"];
+  for (const key of objectFields) {
+    const v = o[key];
+    if (v !== undefined && v !== null && !isRecord(v)) return `${SAVE_FIELD_NAMES[key]}结构无效`;
+    if (ver >= 18 && !isRecord(v)) return `${SAVE_FIELD_NAMES[key]}数据缺失`;
+  }
+  if (ver >= 18) {
+    for (const [key, ids] of Object.entries({ buildings: Object.keys(CONFIG.buildings), techniqueLevel: Object.keys(CONFIG.techniques), equipment: ["weapon", "armor", "accessory"], suppression: Object.keys(MAP_CFG), suppressionSince: Object.keys(MAP_CFG) })) {
+      if (ids.some((id) => (o[key] as Record<string, unknown>)[id] === undefined)) return `${SAVE_FIELD_NAMES[key]}数据不完整`;
+    }
+    if (typeof o.id !== "string" || !o.id.trim()) return "角色身份无效";
+    if (typeof o.preparedPill !== "boolean" || typeof o.legacyRootPending !== "boolean") return "角色状态无效";
+    if (!Number.isInteger(o.preparedPillTier) || (o.preparedPillTier as number) < 1 || (o.preparedPillTier as number) > 4) return "预置丹药品阶无效";
+    for (const key of ["recentLogs", "milestones", "marrowHistory", "quenched", "learnedNewTechs", "secretRealmLog", "breakthroughRecords"]) if (!Array.isArray(o[key])) return `${SAVE_FIELD_NAMES[key]}数据无效`;
+    const e = o.encounter as Record<string, unknown>;
+    if (!Number.isInteger(e.triggeredToday) || (e.triggeredToday as number) < 0 || typeof e.guideDone !== "boolean" || typeof e.lastTriggerDate !== "string" || !isValidDateStr(e.lastTriggerDate) || e.pending === undefined) return "际遇状态无效";
+    if (e.pending !== null && (!isRecord(e.pending) || typeof e.pending.mapId !== "string" || !Object.hasOwn(MAP_CFG, e.pending.mapId))) return "际遇地图无效";
   }
   migrateRealmRefs(o, ver);
   if (typeof o.name !== "string" || !o.name.trim()) return "存档缺少姓名";
   if (!realmOrder.includes(o.realm as RealmId)) return "境界无效";
-  if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt)) return "时间数据无效";
+  if (typeof o.lastSettledAt !== "number" || !Number.isFinite(o.lastSettledAt) || o.lastSettledAt < 0) return "时间数据无效";
   if (ver >= 18) {
-    if (typeof o.revision !== "number" || !Number.isInteger(o.revision) || o.revision < 0) return "修订号无效";
+    if (typeof o.revision !== "number" || !Number.isSafeInteger(o.revision) || o.revision < 0 || o.revision === Number.MAX_SAFE_INTEGER) return "修订号无效";
   }
 
   const checks: Array<string | null> = [
@@ -3804,19 +3856,35 @@ export function validateSaveObject(o: Record<string, unknown>): string | null {
   return null;
 }
 
-export function importSave(json: string): Result<SaveState> {
-  let d: unknown;
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+export function validateSaveObject(o: Record<string, unknown>): string | null {
+  try { return isRecord(o) ? validateSaveFields(structuredClone(o)) : "存档结构无效"; }
+  catch { return "存档结构无效，无法安全读取"; }
+}
+
+// 启动、恢复、导入、冲突重读共用；永不改写输入，所有异常返回可恢复错误。
+export function readSave(value: unknown, nowMs?: number): Result<SaveState> {
   try {
-    d = JSON.parse(json);
-  } catch {
-    return fail("文件不是有效 JSON");
-  }
-  if (!d || typeof d !== "object") return fail("存档结构无效");
-  const o = d as Record<string, unknown>;
-  const err = validateSaveObject(o);
-  if (err) return fail(err);
-  const s = normalizeSave(o);
-  return { state: s, ok: true };
+    if (!isRecord(value)) return fail("存档结构无效");
+    const o = structuredClone(value);
+    const err = validateSaveObject(o);
+    if (err) return fail(err);
+    const migrated = (o.schemaVersion as number) < SCHEMA_VERSION ? normalizeSave(o) : migrateSave(o as unknown as SaveState);
+    const after = validateSaveObject(migrated as unknown as Record<string, unknown>);
+    if (after) return fail(after);
+    const state = nowMs === undefined ? migrated : settle(migrated, nowMs);
+    const checked = validateSaveObject(state as unknown as Record<string, unknown>);
+    if (checked) return fail(checked);
+    return { ok: true, state };
+  } catch { return fail("存档迁移或结算失败，已保留原档"); }
+}
+
+export function importSave(json: string): Result<SaveState> {
+  try { return readSave(JSON.parse(json)); }
+  catch { return fail("文件不是有效 JSON"); }
 }
 
 function normalizeSave(o: Record<string, unknown>): SaveState {
@@ -3875,5 +3943,6 @@ function normalizeSave(o: Record<string, unknown>): SaveState {
   base.breakthroughRecords = Array.isArray(o.breakthroughRecords) ? (o.breakthroughRecords as BreakthroughRecord[]) : [];
   base.lastSettledAt = o.lastSettledAt as number;
   base.revision = ((o.revision as number) || 0) + 1;
+  base.schemaVersion = o.schemaVersion as number;
   return migrateSave(base);
 }

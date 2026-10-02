@@ -1,0 +1,155 @@
+{
+  "data": [
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "仅用模板"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "确认并继续"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "AI 文案"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "仅用模板"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "AI 文案"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "确认并继续"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "仅用模板"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "AI 文案"
+    }
+  ],
+  "escapeKeepsRequired": true,
+  "encounter": [
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "绕行而去"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "探查井底"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "绕行而去"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "探查井底"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "绕行而去"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "探查井底"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "绕行而去"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "探查井底"
+    }
+  ],
+  "result": [
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "openCount": 1,
+      "text": "继续修行"
+    }
+  ],
+  "optionalBattleResumes": true,
+  "focusAfter": "MAIN"
+}

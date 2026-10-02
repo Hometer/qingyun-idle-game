@@ -38,7 +38,7 @@ export function ResourceBar() {
             <span className="hero-omen" title={a?.desc}>星象 · {a?.name ?? "平常"}{state.daily.astrology.used ? " · 已用" : ""}</span>
           </div>
         </div>
-        <button onClick={settleNow} className="hero-claim inline-flex min-h-[44px] shrink-0 items-center gap-2 border border-[#ebd9ae] bg-[#dfc494] px-5 py-2 text-sm font-semibold text-[#23312d] shadow-[0_8px_18px_rgba(8,25,23,.18)]">
+        <button id="commission-settle" onClick={settleNow} className="hero-claim inline-flex min-h-[44px] shrink-0 items-center gap-2 border border-[#ebd9ae] bg-[#dfc494] px-5 py-2 text-sm font-semibold text-[#23312d] shadow-[0_8px_18px_rgba(8,25,23,.18)]">
           <span aria-hidden="true" className="text-lg leading-none">◇</span> 领取收益
         </button>
       </div>

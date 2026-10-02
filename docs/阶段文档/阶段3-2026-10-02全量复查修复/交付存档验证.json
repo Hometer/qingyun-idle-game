@@ -1,0 +1,46 @@
+[
+  {
+    "file": "实际下载-正常角色.json",
+    "bytes": 24115,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  },
+  {
+    "file": "实际下载-委托已领奖角色.json",
+    "bytes": 23946,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  },
+  {
+    "file": "实际下载-换空词条装备后.json",
+    "bytes": 23967,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  },
+  {
+    "file": "合成预览角色-未接委托.json",
+    "bytes": 24354,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  }
+]

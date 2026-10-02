@@ -1,0 +1,12 @@
+{
+  "realm": "yuanying1",
+  "map": "map_jindan",
+  "node": "node_danjie",
+  "normalWon": true,
+  "challengeNoCritWon": false,
+  "challengeCritWon": true,
+  "generatedTitle": "在「金丹秘境·丹劫幻象」赢得一场挑战",
+  "acceptOk": false,
+  "reason": "该委托目标已变化，请重新选择",
+  "saveValid": true
+}

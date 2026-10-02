@@ -1,0 +1,20 @@
+{
+  "before": {
+    "cultivation": 1.296,
+    "spirit": 0.27
+  },
+  "after": {
+    "cultivation": 1.2,
+    "spirit": 0.25
+  },
+  "actualDelta": {
+    "cultivation": -0.09600000000000009,
+    "spirit": -0.020000000000000018
+  },
+  "preview": [
+    "青铜剑基础攻+5（穿戴中）重铸(灵石500)穿戴词条：修为产速 +8%、灵气产速 +8%锁·修为产速 +8%锁·灵气产速 +8%",
+    "青铜剑基础攻+5穿戴穿上后 修为 -0.096/秒，灵气 -0.02/秒"
+  ],
+  "equipped": "w_bronze#2",
+  "importsValid": true
+}

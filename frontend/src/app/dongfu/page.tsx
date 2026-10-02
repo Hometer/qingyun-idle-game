@@ -1,5 +1,6 @@
 "use client";
 
+import { CommissionTargetFocus } from "@/components/CommissionTargetFocus";
 import { useGame } from "@/lib/game-context";
 import { Section } from "@/components/Section";
 import { BUILDINGS, WORLD_TEXT, REALM_ORDER, REALM_NAMES } from "@/lib/labels";
@@ -41,6 +42,7 @@ export default function DongfuPage() {
 
   return (
     <>
+      <CommissionTargetFocus />
     <Section title="洞府建筑" variant="featured">
       <p className="mb-2 text-sm text-muted">{WORLD_TEXT.dongfu}</p>
       {(Object.keys(BUILDINGS) as BuildingId[]).map((id) => {
@@ -54,7 +56,7 @@ export default function DongfuPage() {
         const current = lvl >= 1 ? effectText(id, b.levels[lvl - 1]) : "未建";
         const next = lvl < b.levels.length ? effectText(id, b.levels[lvl]) : null;
         return (
-          <div key={id} className="border-b border-line/60 py-2 last:border-0">
+          <div id={`commission-${id}`} tabIndex={-1} key={id} className="border-b border-line/60 py-2 last:border-0">
             <div className="flex items-center justify-between">
               <div className="font-medium">
                 {b.name} <span className="text-muted">Lv{lvl}</span>
@@ -84,7 +86,7 @@ export default function DongfuPage() {
         );
       })}
 
-      <div className="mt-4 rounded-lg border border-line/60 p-3">
+      <div id="commission-library" tabIndex={-1} className="mt-4 rounded-lg border border-line/60 p-3">
         <div className="flex items-center justify-between">
           <div className="font-medium">
             藏经阁 <span className="text-muted">Lv{state.library}</span>
@@ -111,7 +113,7 @@ export default function DongfuPage() {
         )}
       </div>
 
-      <div className="mt-4 rounded-lg border border-line/60 p-3">
+      <div id="commission-forge" tabIndex={-1} className="mt-4 rounded-lg border border-line/60 p-3">
         <div className="flex items-center justify-between">
           <div className="font-medium">
             炼器台 <span className="text-muted">Lv{state.forge}</span>

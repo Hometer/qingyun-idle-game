@@ -5,19 +5,26 @@ const STORE = "save";
 const KEY = "current";
 const BACKUP_KEY = "backup";
 const META_KEY = "meta";
+const HIGH_WATER_KEY = "generationHighWater";
 
-interface Meta {
-  generation: number;
+export interface LoadedSave { state: SaveState | null; generation: number }
+export interface PersistResult { ok: boolean; conflict: boolean }
+
+export class SaveMetadataError extends Error {
+  constructor() { super("存档元数据损坏，请导出原档后修复元数据；角色和备份均已保留"); }
 }
 
-export interface LoadedSave {
-  state: SaveState | null;
-  generation: number;
+function generationOf(meta: unknown): number {
+  // 不存在的记录兼容最早的存档；存在但损坏的记录不能伪装成代次 0。
+  if (meta === undefined) return 0;
+  const value = meta && typeof meta === "object" && !Array.isArray(meta) ? (meta as { generation?: unknown }).generation : undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value === Number.MAX_SAFE_INTEGER) throw new SaveMetadataError();
+  return value;
 }
 
-export interface PersistResult {
-  ok: boolean;
-  conflict: boolean;
+function nextGeneration(generation: number): number {
+  if (!Number.isSafeInteger(generation + 1) || generation + 1 === Number.MAX_SAFE_INTEGER) throw new SaveMetadataError();
+  return generation + 1;
 }
 
 function open(): Promise<IDBDatabase> {
@@ -28,118 +35,114 @@ function open(): Promise<IDBDatabase> {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error("存档数据库被其他页面占用，请关闭旧页面后重试"));
   });
 }
 
-// 读取存档与当前代次。代次持久化在 meta 记录中，用于“重置/导入后旧标签页不得复活旧档”。
+function get(store: IDBObjectStore, key: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const req = store.get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function transaction<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => Promise<T>): Promise<T> {
+  const db = await open();
+  try {
+    const tx = db.transaction(STORE, mode);
+    const done = new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("存档读写失败"));
+      tx.onabort = () => reject(tx.error ?? new Error("存档读写已中止"));
+    });
+    // 工作失败时也消费事务失败，避免未处理 Promise。
+    void done.catch(() => {});
+    try {
+      const result = await work(tx.objectStore(STORE));
+      await done;
+      return result;
+    } catch (error) {
+      try { tx.abort(); } catch {}
+      await done.catch(() => {});
+      throw error;
+    }
+  } finally { db.close(); }
+}
+
+async function readGeneration(store: IDBObjectStore): Promise<number> {
+  const actual = generationOf(await get(store, META_KEY));
+  const highWater = generationOf(await get(store, HIGH_WATER_KEY));
+  if (actual < highWater) throw new SaveMetadataError();
+  return actual;
+}
+
 export async function loadSave(): Promise<LoadedSave> {
-  const db = await open();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const store = tx.objectStore(STORE);
-    const metaReq = store.get(META_KEY);
-    metaReq.onsuccess = () => {
-      const meta = (metaReq.result as Meta) ?? { generation: 0 };
-      const curReq = store.get(KEY);
-      curReq.onsuccess = () => resolve({ state: (curReq.result as SaveState) ?? null, generation: meta.generation });
-      curReq.onerror = () => reject(curReq.error);
-    };
-    metaReq.onerror = () => reject(metaReq.error);
+  return transaction("readonly", async (store) => {
+    const generation = await readGeneration(store);
+    return { state: (await get(store, KEY) as SaveState | undefined) ?? null, generation };
   });
 }
 
-// 乐观并发：仅在「当前代次仍等于操作所属代次」且「现存修订号等于操作基准修订号」时才写入。
-// 代次不匹配说明存档已被重置或整体替换，旧标签页不得重建；修订号不匹配说明另一标签页已写入。
+// 元数据坏时仍能独立导出角色原档。
+export async function loadRawSave(): Promise<SaveState | null> {
+  return transaction("readonly", async (store) => (await get(store, KEY) as SaveState | undefined) ?? null);
+}
+
 export async function persistSave(state: SaveState, baseRevision: number, generation: number): Promise<PersistResult> {
-  const db = await open();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    const metaReq = store.get(META_KEY);
-    metaReq.onsuccess = () => {
-      const meta = (metaReq.result as Meta) ?? { generation: 0 };
-      if (meta.generation !== generation) {
-        resolve({ ok: false, conflict: true });
-        return;
-      }
-      const curReq = store.get(KEY);
-      curReq.onsuccess = () => {
-        const cur = curReq.result as SaveState | undefined;
-        if (cur && cur.revision !== baseRevision) {
-          resolve({ ok: false, conflict: true });
-          return;
-        }
-        store.put(state, KEY);
-      };
-      curReq.onerror = () => reject(curReq.error);
-    };
-    metaReq.onerror = () => reject(metaReq.error);
-    tx.oncomplete = () => resolve({ ok: true, conflict: false });
-    tx.onerror = () => reject(tx.error);
+  return transaction("readwrite", async (store) => {
+    const actual = await readGeneration(store);
+    if (actual !== generation) return { ok: false, conflict: true };
+    const cur = await get(store, KEY) as SaveState | undefined;
+    const revision = cur && cur.schemaVersion < 18 && cur.revision === undefined ? 0 : cur?.revision;
+    if (cur && revision !== baseRevision) return { ok: false, conflict: true };
+    store.put(state, KEY);
+    store.put({ generation: actual }, HIGH_WATER_KEY);
+    return { ok: true, conflict: false };
   });
 }
 
-// 整体替换（导入/恢复等场景）：校验代次后写入，并递增代次使其他标签页失效。
-export async function replaceSave(state: SaveState, generation: number): Promise<{ ok: boolean; conflict: boolean; generation: number }> {
-  const db = await open();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    let result: { ok: boolean; conflict: boolean; generation: number } | null = null;
-    const metaReq = store.get(META_KEY);
-    metaReq.onsuccess = () => {
-      const meta = (metaReq.result as Meta) ?? { generation: 0 };
-      if (meta.generation !== generation) {
-        result = { ok: false, conflict: true, generation: meta.generation };
-        return;
-      }
-      const nextGen = meta.generation + 1;
-      store.put({ generation: nextGen }, META_KEY);
-      store.put(state, KEY);
-      result = { ok: true, conflict: false, generation: nextGen };
-    };
-    metaReq.onerror = () => reject(metaReq.error);
-    tx.oncomplete = () => resolve(result ?? { ok: false, conflict: true, generation });
-    tx.onerror = () => reject(tx.error);
+export async function replaceSave(state: SaveState, generation: number): Promise<PersistResult & { generation: number }> {
+  return transaction("readwrite", async (store) => {
+    const actual = await readGeneration(store);
+    if (actual !== generation) return { ok: false, conflict: true, generation: actual };
+    const next = nextGeneration(actual);
+    store.put({ generation: next }, META_KEY);
+    store.put({ generation: next }, HIGH_WATER_KEY);
+    store.put(state, KEY);
+    return { ok: true, conflict: false, generation: next };
   });
 }
 
 export async function backupSave(state: SaveState): Promise<void> {
-  const db = await open();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(state, BACKUP_KEY);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  return transaction("readwrite", async (store) => { store.put(state, BACKUP_KEY); });
 }
 
 export async function loadBackup(): Promise<SaveState | null> {
-  const db = await open();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const rq = tx.objectStore(STORE).get(BACKUP_KEY);
-    rq.onsuccess = () => resolve((rq.result as SaveState) ?? null);
-    rq.onerror = () => reject(rq.error);
+  return transaction("readonly", async (store) => (await get(store, BACKUP_KEY) as SaveState | undefined) ?? null);
+}
+
+// 只修复元数据；独立高水位使修复在时钟回拨时也严格前进，角色及备份不改。
+export async function repairSaveMetadata(): Promise<number> {
+  return transaction("readwrite", async (store) => {
+    const highWater = generationOf(await get(store, HIGH_WATER_KEY));
+    try { return await readGeneration(store); } catch (error) {
+      if (!(error instanceof SaveMetadataError)) throw error;
+      const next = Math.max(highWater + 1, Date.now() * 1024);
+      if (!Number.isSafeInteger(next) || next < 0 || next === Number.MAX_SAFE_INTEGER) throw new SaveMetadataError();
+      store.put({ generation: next }, META_KEY);
+      store.put({ generation: next }, HIGH_WATER_KEY);
+      return next;
+    }
   });
 }
 
-// 清空存档：删除 current 并递增代次，返回新代次。旧标签页因代次不匹配无法把旧档写回。
 export async function clearSave(): Promise<number> {
-  const db = await open();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    let nextGen = 0;
-    const metaReq = store.get(META_KEY);
-    metaReq.onsuccess = () => {
-      const meta = (metaReq.result as Meta) ?? { generation: 0 };
-      nextGen = meta.generation + 1;
-      store.put({ generation: nextGen }, META_KEY);
-      store.delete(KEY);
-    };
-    metaReq.onerror = () => reject(metaReq.error);
-    tx.oncomplete = () => resolve(nextGen);
-    tx.onerror = () => reject(tx.error);
+  return transaction("readwrite", async (store) => {
+    const next = nextGeneration(await readGeneration(store));
+    store.put({ generation: next }, META_KEY);
+    store.put({ generation: next }, HIGH_WATER_KEY);
+    store.delete(KEY);
+    return next;
   });
 }

@@ -1,0 +1,57 @@
+{
+  "counts": {
+    "info": 0,
+    "low": 0,
+    "moderate": 3,
+    "high": 1,
+    "critical": 1,
+    "total": 5
+  },
+  "items": [
+    {
+      "name": "@vitest/mocker",
+      "severity": "moderate",
+      "fixAvailable": {
+        "name": "vitest",
+        "version": "5.0.3",
+        "isSemVerMajor": true
+      }
+    },
+    {
+      "name": "esbuild",
+      "severity": "moderate",
+      "fixAvailable": {
+        "name": "vitest",
+        "version": "5.0.3",
+        "isSemVerMajor": true
+      }
+    },
+    {
+      "name": "vite",
+      "severity": "high",
+      "fixAvailable": {
+        "name": "vitest",
+        "version": "5.0.3",
+        "isSemVerMajor": true
+      }
+    },
+    {
+      "name": "vite-node",
+      "severity": "moderate",
+      "fixAvailable": {
+        "name": "vitest",
+        "version": "5.0.3",
+        "isSemVerMajor": true
+      }
+    },
+    {
+      "name": "vitest",
+      "severity": "critical",
+      "fixAvailable": {
+        "name": "vitest",
+        "version": "5.0.3",
+        "isSemVerMajor": true
+      }
+    }
+  ]
+}

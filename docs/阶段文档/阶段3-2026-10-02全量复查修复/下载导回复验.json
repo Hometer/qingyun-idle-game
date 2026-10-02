@@ -1,0 +1,46 @@
+[
+  {
+    "file": "actual-healthy.json",
+    "bytes": 24115,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  },
+  {
+    "file": "actual-strong.json",
+    "bytes": 23946,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  },
+  {
+    "file": "导出实测-委托已领奖合成角色.json",
+    "bytes": 24769,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  },
+  {
+    "file": "导出实测-新角合成角色.json",
+    "bytes": 20664,
+    "firstImport": true,
+    "secondImport": true,
+    "resourcesPreserved": true,
+    "identityPreserved": true,
+    "realmPreserved": true,
+    "inventoryCountPreserved": true,
+    "commissionHistoryPreserved": true
+  }
+]

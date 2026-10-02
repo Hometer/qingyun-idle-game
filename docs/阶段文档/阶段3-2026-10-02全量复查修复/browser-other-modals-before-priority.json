@@ -1,0 +1,130 @@
+{
+  "data": [
+    {
+      "inside": true,
+      "correct": false,
+      "text": "破势"
+    },
+    {
+      "inside": true,
+      "correct": false,
+      "text": "守拙"
+    },
+    {
+      "inside": true,
+      "correct": false,
+      "text": "开战"
+    },
+    {
+      "inside": true,
+      "correct": false,
+      "text": "关闭"
+    },
+    {
+      "inside": true,
+      "correct": false,
+      "text": "开战"
+    },
+    {
+      "inside": true,
+      "correct": false,
+      "text": "守拙"
+    },
+    {
+      "inside": true,
+      "correct": false,
+      "text": "破势"
+    },
+    {
+      "inside": true,
+      "correct": false,
+      "text": "常法"
+    }
+  ],
+  "escapeKeepsRequired": true,
+  "encounter": [
+    {
+      "inside": true,
+      "correct": true,
+      "text": "绕行而去"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "探查井底"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "绕行而去"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "探查井底"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "绕行而去"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "探查井底"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "绕行而去"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "探查井底"
+    }
+  ],
+  "result": [
+    {
+      "inside": true,
+      "correct": true,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "继续修行"
+    },
+    {
+      "inside": true,
+      "correct": true,
+      "text": "继续修行"
+    }
+  ],
+  "focusAfter": "MAIN"
+}

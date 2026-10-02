@@ -1,0 +1,124 @@
+{
+  "retryPolicy": "retry-while-affordable",
+  "mode": "seeded-random",
+  "oneLogin": {
+    "total": 54,
+    "unfinished": 0,
+    "min": 40,
+    "max": 49,
+    "under42": 6,
+    "over56": 0,
+    "samplesOutside": [
+      {
+        "key": "spirit/innate/dull/五行/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/变异/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/normal/五行/risky/1登录",
+        "days": 41
+      },
+      {
+        "key": "spirit/innate/normal/变异/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/genius/五行/risky/1登录",
+        "days": 41
+      }
+    ]
+  },
+  "twoLogins": {
+    "total": 0,
+    "unfinished": 0,
+    "under42": 0,
+    "over56": 0,
+    "samplesOutside": []
+  },
+  "oneSteady": {
+    "total": 0,
+    "unfinished": 0,
+    "under42": 0,
+    "over56": 0,
+    "samplesOutside": []
+  },
+  "oneRisky": {
+    "total": 54,
+    "unfinished": 0,
+    "min": 40,
+    "max": 49,
+    "under42": 6,
+    "over56": 0,
+    "samplesOutside": [
+      {
+        "key": "spirit/innate/dull/五行/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/dull/变异/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/normal/五行/risky/1登录",
+        "days": 41
+      },
+      {
+        "key": "spirit/innate/normal/变异/risky/1登录",
+        "days": 40
+      },
+      {
+        "key": "spirit/innate/genius/五行/risky/1登录",
+        "days": 41
+      }
+    ]
+  },
+  "total": 54,
+  "completed": 54,
+  "unfinished": 0,
+  "inTarget42to56": 48,
+  "under42": 6,
+  "over56": 0,
+  "min": 40,
+  "median": 44,
+  "max": 49,
+  "sampleInTarget": [
+    {
+      "key": "balanced/blocked/dull/五行/risky/1登录",
+      "days": 46
+    },
+    {
+      "key": "balanced/blocked/dull/变异/risky/1登录",
+      "days": 46
+    },
+    {
+      "key": "balanced/blocked/normal/五行/risky/1登录",
+      "days": 46
+    },
+    {
+      "key": "balanced/blocked/normal/变异/risky/1登录",
+      "days": 47
+    },
+    {
+      "key": "balanced/blocked/genius/五行/risky/1登录",
+      "days": 46
+    }
+  ],
+  "sampleUnder": [
+    {
+      "key": "spirit/innate/dull/五行/risky/1登录",
+      "days": 40
+    },
+    {
+      "key": "spirit/innate/dull/变异/risky/1登录",
+      "days": 40
+    },
+    {
+      "key": "spirit/innate/normal/五行/risky/1登录",
+      "days": 41
+    }
+  ],
+  "sampleOver": []
+}
