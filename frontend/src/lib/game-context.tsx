@@ -291,7 +291,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `青云修仙录原档-${raw.name ?? "unknown"}.json`;
+      a.download = `灵境修行原档-${raw.name ?? "unknown"}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -1100,7 +1100,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `青云修仙录存档-${state.name}.json`;
+    a.download = `灵境修行存档-${state.name}.json`;
     a.click();
     URL.revokeObjectURL(url);
     try {

@@ -69,7 +69,7 @@ export function CreateCharacter() {
           <div className="relative">
             <div className="brand-seal mb-7 flex h-14 w-14 items-center justify-center text-2xl">青</div>
             <p className="text-[11px] tracking-[.28em] text-[#d6c18e]">壹 · 初入仙途</p>
-            <h1 className="display-font mt-3 text-4xl font-semibold tracking-[.14em] sm:text-[48px]">青云修仙录</h1>
+            <h1 className="display-font mt-3 text-4xl font-semibold tracking-[.14em] sm:text-[48px]">灵境修行</h1>
             <p className="mt-3 text-sm leading-relaxed text-[#d9e3d9]">一念入山门，万里皆仙途。</p>
           </div>
           <div className="relative hidden border-t border-[#d7bd87]/35 pt-6 text-sm leading-8 text-[#e3ddc8] lg:block">云起青山，路入仙门。<br />命盘既定，前途由你亲手开辟。</div>

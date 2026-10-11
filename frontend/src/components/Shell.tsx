@@ -58,7 +58,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <aside className="desktop-sidebar hidden lg:sticky lg:top-5 lg:my-5 lg:flex lg:h-[calc(100vh-40px)] lg:flex-col">
         <div className="sidebar-top flex items-center gap-3 px-5 pt-7">
           <span className="brand-seal flex h-11 w-11 items-center justify-center text-xl">青</span>
-          <div><div className="display-font text-lg font-semibold tracking-[.13em]">青云修仙录</div><div className="mt-0.5 text-[10px] tracking-[.22em] text-[#b7c6bc]">一念入道 · 万象归真</div></div>
+          <div><div className="display-font text-lg font-semibold tracking-[.13em]">灵境修行</div><div className="mt-0.5 text-[10px] tracking-[.22em] text-[#b7c6bc]">一念入道 · 万象归真</div></div>
         </div>
         <div className="mx-5 mt-9 border-t border-[#d4c293]/25 pt-4 text-[10px] tracking-[.25em] text-[#a9bcb5]">修行目录 / 仙途五卷</div>
         <nav aria-label="主导航" className="mt-3 flex flex-col gap-1 px-3">
@@ -80,7 +80,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="min-w-0 pb-24 lg:pb-10 lg:pt-5">
       <div className="game-topbar hidden lg:flex" aria-label="当前篇章">
-        <span className="game-topbar-brand">青云修仙录 <span>· QINGYUN</span></span>
+        <span className="game-topbar-brand">灵境修行 <span>· LINGJING</span></span>
         <span className="game-topbar-location">仙途五卷 <span aria-hidden="true">／</span> {pageInfo[0]}篇</span>
       </div>
       <ResourceBar />

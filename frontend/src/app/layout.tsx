@@ -4,8 +4,8 @@ import { GameProvider } from "@/lib/game-context";
 import { Shell } from "@/components/Shell";
 
 export const metadata: Metadata = {
-  title: "青云修仙录",
-  description: "单机修仙文字放置游戏",
+  title: "灵境修行｜大模型叙事修仙放置 RPG",
+  description: "面向修仙题材放置 RPG 玩家，以挂机收益、战斗探索和角色成长构建核心玩法，通过 AI 剧情事件与分支任务丰富叙事体验，保障进度、奖励和经济结算稳定，并控制模型调用量。",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
